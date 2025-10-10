@@ -1,0 +1,277 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  avatar      String?
+  role        UserRole @default(VIEWER)
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  accounts Account[]
+  sessions Session[]
+  talent   Talent?
+  brand    Brand?
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Talent Management
+model Talent {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  stageName        String
+  bio              String
+  socialMediaLinks Json?
+  categories       String[]
+  isVerified       Boolean           @default(false)
+  rating           Float             @default(0)
+  totalEarnings    Decimal           @default(0) @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ips  IntellectualProperty[]
+  licenses License[]
+  royalties Royalty[]
+
+  @@map("talents")
+}
+
+// Brand Management
+model Brand {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  companyName String
+  industry    String
+  website     String?
+  description String
+  logo        String?
+  isVerified  Boolean @default(false)
+  totalSpent  Decimal @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenses License[]
+  payments Payment[]
+
+  @@map("brands")
+}
+
+// Intellectual Property Management
+model IntellectualProperty {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  type        IPType
+  category    String
+  tags        String[]
+  metadata    Json?
+  isActive    Boolean  @default(true)
+  talentId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  talent   Talent    @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  files    IPFile[]
+  licenses License[]
+
+  @@map("intellectual_properties")
+}
+
+model IPFile {
+  id           String @id @default(cuid())
+  url          String
+  type         String
+  size         Int
+  originalName String
+  mimeType     String
+  ipId         String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  ip IntellectualProperty @relation(fields: [ipId], references: [id], onDelete: Cascade)
+
+  @@map("ip_files")
+}
+
+// License Management
+model License {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  status      LicenseStatus @default(DRAFT)
+  startDate   DateTime
+  endDate     DateTime
+  terms       String        @db.Text
+  royaltyRate Decimal       @db.Decimal(5, 2)
+  royaltyType RoyaltyType
+  totalValue  Decimal       @db.Decimal(10, 2)
+  talentId    String
+  brandId     String
+  ipId        String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  talent    Talent                 @relation(fields: [talentId], references: [id])
+  brand     Brand                  @relation(fields: [brandId], references: [id])
+  ip        IntellectualProperty   @relation(fields: [ipId], references: [id])
+  royalties Royalty[]
+  payments  Payment[]
+
+  @@map("licenses")
+}
+
+// Royalty Management
+model Royalty {
+  id          String        @id @default(cuid())
+  licenseId   String
+  amount      Decimal       @db.Decimal(10, 2)
+  currency    String        @default("USD")
+  period      RoyaltyPeriod
+  periodStart DateTime
+  periodEnd   DateTime
+  status      PaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  talentId    String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  license License @relation(fields: [licenseId], references: [id])
+  talent  Talent  @relation(fields: [talentId], references: [id])
+
+  @@map("royalties")
+}
+
+// Payment Management
+model Payment {
+  id                    String        @id @default(cuid())
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("USD")
+  status                PaymentStatus @default(PENDING)
+  paymentMethod         String
+  stripePaymentIntentId String?
+  metadata              Json?
+  licenseId             String?
+  brandId               String
+  paidAt                DateTime?
+  refundedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relations
+  license License? @relation(fields: [licenseId], references: [id])
+  brand   Brand    @relation(fields: [brandId], references: [id])
+
+  @@map("payments")
+}
+
+// Analytics
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  type      String
+  userId    String?
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@map("analytics_events")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  MANAGER
+  TALENT
+  BRAND
+  VIEWER
+}
+
+enum IPType {
+  IMAGE
+  VIDEO
+  AUDIO
+  TEXT
+  BRAND
+  TRADEMARK
+}
+
+enum LicenseStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+enum RoyaltyType {
+  PERCENTAGE
+  FIXED
+  TIERED
+}
+
+enum RoyaltyPeriod {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
