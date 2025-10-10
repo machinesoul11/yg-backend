@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+# macOS resource forks
+._*
+.AppleDouble
+.LSOverride
 
 # debug
 npm-debug.log*

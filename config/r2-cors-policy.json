@@ -1,0 +1,29 @@
+{
+  "cors": [
+    {
+      "AllowedOrigins": [
+        "https://yesgoddess.com",
+        "https://app.yesgoddess.com",
+        "https://admin.yesgoddess.com",
+        "http://localhost:3000",
+        "http://localhost:3001"
+      ],
+      "AllowedMethods": [
+        "GET",
+        "PUT",
+        "POST",
+        "DELETE",
+        "HEAD"
+      ],
+      "AllowedHeaders": [
+        "*"
+      ],
+      "ExposeHeaders": [
+        "ETag",
+        "Content-Length",
+        "Content-Type"
+      ],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}

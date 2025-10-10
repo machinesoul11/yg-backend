@@ -1,26 +1,262 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* YES GODDESS Brand Variables */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand Colors */
+  --color-brand-gold: #D4AF37;
+  --color-brand-gold-light: #F5E6D3;
+  --color-brand-gold-dark: #B8941F;
+  --color-brand-black: #000000;
+  --color-brand-black-soft: #1A1A1A;
+  --color-brand-white: #FFFFFF;
+  --color-brand-white-warm: #FAF8F5;
+  --color-brand-rose: #E8B4B8;
+  --color-brand-rose-light: #F5E1E4;
+  --color-brand-sage: #9CAF88;
+  --color-brand-cream: #F5E6D3;
+  
+  /* Semantic Colors */
+  --color-background: #FFFFFF;
+  --color-foreground: #000000;
+  --color-surface: #FAF8F5;
+  --color-border: #E5E5E5;
+  --color-muted: #6B7280;
+  
+  /* Spacing */
+  --spacing-unit: 0.25rem;
+  
+  /* Typography */
+  --font-display: 'Playfair Display', serif;
+  --font-sans: 'Montserrat', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  /* Import brand fonts */
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  
+  html {
+    @apply antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+  
+  body {
+    @apply bg-brand-white text-brand-black font-sans;
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+  
+  /* Headings */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold;
+    letter-spacing: -0.01em;
+  }
+  
+  h1 {
+    @apply text-display-md md:text-display-lg;
+  }
+  
+  h2 {
+    @apply text-display-sm md:text-display-md;
+  }
+  
+  h3 {
+    @apply text-h1 md:text-h2;
+  }
+  
+  h4 {
+    @apply text-h2 md:text-h3;
+  }
+  
+  h5 {
+    @apply text-h3 md:text-h4;
+  }
+  
+  h6 {
+    @apply text-h4 md:text-h5;
+  }
+  
+  /* Links */
+  a {
+    @apply text-brand-gold hover:text-brand-gold-dark transition-colors duration-200;
+  }
+  
+  /* Selection */
+  ::selection {
+    @apply bg-brand-gold text-brand-white;
+  }
+  
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-gold ring-offset-2;
+  }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-brand-white-warm;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-brand-gold rounded;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-brand-gold-dark;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Button Variants */
+  .btn {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-lg font-sans font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply btn bg-brand-gold text-brand-white hover:bg-brand-gold-dark focus-visible:ring-brand-gold shadow-soft hover:shadow-gold;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-brand-black text-brand-white hover:bg-brand-black-soft focus-visible:ring-brand-black;
+  }
+  
+  .btn-outline {
+    @apply btn border-2 border-brand-gold text-brand-gold hover:bg-brand-gold hover:text-brand-white focus-visible:ring-brand-gold;
+  }
+  
+  .btn-ghost {
+    @apply btn text-brand-black hover:bg-brand-cream focus-visible:ring-brand-gold;
+  }
+  
+  .btn-rose {
+    @apply btn bg-brand-rose text-brand-white hover:bg-brand-rose-dark focus-visible:ring-brand-rose;
+  }
+  
+  .btn-sage {
+    @apply btn bg-brand-sage text-brand-white hover:bg-brand-sage-dark focus-visible:ring-brand-sage;
+  }
+  
+  /* Card Component */
+  .card {
+    @apply bg-brand-white rounded-lg shadow-soft border border-brand-white-warm p-6 transition-shadow duration-200;
+  }
+  
+  .card-hover {
+    @apply card hover:shadow-medium;
+  }
+  
+  .card-gold {
+    @apply card border-brand-gold-light bg-gradient-to-br from-brand-white to-brand-cream;
+  }
+  
+  /* Input Styles */
+  .input {
+    @apply w-full px-4 py-2.5 rounded-lg border border-gray-300 bg-brand-white text-brand-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-gold focus:border-transparent transition-all duration-200;
+  }
+  
+  .input-error {
+    @apply input border-error focus:ring-error;
+  }
+  
+  /* Badge Component */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-body-sm font-medium;
+  }
+  
+  .badge-gold {
+    @apply badge bg-brand-gold-light text-brand-gold-dark;
+  }
+  
+  .badge-rose {
+    @apply badge bg-brand-rose-light text-brand-rose-dark;
+  }
+  
+  .badge-sage {
+    @apply badge bg-brand-sage-light text-brand-sage-dark;
+  }
+  
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-error {
+    @apply badge bg-red-100 text-red-800;
+  }
+  
+  /* Container */
+  .container-brand {
+    @apply container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl;
+  }
+  
+  /* Section */
+  .section {
+    @apply py-16 md:py-24;
+  }
+  
+  /* Divider */
+  .divider {
+    @apply border-t border-brand-cream;
+  }
+  
+  .divider-gold {
+    @apply border-t-2 border-brand-gold;
+  }
+  
+  /* Text Gradients */
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-brand-gold to-brand-gold-light bg-clip-text text-transparent;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-white/20;
+  }
+}
+
+@layer utilities {
+  /* Text Utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Animation delays */
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+  
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+  
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+  
+  /* Safe area utilities for mobile */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
 }

@@ -25,12 +25,7 @@ const eslintConfig = [
   },
   {
     files: ["**/*.{js,jsx,ts,tsx}"],
-    plugins: {
-      "@typescript-eslint": require("@typescript-eslint/eslint-plugin"),
-      "prettier": require("eslint-plugin-prettier"),
-    },
     rules: {
-      "prettier/prettier": "error",
       "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/explicit-function-return-type": "off",

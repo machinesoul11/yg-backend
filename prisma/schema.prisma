@@ -3,11 +3,13 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "metrics"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_POOLED")
+  directUrl = env("DATABASE_URL")
 }
 
 // User Management
@@ -27,6 +29,8 @@ model User {
   sessions Session[]
   talent   Talent?
   brand    Brand?
+  emailEvents EmailEvent[]
+  emailPreferences EmailPreferences?
 
   @@map("users")
 }
@@ -274,4 +278,107 @@ enum PaymentStatus {
   FAILED
   CANCELLED
   REFUNDED
+}
+
+// Email Management
+model EmailEvent {
+  id             String         @id @default(cuid())
+  userId         String?
+  email          String
+  eventType      EmailEventType
+  messageId      String         // Resend message ID
+  subject        String?
+  templateName   String?
+  metadata       Json?          // Custom data passed with email
+  
+  // Event timestamps
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  bouncedAt      DateTime?
+  complainedAt   DateTime?
+  
+  // Event details
+  bounceReason   String?
+  clickedUrl     String?
+  userAgent      String?
+  ipAddress      String?
+  
+  createdAt      DateTime       @default(now())
+  
+  user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, eventType])
+  @@index([email, eventType])
+  @@index([messageId])
+  @@index([sentAt])
+  @@map("email_events")
+}
+
+enum EmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+model EmailPreferences {
+  id                    String          @id @default(cuid())
+  userId                String          @unique
+  
+  // Notification preferences
+  royaltyStatements     Boolean         @default(true)
+  licenseExpiry         Boolean         @default(true)
+  projectInvitations    Boolean         @default(true)
+  messages              Boolean         @default(true)
+  payouts               Boolean         @default(true)
+  
+  // Digest settings
+  digestFrequency       DigestFrequency @default(IMMEDIATE)
+  
+  // Marketing preferences
+  newsletters           Boolean         @default(true)
+  announcements         Boolean         @default(true)
+  
+  // Global unsubscribe
+  unsubscribedAt        DateTime?
+  
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  
+  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("email_preferences")
+}
+
+enum DigestFrequency {
+  IMMEDIATE
+  DAILY
+  WEEKLY
+  NEVER
+}
+
+model EmailSuppression {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  reason       SuppressionReason
+  suppressedAt DateTime          @default(now())
+  
+  // Details
+  bounceType   String?           // hard, soft, complaint
+  bounceReason String?
+  
+  @@index([email])
+  @@map("email_suppressions")
+}
+
+enum SuppressionReason {
+  BOUNCE
+  COMPLAINT
+  UNSUBSCRIBE
+  MANUAL
 }

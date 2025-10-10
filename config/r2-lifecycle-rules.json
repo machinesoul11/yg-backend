@@ -1,0 +1,35 @@
+{
+  "Rules": [
+    {
+      "ID": "delete-incomplete-uploads",
+      "Status": "Enabled",
+      "Filter": {},
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+      }
+    },
+    {
+      "ID": "delete-temp-files",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "temp/"
+      },
+      "Expiration": {
+        "Days": 1
+      }
+    },
+    {
+      "ID": "transition-old-versions",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "assets/"
+      },
+      "Transitions": [
+        {
+          "Days": 90,
+          "StorageClass": "INFREQUENT_ACCESS"
+        }
+      ]
+    }
+  ]
+}
