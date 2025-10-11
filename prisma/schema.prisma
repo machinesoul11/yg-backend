@@ -1,37 +1,49 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
-  previewFeatures = ["fullTextSearch", "metrics"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "metrics"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL_POOLED")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL_POOLED")
   directUrl = env("DATABASE_URL")
 }
 
-// User Management
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  name        String
-  avatar      String?
-  role        UserRole @default(VIEWER)
-  isActive    Boolean  @default(true)
-  lastLoginAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String?
+  avatar              String?
+  role                UserRole             @default(VIEWER)
+  password_hash       String?
+  email_verified      DateTime?
+  deleted_at          DateTime?
+  isActive            Boolean              @default(true)
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  accounts            Account[]
+  auditEvents         AuditEvent[]
+  brand               Brand?
+  creator             Creator?
+  emailEvents         EmailEvent[]
+  emailPreferences    EmailPreferences?
+  assetsCreated       IpAsset[]            @relation("AssetCreator")
+  assetsUpdated       IpAsset[]            @relation("AssetUpdater")
+  ownershipCreated    IpOwnership[]        @relation("IpOwnershipCreatedBy")
+  ownershipUpdated    IpOwnership[]        @relation("IpOwnershipUpdatedBy")
+  passwordResetTokens PasswordResetToken[]
+  projectsCreated     Project[]            @relation("ProjectCreatedBy")
+  projectsUpdated     Project[]            @relation("ProjectUpdatedBy")
+  royaltyRunsCreated  RoyaltyRun[]         @relation("RoyaltyRunCreatedBy")
+  sessions            Session[]
+  talent              Talent?
+  verificationTokens  VerificationToken[]
+  notifications       Notification[]
 
-  // Relations
-  accounts Account[]
-  sessions Session[]
-  talent   Talent?
-  brand    Brand?
-  emailEvents EmailEvent[]
-  emailPreferences EmailPreferences?
-
+  @@index([email])
+  @@index([role])
+  @@index([deleted_at])
   @@map("users")
 }
 
@@ -41,15 +53,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
@@ -62,55 +73,303 @@ model Session {
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([expires])
   @@map("sessions")
 }
 
-// Talent Management
+model VerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expires])
+  @@map("verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expires   DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expires])
+  @@map("password_reset_tokens")
+}
+
+model AuditEvent {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  // Actor information
+  userId String?
+  email  String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // What was changed
+  entityType String // "project", "license", "payout", etc.
+  entityId   String // The specific record ID
+  action     String // "create", "update", "delete", "view"
+
+  // Change tracking
+  beforeJson Json? // State before change
+  afterJson  Json? // State after change
+
+  // Request context
+  ipAddress String?
+  userAgent String?
+  requestId String? // For distributed tracing
+
+  // Indexes for querying
+  @@index([userId, timestamp])
+  @@index([entityType, entityId])
+  @@index([action, timestamp])
+  @@index([requestId])
+  @@index([email])
+  @@map("audit_events")
+}
+
+model Creator {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  stageName          String
+  bio                String?
+  specialties        Json
+  socialLinks        Json?
+  stripeAccountId    String?            @unique
+  onboardingStatus   String             @default("pending")
+  portfolioUrl       String?
+  website            String?
+  availability       Json?
+  preferences        Json?
+  verificationStatus String             @default("pending")
+  verifiedAt         DateTime?
+  performanceMetrics Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipOwnerships       IpOwnership[]
+  royaltyStatements  RoyaltyStatement[]
+  payouts            Payout[]
+
+  @@index([verificationStatus])
+  @@index([onboardingStatus])
+  @@index([userId])
+  @@index([deletedAt])
+  @@map("creators")
+}
+
 model Talent {
-  id               String            @id @default(cuid())
-  userId           String            @unique
+  id               String                 @id @default(cuid())
+  userId           String                 @unique
   stageName        String
   bio              String
   socialMediaLinks Json?
   categories       String[]
-  isVerified       Boolean           @default(false)
-  rating           Float             @default(0)
-  totalEarnings    Decimal           @default(0) @db.Decimal(10, 2)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ips  IntellectualProperty[]
-  licenses License[]
-  royalties Royalty[]
+  isVerified       Boolean                @default(false)
+  rating           Float                  @default(0)
+  totalEarnings    Decimal                @default(0) @db.Decimal(10, 2)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  ips              IntellectualProperty[]
+  royalties        Royalty[]
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("talents")
 }
 
-// Brand Management
 model Brand {
-  id          String  @id @default(cuid())
-  userId      String  @unique
-  companyName String
-  industry    String
-  website     String?
-  description String
-  logo        String?
-  isVerified  Boolean @default(false)
-  totalSpent  Decimal @default(0) @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  companyName        String    @db.VarChar(255)
+  industry           String?   @db.VarChar(100)
+  website            String?
+  description        String?
+  logo               String?
+  isVerified         Boolean   @default(false)
+  totalSpent         Decimal   @default(0) @db.Decimal(10, 2)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  billingInfo        Json?
+  brandGuidelinesUrl String?
+  companySize        Json?
+  contactInfo        Json?
+  deletedAt          DateTime?
+  targetAudience     Json?
+  teamMembers        Json?
+  verificationNotes  String?
+  verificationStatus String    @default("pending")
+  verifiedAt         DateTime?
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenses           License[]
+  payments           Payment[]
+  projects           Project[]
 
-  // Relations
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  licenses License[]
-  payments Payment[]
-
+  @@index([companyName])
+  @@index([industry])
+  @@index([verificationStatus])
+  @@index([deletedAt])
+  @@index([userId])
+  @@index([createdAt])
   @@map("brands")
 }
 
-// Intellectual Property Management
+model Project {
+  id           String        @id @default(cuid())
+  brandId      String
+  name         String        @db.VarChar(200)
+  description  String?
+  status       ProjectStatus @default(DRAFT)
+  budgetCents  Int           @default(0)
+  startDate    DateTime?
+  endDate      DateTime?
+  objectives   Json?
+  requirements Json?
+  metadata     Json?
+  projectType  ProjectType   @default(CAMPAIGN)
+  createdBy    String
+  updatedBy    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  events       Event[]
+  ipAssets     IpAsset[]
+  licenses     License[]
+  dailyMetrics DailyMetric[]
+  brand        Brand         @relation(fields: [brandId], references: [id])
+  creatorUser  User          @relation("ProjectCreatedBy", fields: [createdBy], references: [id])
+  updaterUser  User?         @relation("ProjectUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@index([brandId, status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([status])
+  @@index([projectType])
+  @@map("projects")
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  source     String   @db.VarChar(50) // 'web', 'api', 'system', 'webhook'
+  eventType  String   @map("event_type") @db.VarChar(100)
+
+  // Actor (who performed the action)
+  actorType String? @map("actor_type") @db.VarChar(50) // 'user', 'creator', 'brand', 'system'
+  actorId   String? @map("actor_id")
+
+  // Entity references (what was acted upon)
+  projectId String? @map("project_id")
+  ipAssetId String? @map("ip_asset_id")
+  licenseId String? @map("license_id")
+
+  // Legacy fields for backward compatibility
+  userId    String?
+  brandId   String?
+  creatorId String?
+
+  // Flexible event data
+  propsJson Json @default("{}") @map("props_json")
+
+  // Session grouping
+  sessionId String? @map("session_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project     Project?     @relation(fields: [projectId], references: [id])
+  ipAsset     IpAsset?     @relation(fields: [ipAssetId], references: [id])
+  license     License?     @relation(fields: [licenseId], references: [id])
+  attribution Attribution?
+
+  @@index([occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([projectId, occurredAt])
+  @@index([ipAssetId, occurredAt])
+  @@index([licenseId, occurredAt])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("events")
+}
+
+model Attribution {
+  id      String @id @default(cuid())
+  eventId String @unique @map("event_id")
+
+  // UTM Parameters
+  utmSource   String? @map("utm_source") @db.VarChar(255)
+  utmMedium   String? @map("utm_medium") @db.VarChar(255)
+  utmCampaign String? @map("utm_campaign") @db.VarChar(255)
+  utmTerm     String? @map("utm_term") @db.VarChar(255)
+  utmContent  String? @map("utm_content") @db.VarChar(255)
+
+  // Referrer Data
+  referrer    String? @db.Text
+  landingPage String? @map("landing_page") @db.Text
+
+  // Device/Browser Context
+  deviceType String? @map("device_type") @db.VarChar(50)
+  browser    String? @db.VarChar(100)
+  os         String? @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([utmSource, utmMedium, utmCampaign])
+  @@index([referrer])
+  @@map("attribution")
+}
+
+model DailyMetric {
+  id   String   @id @default(cuid())
+  date DateTime @db.Date
+
+  // Entity dimensions (nullable for platform-wide aggregates)
+  projectId String? @map("project_id")
+  ipAssetId String? @map("ip_asset_id")
+  licenseId String? @map("license_id")
+
+  // Core Metrics
+  views        Int @default(0)
+  clicks       Int @default(0)
+  conversions  Int @default(0)
+  revenueCents Int @default(0) @map("revenue_cents")
+
+  // Engagement Metrics
+  uniqueVisitors Int @default(0) @map("unique_visitors")
+  engagementTime Int @default(0) @map("engagement_time") // seconds
+
+  // Flexible additional metrics
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project Project? @relation(fields: [projectId], references: [id])
+  ipAsset IpAsset? @relation(fields: [ipAssetId], references: [id])
+  license License? @relation(fields: [licenseId], references: [id])
+
+  @@unique([date, projectId, ipAssetId, licenseId])
+  @@index([date])
+  @@index([projectId, date])
+  @@index([ipAssetId, date])
+  @@index([licenseId, date])
+  @@map("daily_metrics")
+}
+
 model IntellectualProperty {
   id          String   @id @default(cuid())
   name        String
@@ -123,60 +382,68 @@ model IntellectualProperty {
   talentId    String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  // Relations
-  talent   Talent    @relation(fields: [talentId], references: [id], onDelete: Cascade)
-  files    IPFile[]
-  licenses License[]
+  talent      Talent   @relation(fields: [talentId], references: [id], onDelete: Cascade)
+  files       IPFile[]
 
   @@map("intellectual_properties")
 }
 
 model IPFile {
-  id           String @id @default(cuid())
+  id           String               @id @default(cuid())
   url          String
   type         String
   size         Int
   originalName String
   mimeType     String
   ipId         String
-  createdAt    DateTime @default(now())
-
-  // Relations
-  ip IntellectualProperty @relation(fields: [ipId], references: [id], onDelete: Cascade)
+  createdAt    DateTime             @default(now())
+  ip           IntellectualProperty @relation(fields: [ipId], references: [id], onDelete: Cascade)
 
   @@map("ip_files")
 }
 
-// License Management
 model License {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  status      LicenseStatus @default(DRAFT)
-  startDate   DateTime
-  endDate     DateTime
-  terms       String        @db.Text
-  royaltyRate Decimal       @db.Decimal(5, 2)
-  royaltyType RoyaltyType
-  totalValue  Decimal       @db.Decimal(10, 2)
-  talentId    String
-  brandId     String
-  ipId        String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                String            @id @default(cuid())
+  status            LicenseStatus     @default(DRAFT)
+  autoRenew         Boolean           @default(false) @map("auto_renew")
+  billingFrequency  BillingFrequency? @map("billing_frequency")
+  brandId           String            @map("brand_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  createdBy         String?           @map("created_by")
+  deletedAt         DateTime?         @map("deleted_at")
+  endDate           DateTime          @map("end_date")
+  feeCents          Int               @default(0) @map("fee_cents")
+  ipAssetId         String            @map("ip_asset_id")
+  licenseType       LicenseType       @map("license_type")
+  metadata          Json?
+  parentLicenseId   String?           @map("parent_license_id")
+  paymentTerms      String?           @map("payment_terms")
+  projectId         String?           @map("project_id")
+  renewalNotifiedAt DateTime?         @map("renewal_notified_at")
+  revShareBps       Int               @default(0) @map("rev_share_bps")
+  scopeJson         Json              @map("scope_json")
+  signatureProof    String?           @map("signature_proof")
+  signedAt          DateTime?         @map("signed_at")
+  startDate         DateTime          @map("start_date")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  updatedBy         String?           @map("updated_by")
+  brand             Brand             @relation(fields: [brandId], references: [id])
+  ipAsset           IpAsset           @relation(fields: [ipAssetId], references: [id])
+  parentLicense     License?          @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
+  renewals          License[]         @relation("LicenseRenewals")
+  project           Project?          @relation(fields: [projectId], references: [id])
+  royaltyLines      RoyaltyLine[]
+  events            Event[]
+  dailyMetrics      DailyMetric[]
 
-  // Relations
-  talent    Talent                 @relation(fields: [talentId], references: [id])
-  brand     Brand                  @relation(fields: [brandId], references: [id])
-  ip        IntellectualProperty   @relation(fields: [ipId], references: [id])
-  royalties Royalty[]
-  payments  Payment[]
-
+  @@index([ipAssetId, status, endDate])
+  @@index([brandId, status])
+  @@index([status, endDate])
+  @@index([deletedAt])
+  @@index([projectId])
   @@map("licenses")
 }
 
-// Royalty Management
 model Royalty {
   id          String        @id @default(cuid())
   licenseId   String
@@ -190,15 +457,11 @@ model Royalty {
   talentId    String
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
-
-  // Relations
-  license License @relation(fields: [licenseId], references: [id])
-  talent  Talent  @relation(fields: [talentId], references: [id])
+  talent      Talent        @relation(fields: [talentId], references: [id])
 
   @@map("royalties")
 }
 
-// Payment Management
 model Payment {
   id                    String        @id @default(cuid())
   amount                Decimal       @db.Decimal(10, 2)
@@ -213,15 +476,11 @@ model Payment {
   refundedAt            DateTime?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
-
-  // Relations
-  license License? @relation(fields: [licenseId], references: [id])
-  brand   Brand    @relation(fields: [brandId], references: [id])
+  brand                 Brand         @relation(fields: [brandId], references: [id])
 
   @@map("payments")
 }
 
-// Analytics
 model AnalyticsEvent {
   id        String   @id @default(cuid())
   type      String
@@ -232,11 +491,242 @@ model AnalyticsEvent {
   @@map("analytics_events")
 }
 
-// Enums
+model EmailEvent {
+  id           String         @id @default(cuid())
+  userId       String?
+  email        String
+  eventType    EmailEventType
+  messageId    String
+  subject      String?
+  templateName String?
+  metadata     Json?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  bouncedAt    DateTime?
+  complainedAt DateTime?
+  bounceReason String?
+  clickedUrl   String?
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime       @default(now())
+  user         User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventType])
+  @@index([email, eventType])
+  @@index([messageId])
+  @@index([sentAt])
+  @@map("email_events")
+}
+
+model EmailPreferences {
+  id                 String          @id @default(cuid())
+  userId             String          @unique
+  royaltyStatements  Boolean         @default(true)
+  licenseExpiry      Boolean         @default(true)
+  projectInvitations Boolean         @default(true)
+  messages           Boolean         @default(true)
+  payouts            Boolean         @default(true)
+  digestFrequency    DigestFrequency @default(IMMEDIATE)
+  newsletters        Boolean         @default(true)
+  announcements      Boolean         @default(true)
+  unsubscribedAt     DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_preferences")
+}
+
+model EmailSuppression {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  reason       SuppressionReason
+  suppressedAt DateTime          @default(now())
+  bounceType   String?
+  bounceReason String?
+
+  @@index([email])
+  @@map("email_suppressions")
+}
+
+model IpAsset {
+  id            String        @id @default(cuid())
+  projectId     String?       @map("project_id")
+  title         String        @db.VarChar(255)
+  description   String?
+  type          AssetType
+  storageKey    String        @unique @map("storage_key")
+  fileSize      BigInt        @map("file_size")
+  mimeType      String        @map("mime_type") @db.VarChar(100)
+  thumbnailUrl  String?       @map("thumbnail_url")
+  previewUrl    String?       @map("preview_url")
+  version       Int           @default(1)
+  parentAssetId String?       @map("parent_asset_id")
+  metadata      Json?
+  status        AssetStatus   @default(DRAFT)
+  scanStatus    ScanStatus    @default(PENDING) @map("scan_status")
+  scanResult    Json?         @map("scan_result")
+  createdBy     String        @map("created_by")
+  updatedBy     String?       @map("updated_by")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  deletedAt     DateTime?     @map("deleted_at")
+  creator       User          @relation("AssetCreator", fields: [createdBy], references: [id])
+  parentAsset   IpAsset?      @relation("AssetDerivatives", fields: [parentAssetId], references: [id], onDelete: Restrict)
+  derivatives   IpAsset[]     @relation("AssetDerivatives")
+  project       Project?      @relation(fields: [projectId], references: [id])
+  updater       User?         @relation("AssetUpdater", fields: [updatedBy], references: [id])
+  ownerships    IpOwnership[]
+  licenses      License[]
+  royaltyLines  RoyaltyLine[]
+  events        Event[]
+  dailyMetrics  DailyMetric[]
+
+  @@index([projectId, status])
+  @@index([createdBy, status])
+  @@index([type, status])
+  @@index([storageKey])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("ip_assets")
+}
+
+model IpOwnership {
+  id                String        @id @default(cuid())
+  ipAssetId         String        @map("ip_asset_id")
+  creatorId         String        @map("creator_id")
+  shareBps          Int           @map("share_bps")
+  ownershipType     OwnershipType @default(PRIMARY) @map("ownership_type")
+  startDate         DateTime      @default(now()) @map("start_date")
+  endDate           DateTime?     @map("end_date")
+  contractReference String?       @map("contract_reference")
+  legalDocUrl       String?       @map("legal_doc_url")
+  notes             Json?
+  createdBy         String        @map("created_by")
+  updatedBy         String        @map("updated_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  createdByUser     User          @relation("IpOwnershipCreatedBy", fields: [createdBy], references: [id])
+  creator           Creator       @relation(fields: [creatorId], references: [id])
+  ipAsset           IpAsset       @relation(fields: [ipAssetId], references: [id], onDelete: Cascade)
+  updatedByUser     User          @relation("IpOwnershipUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@index([ipAssetId, startDate, endDate])
+  @@index([creatorId])
+  @@index([ownershipType])
+  @@map("ip_ownerships")
+}
+
+model RoyaltyRun {
+  id                  String             @id @default(cuid())
+  periodStart         DateTime           @map("period_start")
+  periodEnd           DateTime           @map("period_end")
+  status              RoyaltyRunStatus   @default(DRAFT)
+  totalRevenueCents   Int                @default(0) @map("total_revenue_cents")
+  totalRoyaltiesCents Int                @default(0) @map("total_royalties_cents")
+  processedAt         DateTime?          @map("processed_at")
+  lockedAt            DateTime?          @map("locked_at")
+  createdBy           String             @map("created_by")
+  notes               String?
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  statements          RoyaltyStatement[]
+  creator             User               @relation("RoyaltyRunCreatedBy", fields: [createdBy], references: [id])
+
+  @@index([periodStart, periodEnd])
+  @@index([status])
+  @@index([createdAt])
+  @@map("royalty_runs")
+}
+
+model RoyaltyStatement {
+  id                 String                 @id @default(cuid())
+  royaltyRunId       String                 @map("royalty_run_id")
+  creatorId          String                 @map("creator_id")
+  totalEarningsCents Int                    @default(0) @map("total_earnings_cents")
+  status             RoyaltyStatementStatus @default(PENDING)
+  reviewedAt         DateTime?              @map("reviewed_at")
+  disputedAt         DateTime?              @map("disputed_at")
+  disputeReason      String?                @map("dispute_reason")
+  paidAt             DateTime?              @map("paid_at")
+  paymentReference   String?                @map("payment_reference")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  royaltyRun         RoyaltyRun             @relation(fields: [royaltyRunId], references: [id])
+  creator            Creator                @relation(fields: [creatorId], references: [id])
+  lines              RoyaltyLine[]
+  payouts            Payout[]
+
+  @@unique([royaltyRunId, creatorId])
+  @@index([creatorId, createdAt])
+  @@index([status])
+  @@map("royalty_statements")
+}
+
+model RoyaltyLine {
+  id                     String           @id @default(cuid())
+  royaltyStatementId     String           @map("royalty_statement_id")
+  licenseId              String           @map("license_id")
+  ipAssetId              String           @map("ip_asset_id")
+  revenueCents           Int              @map("revenue_cents")
+  shareBps               Int              @map("share_bps")
+  calculatedRoyaltyCents Int              @map("calculated_royalty_cents")
+  periodStart            DateTime         @map("period_start")
+  periodEnd              DateTime         @map("period_end")
+  metadata               Json?
+  createdAt              DateTime         @default(now()) @map("created_at")
+  royaltyStatement       RoyaltyStatement @relation(fields: [royaltyStatementId], references: [id])
+  license                License          @relation(fields: [licenseId], references: [id])
+  ipAsset                IpAsset          @relation(fields: [ipAssetId], references: [id])
+
+  @@index([royaltyStatementId])
+  @@index([licenseId])
+  @@index([ipAssetId])
+  @@map("royalty_lines")
+}
+
+model Payout {
+  id                 String            @id @default(cuid())
+  creatorId          String            @map("creator_id")
+  royaltyStatementId String?           @map("royalty_statement_id")
+  amountCents        Int               @map("amount_cents")
+  stripeTransferId   String?           @unique @map("stripe_transfer_id")
+  status             PayoutStatus      @default(PENDING)
+  processedAt        DateTime?         @map("processed_at")
+  failedReason       String?           @map("failed_reason")
+  retryCount         Int               @default(0) @map("retry_count")
+  lastRetryAt        DateTime?         @map("last_retry_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  creator            Creator           @relation(fields: [creatorId], references: [id])
+  royaltyStatement   RoyaltyStatement? @relation(fields: [royaltyStatementId], references: [id])
+
+  @@index([creatorId, status])
+  @@index([status, createdAt])
+  @@index([stripeTransferId])
+  @@map("payouts")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum ProjectType {
+  CAMPAIGN
+  CONTENT
+  LICENSING
+}
+
 enum UserRole {
   ADMIN
-  MANAGER
-  TALENT
+  CREATOR
   BRAND
   VIEWER
 }
@@ -250,13 +740,26 @@ enum IPType {
   TRADEMARK
 }
 
+enum LicenseType {
+  EXCLUSIVE
+  NON_EXCLUSIVE
+  EXCLUSIVE_TERRITORY
+}
+
 enum LicenseStatus {
   DRAFT
-  PENDING
+  PENDING_APPROVAL
   ACTIVE
   EXPIRED
-  CANCELLED
+  TERMINATED
   SUSPENDED
+}
+
+enum BillingFrequency {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
 }
 
 enum RoyaltyType {
@@ -280,42 +783,6 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// Email Management
-model EmailEvent {
-  id             String         @id @default(cuid())
-  userId         String?
-  email          String
-  eventType      EmailEventType
-  messageId      String         // Resend message ID
-  subject        String?
-  templateName   String?
-  metadata       Json?          // Custom data passed with email
-  
-  // Event timestamps
-  sentAt         DateTime?
-  deliveredAt    DateTime?
-  openedAt       DateTime?
-  clickedAt      DateTime?
-  bouncedAt      DateTime?
-  complainedAt   DateTime?
-  
-  // Event details
-  bounceReason   String?
-  clickedUrl     String?
-  userAgent      String?
-  ipAddress      String?
-  
-  createdAt      DateTime       @default(now())
-  
-  user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId, eventType])
-  @@index([email, eventType])
-  @@index([messageId])
-  @@index([sentAt])
-  @@map("email_events")
-}
-
 enum EmailEventType {
   SENT
   DELIVERED
@@ -326,35 +793,6 @@ enum EmailEventType {
   FAILED
 }
 
-model EmailPreferences {
-  id                    String          @id @default(cuid())
-  userId                String          @unique
-  
-  // Notification preferences
-  royaltyStatements     Boolean         @default(true)
-  licenseExpiry         Boolean         @default(true)
-  projectInvitations    Boolean         @default(true)
-  messages              Boolean         @default(true)
-  payouts               Boolean         @default(true)
-  
-  // Digest settings
-  digestFrequency       DigestFrequency @default(IMMEDIATE)
-  
-  // Marketing preferences
-  newsletters           Boolean         @default(true)
-  announcements         Boolean         @default(true)
-  
-  // Global unsubscribe
-  unsubscribedAt        DateTime?
-  
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  
-  user                  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("email_preferences")
-}
-
 enum DigestFrequency {
   IMMEDIATE
   DAILY
@@ -362,23 +800,164 @@ enum DigestFrequency {
   NEVER
 }
 
-model EmailSuppression {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  reason       SuppressionReason
-  suppressedAt DateTime          @default(now())
-  
-  // Details
-  bounceType   String?           // hard, soft, complaint
-  bounceReason String?
-  
-  @@index([email])
-  @@map("email_suppressions")
-}
-
 enum SuppressionReason {
   BOUNCE
   COMPLAINT
   UNSUBSCRIBE
   MANUAL
+}
+
+enum OwnershipType {
+  PRIMARY
+  CONTRIBUTOR
+  DERIVATIVE
+  TRANSFERRED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  THREE_D
+  OTHER
+}
+
+enum AssetStatus {
+  DRAFT
+  PROCESSING
+  REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum ScanStatus {
+  PENDING
+  SCANNING
+  CLEAN
+  INFECTED
+  ERROR
+}
+
+enum RoyaltyRunStatus {
+  DRAFT
+  CALCULATED
+  LOCKED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RoyaltyStatementStatus {
+  PENDING
+  REVIEWED
+  DISPUTED
+  RESOLVED
+  PAID
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ===========================
+// System Tables
+// ===========================
+
+model IdempotencyKey {
+  id  String @id @default(cuid())
+  key String @unique
+
+  // What was the operation
+  entityType String  @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  // Request/Response storage
+  requestHash    String? @map("request_hash")
+  responseStatus Int?    @map("response_status")
+  responseBody   Json?   @map("response_body")
+
+  // Processing state
+  processed    Boolean   @default(false)
+  processingAt DateTime? @map("processing_at")
+
+  // Lifecycle
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  @@index([key])
+  @@index([expiresAt])
+  @@index([entityType, entityId])
+  @@map("idempotency_keys")
+}
+
+model FeatureFlag {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  enabled     Boolean @default(false)
+  description String?
+
+  // Targeting & Rollout
+  conditions        Json?
+  rolloutPercentage Int   @default(0) @map("rollout_percentage")
+
+  // Metadata
+  createdBy String   @map("created_by")
+  updatedBy String?  @map("updated_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([enabled])
+  @@map("feature_flags")
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  // Content
+  type    NotificationType
+  title   String           @db.VarChar(255)
+  message String
+
+  // Action
+  actionUrl String? @map("action_url")
+
+  // Priority & Status
+  priority NotificationPriority @default(MEDIUM)
+  read     Boolean              @default(false)
+  readAt   DateTime?            @map("read_at")
+
+  // Metadata
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@index([userId, type])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  LICENSE
+  PAYOUT
+  ROYALTY
+  PROJECT
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }

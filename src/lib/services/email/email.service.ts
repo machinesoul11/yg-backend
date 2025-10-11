@@ -265,6 +265,94 @@ export class EmailService {
     };
   }
 
+  /**
+   * Send verification email for new user registration
+   */
+  async sendVerificationEmail(params: {
+    email: string;
+    name: string;
+    verificationUrl: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendTransactional({
+      email: params.email,
+      subject: 'Verify your YES GODDESS account',
+      template: 'email-verification',
+      variables: {
+        userName: params.name,
+        verificationUrl: params.verificationUrl,
+      },
+      tags: {
+        type: 'verification',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send welcome email after email verification
+   */
+  async sendWelcomeEmail(params: {
+    email: string;
+    name: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendTransactional({
+      email: params.email,
+      subject: 'Welcome to YES GODDESS',
+      template: 'welcome-email',
+      variables: {
+        userName: params.name,
+      },
+      tags: {
+        type: 'welcome',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send password reset email
+   */
+  async sendPasswordResetEmail(params: {
+    email: string;
+    name: string;
+    resetUrl: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendTransactional({
+      email: params.email,
+      subject: 'Reset your YES GODDESS password',
+      template: 'password-reset',
+      variables: {
+        userName: params.name,
+        resetUrl: params.resetUrl,
+      },
+      tags: {
+        type: 'password-reset',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send password changed confirmation email
+   */
+  async sendPasswordChangedEmail(params: {
+    email: string;
+    name: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendTransactional({
+      email: params.email,
+      subject: 'Your YES GODDESS password was changed',
+      template: 'password-changed',
+      variables: {
+        userName: params.name,
+      },
+      tags: {
+        type: 'password-changed',
+        category: 'system',
+      },
+    });
+  }
+
   // --- Private helper methods ---
 
   private async isEmailSuppressed(email: string): Promise<boolean> {

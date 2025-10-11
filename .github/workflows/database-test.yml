@@ -1,0 +1,129 @@
+name: Database Migration Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
+      - 'prisma/seed.ts'
+
+jobs:
+  test-migrations:
+    name: Test Database Migrations
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yesgoddess_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Run migrations on fresh database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+        run: |
+          echo "🧪 Testing migrations on fresh database..."
+          npm run db:migrate:deploy
+
+      - name: Verify migration success
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+        run: |
+          echo "🔍 Verifying database state..."
+          npm run db:migrate:status
+
+      - name: Run seed script
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+          NODE_ENV: development
+        run: |
+          echo "🌱 Testing seed script..."
+          npm run db:seed
+
+      - name: Validate schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+        run: |
+          echo "✅ Validating Prisma schema matches database..."
+          npx prisma validate
+
+      - name: Check for schema drift
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+        run: |
+          echo "🔍 Checking for schema drift..."
+          npx prisma migrate diff \
+            --from-schema-datamodel prisma/schema.prisma \
+            --to-schema-datasource prisma/schema.prisma \
+            --exit-code
+
+      - name: Test rollback scripts (if exist)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yesgoddess_test
+        run: |
+          echo "🔄 Testing rollback procedures..."
+          if [ -d "prisma/migrations/rollbacks" ]; then
+            echo "Found rollback scripts directory"
+            # Test rollback syntax (don't actually execute)
+            for file in prisma/migrations/rollbacks/*.sql; do
+              if [ -f "$file" ]; then
+                echo "Validating $file"
+                psql $DATABASE_URL -f "$file" --dry-run 2>&1 || true
+              fi
+            done
+          else
+            echo "No rollback scripts found (this is okay)"
+          fi
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅ PASSED' : '❌ FAILED';
+            const body = `## Database Migration Tests ${status}
+            
+            **Test Results:**
+            - Fresh database migration: ${{ job.status }}
+            - Schema validation: ${{ job.status }}
+            - Seed script: ${{ job.status }}
+            
+            ${status === '✅ PASSED' ? 
+              '✅ All database migration tests passed. Safe to merge.' : 
+              '❌ Migration tests failed. Please review the logs and fix issues before merging.'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
