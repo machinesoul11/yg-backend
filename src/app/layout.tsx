@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Montserrat, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 
 // YES GODDESS Brand Fonts
 const playfairDisplay = Playfair_Display({
@@ -25,9 +26,9 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "YES GODDESS - Admin & Backend",
-  description: "YES GODDESS talent marketplace administration and backend services",
-  keywords: ["talent marketplace", "content creators", "digital licensing", "admin"],
+  title: "YES GODDESS - Backend & Admin Operations",
+  description: "YES GODDESS backend services and administrative operations platform",
+  keywords: ["backend", "admin", "operations", "internal"],
 };
 
 export default function RootLayout({
@@ -38,7 +39,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfairDisplay.variable} ${montserrat.variable} ${jetBrainsMono.variable}`}>
       <body className="antialiased font-sans bg-brand-white text-brand-black">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

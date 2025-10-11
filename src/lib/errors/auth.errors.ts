@@ -44,7 +44,7 @@ export const AuthErrors = {
   ),
   ACCOUNT_LOCKED: new AuthError(
     'ACCOUNT_LOCKED',
-    'Account has been locked due to too many failed login attempts. Please contact support.',
+    'Account has been locked due to too many failed login attempts',
     423
   ),
   ACCOUNT_DELETED: new AuthError(
@@ -54,12 +54,12 @@ export const AuthErrors = {
   ),
   RATE_LIMIT_EXCEEDED: new AuthError(
     'RATE_LIMIT_EXCEEDED',
-    'Too many requests. Please try again later.',
+    'Too many requests. Try again later',
     429
   ),
   EMAIL_NOT_VERIFIED: new AuthError(
     'EMAIL_NOT_VERIFIED',
-    'Please verify your email address before logging in',
+    'Email verification required',
     403
   ),
 
@@ -71,34 +71,34 @@ export const AuthErrors = {
   ),
   TOKEN_EXPIRED: new AuthError(
     'TOKEN_EXPIRED',
-    'This token has expired. Please request a new one.',
+    'Token has expired',
     401
   ),
   TOKEN_USED: new AuthError(
     'TOKEN_USED',
-    'This token has already been used',
+    'Token has already been used',
     400
   ),
   ALREADY_VERIFIED: new AuthError(
     'ALREADY_VERIFIED',
-    'Email address is already verified',
+    'Email already verified',
     400
   ),
 
   // Authorization Errors
   UNAUTHORIZED: new AuthError(
     'UNAUTHORIZED',
-    'You must be logged in to access this resource',
+    'Authentication required',
     401
   ),
   FORBIDDEN: new AuthError(
     'FORBIDDEN',
-    'You do not have permission to access this resource',
+    'Access denied',
     403
   ),
   INVALID_SESSION: new AuthError(
     'INVALID_SESSION',
-    'Your session has expired. Please log in again.',
+    'Session expired',
     401
   ),
 
@@ -110,11 +110,16 @@ export const AuthErrors = {
   ),
   PASSWORD_REUSE: new AuthError(
     'PASSWORD_REUSE',
-    'New password must be different from current password',
+    'Password cannot be the same as your last 10 passwords',
+    400
+  ),
+  WEAK_PASSWORD_STRENGTH: new AuthError(
+    'WEAK_PASSWORD_STRENGTH',
+    'Password does not meet security requirements',
     400
   ),
 
-  // Account Deletion Errors
+  // Account Management Errors
   PENDING_OBLIGATIONS: new AuthError(
     'PENDING_OBLIGATIONS',
     'Cannot delete account with pending financial obligations',

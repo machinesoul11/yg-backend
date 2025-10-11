@@ -19,6 +19,9 @@ model User {
   email_verified      DateTime?
   deleted_at          DateTime?
   isActive            Boolean              @default(true)
+  locked_until        DateTime?
+  failed_login_count  Int                  @default(0)
+  last_failed_login   DateTime?
   lastLoginAt         DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -33,6 +36,8 @@ model User {
   ownershipCreated    IpOwnership[]        @relation("IpOwnershipCreatedBy")
   ownershipUpdated    IpOwnership[]        @relation("IpOwnershipUpdatedBy")
   passwordResetTokens PasswordResetToken[]
+  passwordHistory     PasswordHistory[]
+  rememberMeTokens    RememberMeToken[]
   projectsCreated     Project[]            @relation("ProjectCreatedBy")
   projectsUpdated     Project[]            @relation("ProjectUpdatedBy")
   royaltyRunsCreated  RoyaltyRun[]         @relation("RoyaltyRunCreatedBy")
@@ -44,6 +49,7 @@ model User {
   @@index([email])
   @@index([role])
   @@index([deleted_at])
+  @@index([locked_until])
   @@map("users")
 }
 
@@ -103,6 +109,35 @@ model PasswordResetToken {
   @@index([token])
   @@index([expires])
   @@map("password_reset_tokens")
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_history")
+}
+
+model RememberMeToken {
+  id              String    @id @default(cuid())
+  userId          String
+  tokenHash       String    @unique @map("token_hash")
+  deviceInfo      String?   @map("device_info")
+  ipAddress       String?   @map("ip_address")
+  userAgent       String?   @map("user_agent")
+  lastUsedAt      DateTime? @map("last_used_at")
+  expiresAt       DateTime  @map("expires_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("remember_me_tokens")
 }
 
 model AuditEvent {

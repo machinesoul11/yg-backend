@@ -25,13 +25,18 @@ import {
   UnauthorizedProfileAccessError,
 } from '../errors/creator.errors';
 import { AuditService } from '@/lib/services/audit.service';
+import { RoleAssignmentService } from '@/lib/services/role-assignment.service';
 import { redis } from '@/lib/redis';
 
 export class CreatorService {
+  private roleAssignmentService: RoleAssignmentService;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly auditService: AuditService,
-  ) {}
+  ) {
+    this.roleAssignmentService = new RoleAssignmentService(prisma, auditService);
+  }
 
   /**
    * Create a new creator profile
@@ -325,12 +330,23 @@ export class CreatorService {
       throw new CreatorNotFoundError(creatorId);
     }
 
-    await this.prisma.creator.update({
-      where: { id: creatorId },
-      data: {
-        verificationStatus: 'approved',
-        verifiedAt: new Date(),
-      },
+    // Update verification status and assign CREATOR role in transaction
+    await this.prisma.$transaction(async (tx) => {
+      // Update creator verification status
+      await tx.creator.update({
+        where: { id: creatorId },
+        data: {
+          verificationStatus: 'approved',
+          verifiedAt: new Date(),
+        },
+      });
+
+      // Automatically assign CREATOR role to user
+      await this.roleAssignmentService.assignCreatorRoleOnVerification(
+        creator.userId,
+        creatorId,
+        adminUserId
+      );
     });
 
     // Invalidate cache

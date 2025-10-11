@@ -11,6 +11,7 @@ import BrandWelcome from '../../../../emails/templates/BrandWelcome';
 import BrandVerificationComplete from '../../../../emails/templates/BrandVerificationComplete';
 import BrandVerificationRejectedEmail from '../../../../emails/templates/BrandVerificationRejectedEmail';
 import BrandTeamInvitation from '../../../../emails/templates/BrandTeamInvitation';
+import RoleChanged from '../../../../emails/templates/RoleChanged';
 
 export type TemplateVariables = Record<string, any>;
 
@@ -28,6 +29,7 @@ export const EMAIL_TEMPLATES = {
   'brand-verification-complete': BrandVerificationComplete,
   'brand-verification-rejected': BrandVerificationRejectedEmail,
   'brand-team-invitation': BrandTeamInvitation,
+  'role-changed': RoleChanged,
 } as const;
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES;
@@ -61,6 +63,7 @@ export function getCategoryFromTemplate(template: string): string {
     'brand-verification-complete': 'system',
     'brand-verification-rejected': 'system',
     'brand-team-invitation': 'system',
+    'role-changed': 'system',
   };
   return mapping[template] || 'other';
 }

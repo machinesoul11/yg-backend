@@ -106,8 +106,7 @@ export const projectsRouter = createTRPCRouter({
     .input(createProjectSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
+        const userId = ctx.session.user.id;
         const project = await projectService.createProject(userId, input);
         return { data: project };
       } catch (error) {
@@ -122,9 +121,8 @@ export const projectsRouter = createTRPCRouter({
     .input(getProjectByIdSchema)
     .query(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'ADMIN'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
         
         const project = await projectService.getProjectById(
           input.id,
@@ -145,9 +143,8 @@ export const projectsRouter = createTRPCRouter({
     .input(listProjectsSchema)
     .query(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'ADMIN'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         const filters = {
           brandId: input.brandId,
@@ -183,9 +180,8 @@ export const projectsRouter = createTRPCRouter({
     .input(updateProjectSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'BRAND'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         const project = await projectService.updateProject(
           input.id,
@@ -207,9 +203,8 @@ export const projectsRouter = createTRPCRouter({
     .input(deleteProjectSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'BRAND'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         await projectService.deleteProject(input.id, userId, userRole);
 
@@ -229,9 +224,8 @@ export const projectsRouter = createTRPCRouter({
     .input(getProjectTeamSchema)
     .query(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'ADMIN'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         const team = await projectService.getProjectTeam(
           input.projectId,
@@ -252,8 +246,7 @@ export const projectsRouter = createTRPCRouter({
     .input(getProjectStatisticsSchema)
     .query(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userRole = 'ADMIN'; // ctx.user.role
+        const userRole = ctx.session.user.role;
 
         const stats = await projectService.getProjectStatistics(
           input.brandId,
@@ -279,16 +272,11 @@ export const projectsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from ctx when authentication is implemented
-        const userId = 'temp-user-id'; // ctx.user.id
-        const userRole = 'BRAND'; // ctx.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
-        // Get user's brand
-        const brand = await prisma.brand.findFirst({
-          where: { userId, deletedAt: null },
-        });
-
-        if (!brand) {
+        // Get user's brand (already available in ctx.securityContext)
+        if (!ctx.securityContext?.brandId) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message: 'Only brand accounts can view their projects',
@@ -296,7 +284,7 @@ export const projectsRouter = createTRPCRouter({
         }
 
         const filters = {
-          brandId: brand.id,
+          brandId: ctx.securityContext.brandId,
           status: input.status,
         };
 

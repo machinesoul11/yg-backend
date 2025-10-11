@@ -2,6 +2,20 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { type FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+import type { SecurityContext } from '@/lib/security/row-level-security';
+import {
+  getIpAssetSecurityFilter,
+  getProjectSecurityFilter,
+  getLicenseSecurityFilter,
+  getRoyaltyStatementSecurityFilter,
+  getPayoutSecurityFilter,
+  getBrandSecurityFilter,
+  getCreatorSecurityFilter,
+  applySecurityFilter,
+} from '@/lib/security/row-level-security';
 
 /**
  * 1. CONTEXT
@@ -14,11 +28,52 @@ import { ZodError } from 'zod';
  * wrap this and provides the required context.
  */
 export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
-  // TODO: Add session management when NextAuth is configured
-  // For now, return basic context
+  // Get the session from Auth.js
+  const session = await getServerSession(authOptions);
+  
+  // Build security context if user is authenticated
+  let securityContext: SecurityContext | undefined;
+  
+  if (session?.user) {
+    // Fetch creator and brand IDs if they exist
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        creator: { select: { id: true } },
+        brand: { select: { id: true } },
+      },
+    });
+
+    if (user) {
+      securityContext = {
+        userId: user.id,
+        role: user.role,
+        creatorId: user.creator?.id,
+        brandId: user.brand?.id,
+      };
+    }
+  }
+  
   return {
+    session,
     req: opts.req,
     resHeaders: opts.resHeaders,
+    db: prisma,
+    securityContext,
+    // Security filter helpers
+    securityFilters: {
+      ipAsset: securityContext ? () => getIpAssetSecurityFilter(securityContext) : () => ({}),
+      project: securityContext ? () => getProjectSecurityFilter(securityContext) : () => ({}),
+      license: securityContext ? () => getLicenseSecurityFilter(securityContext) : () => ({}),
+      royaltyStatement: securityContext ? () => getRoyaltyStatementSecurityFilter(securityContext) : () => ({}),
+      payout: securityContext ? () => getPayoutSecurityFilter(securityContext) : () => ({}),
+      brand: securityContext ? () => getBrandSecurityFilter(securityContext) : () => ({}),
+      creator: securityContext ? () => getCreatorSecurityFilter(securityContext) : () => ({}),
+      apply: <T extends Record<string, any>>(
+        filterType: 'ipAsset' | 'project' | 'license' | 'royaltyStatement' | 'payout' | 'brand' | 'creator',
+        existingWhere?: T
+      ) => securityContext ? applySecurityFilter(securityContext, filterType, existingWhere) : existingWhere || {},
+    },
   };
 };
 
@@ -79,16 +134,17 @@ export const publicProcedure = t.procedure;
  * the session is valid and guarantees `ctx.session.user` is not null.
  *
  * @see https://trpc.io/docs/procedures
- * 
- * TODO: Implement authentication once NextAuth is configured
  */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  // TODO: Uncomment when NextAuth is set up
-  // if (!ctx.session || !ctx.session.user) {
-  //   throw new TRPCError({ code: 'UNAUTHORIZED' });
-  // }
+  if (!ctx.session || !ctx.session.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  }
   return next({
-    ctx,
+    ctx: {
+      ...ctx,
+      // Ensure session is defined for protected procedures
+      session: { ...ctx.session, user: ctx.session.user },
+    },
   });
 });
 
@@ -96,14 +152,56 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
  * Admin-only procedure
  *
  * If you want a query or mutation to ONLY be accessible to admin users, use this.
- * 
- * TODO: Implement authentication once NextAuth is configured
  */
 export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  // TODO: Uncomment when NextAuth is set up
-  // if (ctx.session.user.role !== 'admin') {
-  //   throw new TRPCError({ code: 'FORBIDDEN' });
-  // }
+  if (ctx.session.user.role !== 'ADMIN') {
+    throw new TRPCError({ code: 'FORBIDDEN' });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Creator-only procedure
+ *
+ * If you want a query or mutation to ONLY be accessible to creator users, use this.
+ */
+export const creatorProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== 'CREATOR') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This action requires Creator role',
+    });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Brand-only procedure
+ *
+ * If you want a query or mutation to ONLY be accessible to brand users, use this.
+ */
+export const brandProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.session.user.role !== 'BRAND') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This action requires Brand role',
+    });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Creator or Brand procedure
+ *
+ * Accessible to both CREATOR and BRAND roles (content producers and consumers)
+ */
+export const creatorOrBrandProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!['CREATOR', 'BRAND'].includes(ctx.session.user.role)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This action requires Creator or Brand role',
+    });
+  }
   return next({ ctx });
 });
 
@@ -111,13 +209,26 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
  * Manager or Admin procedure
  *
  * If you want a query or mutation to be accessible to managers and admins, use this.
- * 
- * TODO: Implement authentication once NextAuth is configured
  */
 export const managerProcedure = protectedProcedure.use(({ ctx, next }) => {
-  // TODO: Uncomment when NextAuth is set up
-  // if (!['admin', 'manager'].includes(ctx.session.user.role)) {
-  //   throw new TRPCError({ code: 'FORBIDDEN' });
-  // }
+  if (!['ADMIN', 'CREATOR'].includes(ctx.session.user.role)) {
+    throw new TRPCError({ code: 'FORBIDDEN' });
+  }
   return next({ ctx });
 });
+
+/**
+ * Create a procedure that requires specific permission(s)
+ * This provides fine-grained authorization beyond role-based access
+ * 
+ * @example
+ * import { PERMISSIONS } from '@/lib/constants/permissions';
+ * import { requirePermission } from '@/lib/middleware/permissions';
+ * 
+ * const listAllUsers = protectedProcedure
+ *   .use(requirePermission(PERMISSIONS.USERS_VIEW_ALL))
+ *   .query(async ({ ctx }) => {
+ *     // Only users with USERS_VIEW_ALL permission can execute this
+ *     return await prisma.user.findMany();
+ *   });
+ */

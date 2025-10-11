@@ -4,19 +4,22 @@
  */
 
 import { z } from 'zod';
+import { validatePasswordStrength } from '@/lib/auth/password';
 
 /**
  * Password validation schema
  * Requirements:
- * - Minimum 8 characters
+ * - Minimum 12 characters (enhanced from 8)
  * - At least one uppercase letter
  * - At least one lowercase letter
  * - At least one number
  * - At least one special character
+ * - Not a common weak password
+ * - No sequential or repeated characters
  */
 export const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
+  .min(12, 'Password must be at least 12 characters')
   .max(100, 'Password is too long')
   .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
   .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
@@ -24,7 +27,14 @@ export const passwordSchema = z
   .regex(
     /[^A-Za-z0-9]/,
     'Password must contain at least one special character'
-  );
+  )
+  .refine((password) => {
+    // Additional security validation
+    const errors = validatePasswordStrength(password);
+    return errors.length === 0;
+  }, {
+    message: 'Password does not meet security requirements'
+  });
 
 /**
  * Email validation schema

@@ -53,9 +53,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(fileUploadSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from context once auth is implemented
-        const userId = 'temp-user-id'; // ctx.session.user.id
-        const userRole = 'CREATOR'; // ctx.session.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.initiateUpload(
           { userId, userRole },
@@ -73,8 +72,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(confirmUploadSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.confirmUpload(
           { userId, userRole },
@@ -92,8 +91,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(listAssetsSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.listAssets(
           { userId, userRole },
@@ -111,8 +110,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(getAssetByIdSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.getAssetById(
           { userId, userRole },
@@ -130,8 +129,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(updateAssetSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.updateAsset(
           { userId, userRole },
@@ -149,8 +148,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(updateStatusSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.updateStatus(
           { userId, userRole },
@@ -168,8 +167,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(deleteAssetSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.deleteAsset(
           { userId, userRole },
@@ -187,8 +186,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(getAssetByIdSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.getDownloadUrl(
           { userId, userRole },
@@ -206,8 +205,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(getDerivativesSchema)
     .query(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'CREATOR';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.getDerivatives(
           { userId, userRole },
@@ -225,8 +224,8 @@ export const ipAssetsRouter = createTRPCRouter({
     .input(bulkUpdateStatusSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'ADMIN'; // TODO: Get from ctx.session.user.role
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         return await ipAssetService.bulkUpdateStatus(
           { userId, userRole },

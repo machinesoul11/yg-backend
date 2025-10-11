@@ -9,6 +9,9 @@ import crypto from 'crypto';
 import { AuthErrors } from '../errors/auth.errors';
 import { AuditService, AUDIT_ACTIONS } from './audit.service';
 import { EmailService } from './email/email.service';
+import { PasswordHistoryService } from '../auth/password-history.service';
+import { AccountLockoutService } from '../auth/account-lockout.service';
+import { validatePasswordStrength } from '../auth/password';
 import type {
   RegisterInput,
   LoginInput,
@@ -38,11 +41,17 @@ export type LoginOutput = {
 };
 
 export class AuthService {
+  private passwordHistory: PasswordHistoryService;
+  private accountLockout: AccountLockoutService;
+
   constructor(
     private prisma: PrismaClient,
     private emailService: EmailService,
     private auditService: AuditService
-  ) {}
+  ) {
+    this.passwordHistory = new PasswordHistoryService(prisma);
+    this.accountLockout = new AccountLockoutService(prisma, emailService);
+  }
 
   /**
    * Register a new user
@@ -263,23 +272,46 @@ export class AuthService {
     if (!user) {
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: 'unknown',
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'USER_NOT_FOUND' },
+        after: { reason: 'USER_NOT_FOUND' },
       });
       throw AuthErrors.INVALID_CREDENTIALS;
+    }
+
+    // Check if account is locked
+    const lockoutStatus = await this.accountLockout.isAccountLocked(user.id);
+    if (lockoutStatus.isLocked) {
+      await this.auditService.log({
+        action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
+        userId: user.id,
+        email,
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+        after: { 
+          reason: 'ACCOUNT_LOCKED',
+          locked_until: lockoutStatus.lockedUntil,
+        },
+      });
+      throw AuthErrors.ACCOUNT_LOCKED;
     }
 
     // Check if account is soft-deleted
     if (user.deleted_at) {
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
         userId: user.id,
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'ACCOUNT_DELETED' },
+        after: { reason: 'ACCOUNT_DELETED' },
       });
       throw AuthErrors.ACCOUNT_DELETED;
     }
@@ -288,11 +320,13 @@ export class AuthService {
     if (!user.isActive) {
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
         userId: user.id,
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'ACCOUNT_LOCKED' },
+        after: { reason: 'ACCOUNT_INACTIVE' },
       });
       throw AuthErrors.ACCOUNT_LOCKED;
     }
@@ -302,11 +336,13 @@ export class AuthService {
       // OAuth-only account
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
         userId: user.id,
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'OAUTH_ONLY_ACCOUNT' },
+        after: { reason: 'OAUTH_ONLY_ACCOUNT' },
       });
       throw AuthErrors.INVALID_CREDENTIALS;
     }
@@ -317,16 +353,28 @@ export class AuthService {
     );
 
     if (!isValidPassword) {
+      // Record failed attempt and potentially lock account
+      await this.accountLockout.recordFailedAttempt(
+        user.id,
+        context?.ipAddress,
+        context?.userAgent
+      );
+
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_FAILED,
+        entityType: 'user',
+        entityId: user.id,
         userId: user.id,
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'INVALID_PASSWORD' },
+        after: { reason: 'INVALID_PASSWORD' },
       });
       throw AuthErrors.INVALID_CREDENTIALS;
     }
+
+    // Successful login - reset failed attempts
+    await this.accountLockout.resetFailedAttempts(user.id);
 
     // Update last login
     await this.prisma.user.update({
@@ -336,11 +384,13 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+      entityType: 'user',
+      entityId: user.id,
       userId: user.id,
       email: user.email,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
-      afterJson: {
+      after: {
         role: user.role,
         emailVerified: !!user.email_verified,
       },
@@ -433,6 +483,24 @@ export class AuthService {
       throw AuthErrors.TOKEN_USED;
     }
 
+    // Check password history
+    const isReused = await this.passwordHistory.isPasswordReused(
+      resetToken.userId,
+      newPassword
+    );
+
+    if (isReused) {
+      throw AuthErrors.PASSWORD_REUSE;
+    }
+
+    // Add current password to history before changing
+    if (resetToken.user.password_hash) {
+      await this.passwordHistory.addToHistory(
+        resetToken.userId,
+        resetToken.user.password_hash
+      );
+    }
+
     // Hash new password
     const passwordHash = await this.hashPassword(newPassword);
 
@@ -452,6 +520,11 @@ export class AuthService {
       }),
     ]);
 
+    // Revoke all remember-me tokens for security
+    // This will require the user to login again everywhere
+    // Uncomment when RememberMeService is integrated:
+    // await this.rememberMe.revokeAllUserTokens(resetToken.userId);
+
     // Send confirmation email
     try {
       await this.emailService.sendPasswordChangedEmail({
@@ -464,6 +537,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.PASSWORD_RESET_SUCCESS,
+      entityType: 'user',
+      entityId: resetToken.userId,
       userId: resetToken.userId,
       email: resetToken.user.email,
       ipAddress: context?.ipAddress,
@@ -509,6 +584,21 @@ export class AuthService {
       throw AuthErrors.PASSWORD_REUSE;
     }
 
+    // Check password history
+    const isReused = await this.passwordHistory.isPasswordReused(userId, newPassword);
+    if (isReused) {
+      throw AuthErrors.PASSWORD_REUSE;
+    }
+
+    // Additional password strength validation
+    const strengthErrors = validatePasswordStrength(newPassword, user.email, user.name || undefined);
+    if (strengthErrors.length > 0) {
+      throw new Error(strengthErrors.join('. '));
+    }
+
+    // Add current password to history
+    await this.passwordHistory.addToHistory(userId, user.password_hash);
+
     // Hash new password
     const passwordHash = await this.hashPassword(newPassword);
 
@@ -522,6 +612,10 @@ export class AuthService {
       // Note: This requires session tracking in context
     ]);
 
+    // Revoke all remember-me tokens for security
+    // Uncomment when RememberMeService is integrated:
+    // await this.rememberMe.revokeAllUserTokens(userId);
+
     // Send confirmation email
     try {
       await this.emailService.sendPasswordChangedEmail({
@@ -534,6 +628,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.PASSWORD_CHANGED,
+      entityType: 'user',
+      entityId: userId,
       userId,
       email: user.email,
       ipAddress: context?.ipAddress,

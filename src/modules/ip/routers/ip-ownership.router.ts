@@ -64,8 +64,7 @@ export const ipOwnershipRouter = createTRPCRouter({
     .input(setAssetOwnershipSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // TODO: Get user from context once auth is implemented
-        const userId = 'temp-user-id';
+        const userId = ctx.session.user.id;
 
         const result = await ipOwnershipService.setAssetOwnership(
           input.ipAssetId,
@@ -149,8 +148,8 @@ export const ipOwnershipRouter = createTRPCRouter({
     .input(z.object({ ipAssetId: z.string().cuid() }))
     .query(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
-        const userRole = 'ADMIN';
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
 
         // Permission check
         if (userRole !== 'ADMIN') {
@@ -177,15 +176,10 @@ export const ipOwnershipRouter = createTRPCRouter({
     .input(transferOwnershipSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
+        const userId = ctx.session.user.id;
 
-        // Get user's creator profile
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          include: { creator: true },
-        });
-
-        if (!user?.creator) {
+        // Get user's creator profile (already available in ctx.securityContext)
+        if (!ctx.securityContext?.creatorId) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Creator profile not found',
@@ -197,7 +191,7 @@ export const ipOwnershipRouter = createTRPCRouter({
           ipAssetId: input.ipAssetId,
         });
         const userOwnership = currentOwnerships.find(
-          (o) => o.creatorId === user.creator!.id
+          (o) => o.creatorId === ctx.securityContext!.creatorId
         );
 
         if (!userOwnership || userOwnership.shareBps < input.shareBps) {
@@ -213,7 +207,7 @@ export const ipOwnershipRouter = createTRPCRouter({
 
         // Perform transfer
         const result = await ipOwnershipService.transferOwnership(
-          user.creator.id,
+          ctx.securityContext!.creatorId,
           input.toCreatorId,
           input.ipAssetId,
           input.shareBps,
@@ -264,7 +258,7 @@ export const ipOwnershipRouter = createTRPCRouter({
     .input(z.object({ id: z.string().cuid() }))
     .mutation(async ({ ctx, input }) => {
       try {
-        const userId = 'temp-user-id';
+        const userId = ctx.session.user.id;
 
         // Get ownership record
         const ownership = await prisma.ipOwnership.findUnique({

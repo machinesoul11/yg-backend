@@ -1,6 +1,8 @@
 import { createTRPCRouter } from '@/lib/trpc';
 import { authRouter } from './routers/auth.router';
+import { oauthRouter } from './routers/oauth.router';
 import { auditRouter } from './routers/audit.router';
+import { rolesRouter } from './routers/roles.router';
 import { systemRouter } from '@/modules/system';
 
 /**
@@ -10,7 +12,9 @@ import { systemRouter } from '@/modules/system';
  */
 export const appRouter = createTRPCRouter({
   auth: authRouter,
+  oauth: oauthRouter,
   audit: auditRouter,
+  roles: rolesRouter,
   system: systemRouter,
   // Add your routers here
   // Example:

@@ -6,6 +6,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { EmailService } from '@/lib/services/email/email.service';
 import { AuditService } from '@/lib/services/audit.service';
+import { RoleAssignmentService } from '@/lib/services/role-assignment.service';
 import type { IStorageProvider } from '@/lib/storage';
 import {
   BrandAlreadyExistsError,
@@ -38,12 +39,16 @@ import type {
 } from '../schemas/brand.schema';
 
 export class BrandService {
+  private roleAssignmentService: RoleAssignmentService;
+
   constructor(
     private prisma: PrismaClient,
     private emailService: EmailService,
     private auditService: AuditService,
     private storageProvider: IStorageProvider
-  ) {}
+  ) {
+    this.roleAssignmentService = new RoleAssignmentService(prisma, auditService);
+  }
 
   /**
    * Create new brand profile
@@ -438,15 +443,38 @@ export class BrandService {
     adminId: string,
     notes?: string
   ): Promise<Brand> {
-    const brand = await this.prisma.brand.update({
+    // Fetch brand first to get userId
+    const existingBrand = await this.prisma.brand.findUnique({
       where: { id: brandId },
-      data: {
-        verificationStatus: 'verified',
-        verifiedAt: new Date(),
-        verificationNotes: notes || null,
-        isVerified: true, // Legacy field
-      },
-      include: { user: true },
+      select: { id: true, userId: true },
+    });
+
+    if (!existingBrand) {
+      throw new BrandNotFoundError(brandId);
+    }
+
+    // Update brand and assign role in transaction
+    const brand = await this.prisma.$transaction(async (tx) => {
+      // Update brand verification status
+      const updatedBrand = await tx.brand.update({
+        where: { id: brandId },
+        data: {
+          verificationStatus: 'verified',
+          verifiedAt: new Date(),
+          verificationNotes: notes || null,
+          isVerified: true, // Legacy field
+        },
+        include: { user: true },
+      });
+
+      // Automatically assign BRAND role to user
+      await this.roleAssignmentService.assignBrandRoleOnVerification(
+        existingBrand.userId,
+        brandId,
+        adminId
+      );
+
+      return updatedBrand;
     });
 
     // Send verification email to brand
@@ -473,7 +501,9 @@ export class BrandService {
     await this.auditService.log({
       action: 'brand.verified',
       userId: adminId,
-      afterJson: { brandId, notes },
+      entityType: 'brand',
+      entityId: brandId,
+      after: { brandId, notes },
     });
 
     return this.formatBrandForOutput(brand);

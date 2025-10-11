@@ -137,9 +137,8 @@ export const systemRouter = createTRPCRouter({
       .input(z.object({ flagName: z.string() }))
       .query(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const userId = 'temp-user-id';
-          const userRole = 'CREATOR' as const;
+          const userId = ctx.session.user.id;
+          const userRole = ctx.session.user.role as 'ADMIN' | 'CREATOR' | 'BRAND' | 'VIEWER';
 
           const enabled = await featureFlagService.isEnabled(input.flagName, {
             userId,
@@ -178,8 +177,7 @@ export const systemRouter = createTRPCRouter({
       .input(CreateFeatureFlagSchema)
       .mutation(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const createdBy = 'temp-admin-id';
+          const createdBy = ctx.session.user.id;
           const flag = await featureFlagService.createFlag(input, createdBy);
 
           return {
@@ -205,8 +203,7 @@ export const systemRouter = createTRPCRouter({
       .input(UpdateFeatureFlagSchema)
       .mutation(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const updatedBy = 'temp-admin-id';
+          const updatedBy = ctx.session.user.id;
           const { id, ...data } = input;
           const flag = await featureFlagService.updateFlag(id, data, updatedBy);
 
@@ -250,8 +247,7 @@ export const systemRouter = createTRPCRouter({
       .input(ListNotificationsSchema)
       .query(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const userId = 'temp-user-id';
+          const userId = ctx.session.user.id;
           const { notifications, total } = await notificationService.listForUser({
             ...input,
             userId,
@@ -289,8 +285,7 @@ export const systemRouter = createTRPCRouter({
 
     getUnreadCount: protectedProcedure.query(async ({ ctx }) => {
       try {
-        // TODO: Get from session when auth is configured
-        const userId = 'temp-user-id';
+        const userId = ctx.session.user.id;
         const count = await notificationService.getUnreadCount(userId);
         return { data: { count } };
       } catch (error) {
@@ -302,8 +297,7 @@ export const systemRouter = createTRPCRouter({
       .input(MarkAsReadSchema)
       .mutation(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const userId = 'temp-user-id';
+          const userId = ctx.session.user.id;
           const notification = await notificationService.markAsRead(
             input.notificationId,
             userId
@@ -323,8 +317,7 @@ export const systemRouter = createTRPCRouter({
 
     markAllAsRead: protectedProcedure.mutation(async ({ ctx }) => {
       try {
-        // TODO: Get from session when auth is configured
-        const userId = 'temp-user-id';
+        const userId = ctx.session.user.id;
         const count = await notificationService.markAllAsRead(userId);
         return { data: { count } };
       } catch (error) {
@@ -336,8 +329,7 @@ export const systemRouter = createTRPCRouter({
       .input(DeleteNotificationSchema)
       .mutation(async ({ ctx, input }) => {
         try {
-          // TODO: Get from session when auth is configured
-          const userId = 'temp-user-id';
+          const userId = ctx.session.user.id;
           await notificationService.delete(input.notificationId, userId);
           return { data: { success: true } };
         } catch (error) {
