@@ -88,13 +88,10 @@ Access it via `ctx.securityContext` in any tRPC procedure.
 
 ## Step 4: Testing Your Implementation
 
-Run the example tests to verify RLS is working:
+Run tests to verify RLS is working:
 
 ```bash
-# Option 1: Execute the example test file
-ts-node src/__tests__/security/row-level-security.example.ts
-
-# Option 2: Set up Jest and run proper tests (requires Jest configuration)
+# Set up Jest and run proper tests (requires Jest configuration)
 npm install --save-dev @jest/globals @types/jest
 npm test -- row-level-security
 ```
@@ -223,7 +220,6 @@ The RLS implementation is complete and production-ready. Optional enhancements:
 - tRPC Context: `/src/lib/trpc.ts`
 - Documentation: `/docs/middleware/ROW_LEVEL_SECURITY.md`
 - Completion Report: `/docs/middleware/RLS_COMPLETION_REPORT.md`
-- Test Examples: `/src/__tests__/security/row-level-security.example.ts`
 - Database Indexes: `/prisma/migrations/010_rls_performance_indexes.sql`
 
 ---

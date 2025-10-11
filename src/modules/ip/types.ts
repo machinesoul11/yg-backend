@@ -67,6 +67,52 @@ export interface DownloadUrlResponse {
   expiresAt: string; // ISO 8601
 }
 
+export interface PreviewUrlResponse {
+  url: string;
+  size: 'small' | 'medium' | 'large' | 'original';
+  width?: number;
+  height?: number;
+  expiresAt: string;
+}
+
+export interface AssetVariantsResponse {
+  thumbnails: {
+    small?: PreviewUrlResponse;
+    medium?: PreviewUrlResponse;
+    large?: PreviewUrlResponse;
+  };
+  previews: {
+    url?: string;
+    expiresAt?: string;
+    duration?: number; // For video/audio previews
+  };
+  waveform?: {
+    url?: string;
+    expiresAt?: string;
+  };
+}
+
+export interface AssetMetadataResponse {
+  type: AssetType;
+  technical?: Record<string, any>;
+  descriptive?: Record<string, any>;
+  extracted?: Record<string, any>;
+  processing?: {
+    thumbnailGenerated?: boolean;
+    thumbnailGeneratedAt?: string;
+    previewGenerated?: boolean;
+    previewGeneratedAt?: string;
+    metadataExtracted?: boolean;
+    metadataExtractedAt?: string;
+  };
+}
+
+export interface RegeneratePreviewResponse {
+  jobId: string;
+  status: 'queued' | 'processing';
+  types: string[];
+}
+
 export interface UploadInitiationResponse {
   uploadUrl: string;
   assetId: string;

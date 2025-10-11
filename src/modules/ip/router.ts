@@ -17,6 +17,10 @@ import {
   getAssetByIdSchema,
   deleteAssetSchema,
   getDerivativesSchema,
+  getPreviewSchema,
+  getMetadataSchema,
+  getVariantsSchema,
+  regeneratePreviewSchema,
 } from './validation';
 
 /**
@@ -192,6 +196,86 @@ export const ipAssetsRouter = createTRPCRouter({
         return await ipAssetService.getDownloadUrl(
           { userId, userRole },
           input.id
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Get preview URL with size variant (small, medium, large, original)
+   */
+  getPreview: protectedProcedure
+    .input(getPreviewSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.getPreviewUrl(
+          { userId, userRole },
+          input.id,
+          input.size
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Get asset metadata with optional field filtering
+   */
+  getMetadata: protectedProcedure
+    .input(getMetadataSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.getAssetMetadata(
+          { userId, userRole },
+          input.id,
+          input.fields
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Get all available variants (thumbnails, previews)
+   */
+  getVariants: protectedProcedure
+    .input(getVariantsSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.getAssetVariants(
+          { userId, userRole },
+          input.id,
+          input.type
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Regenerate previews for an asset
+   */
+  regeneratePreview: protectedProcedure
+    .input(regeneratePreviewSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.regeneratePreview(
+          { userId, userRole },
+          input.id,
+          input.types
         );
       } catch (error) {
         handleAssetError(error);

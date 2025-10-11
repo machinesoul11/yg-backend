@@ -37,7 +37,7 @@ export const confirmUploadSchema = z.object({
   description: z.string()
     .max(2000, 'Description too long')
     .optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // ============================================================================
@@ -54,7 +54,7 @@ export const updateAssetSchema = z.object({
     .max(2000, 'Description too long')
     .optional()
     .nullable(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 // ============================================================================
@@ -90,6 +90,34 @@ export const bulkUpdateStatusSchema = z.object({
 // ============================================================================
 // Query Validation
 // ============================================================================
+
+// ============================================================================
+// Preview & Variant Validation
+// ============================================================================
+
+export const getPreviewSchema = z.object({
+  id: z.string().cuid(),
+  size: z.enum(['small', 'medium', 'large', 'original']).optional().default('medium'),
+});
+
+export const getMetadataSchema = z.object({
+  id: z.string().cuid(),
+  fields: z.array(z.enum(['technical', 'descriptive', 'extracted', 'processing', 'all']))
+    .optional()
+    .default(['all']),
+});
+
+export const getVariantsSchema = z.object({
+  id: z.string().cuid(),
+  type: z.enum(['thumbnail', 'preview', 'all']).optional().default('all'),
+});
+
+export const regeneratePreviewSchema = z.object({
+  id: z.string().cuid(),
+  types: z.array(z.enum(['thumbnail', 'preview', 'metadata', 'all']))
+    .optional()
+    .default(['all']),
+});
 
 export const listAssetsSchema = z.object({
   filters: z.object({
@@ -132,7 +160,7 @@ export const getDerivativesSchema = z.object({
 // Metadata Validation
 // ============================================================================
 
-export const assetMetadataSchema = z.record(z.any()).optional().refine(
+export const assetMetadataSchema = z.record(z.string(), z.any()).optional().refine(
   (data) => {
     if (!data) return true;
     

@@ -14,8 +14,7 @@ src/lib/query-filters/
 ├── tenant-scoped-queries.ts    # Tenant-aware query wrappers
 ├── ownership-filters.ts        # Ownership-based filtering
 ├── permission-select.ts        # Field-level permissions
-├── secure-aggregations.ts      # Secure aggregation queries
-└── examples.ts                 # Integration examples
+└── secure-aggregations.ts      # Secure aggregation queries
 ```
 
 ## Core Concepts
@@ -339,10 +338,6 @@ Sensitive fields are never exposed to unauthorized users:
 
 ## Testing
 
-### Manual Testing
-
-See `src/lib/query-filters/examples.ts` for integration examples.
-
 ### Unit Testing
 
 Test coverage should include:
@@ -451,9 +446,8 @@ Run the full test suite to ensure:
 
 For questions or issues:
 1. Review this documentation
-2. Check the examples in `src/lib/query-filters/examples.ts`
-3. Refer to the RLS documentation in `docs/middleware/ROW_LEVEL_SECURITY.md`
-4. Consult the implementation files for detailed code comments
+2. Refer to the RLS documentation in `docs/middleware/ROW_LEVEL_SECURITY.md`
+3. Consult the implementation files for detailed code comments
 
 ---
 

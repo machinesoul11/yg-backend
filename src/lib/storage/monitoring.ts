@@ -4,7 +4,7 @@
  * Tracks storage metrics and provides monitoring capabilities
  */
 
-import { prisma } from '@/lib/db'
+import { prisma } from '../db'
 
 export interface StorageMetrics {
   date: Date

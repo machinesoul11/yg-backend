@@ -150,7 +150,7 @@ model AuditEvent {
   user   User?   @relation(fields: [userId], references: [id])
 
   // What was changed
-  entityType String // "project", "license", "payout", etc.
+  entityType String // "project", "license", "payout", "view", etc.
   entityId   String // The specific record ID
   action     String // "create", "update", "delete", "view"
 
@@ -618,6 +618,8 @@ model IpAsset {
   royaltyLines  RoyaltyLine[]
   events        Event[]
   dailyMetrics  DailyMetric[]
+  sourceRelationships FileRelationship[] @relation("SourceRelationships")
+  targetRelationships FileRelationship[] @relation("TargetRelationships")
 
   @@index([projectId, status])
   @@index([createdBy, status])
@@ -626,6 +628,26 @@ model IpAsset {
   @@index([deletedAt])
   @@index([createdAt])
   @@map("ip_assets")
+}
+
+model FileRelationship {
+  id               String    @id @default(cuid())
+  sourceAssetId    String    @map("source_asset_id")
+  targetAssetId    String    @map("target_asset_id")
+  relationshipType String    @map("relationship_type")
+  metadata         Json      @default("{}")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+  sourceAsset      IpAsset   @relation("SourceRelationships", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  targetAsset      IpAsset   @relation("TargetRelationships", fields: [targetAssetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceAssetId, targetAssetId, relationshipType, deletedAt])
+  @@index([sourceAssetId])
+  @@index([targetAssetId])
+  @@index([relationshipType])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("file_relationships")
 }
 
 model IpOwnership {
@@ -742,6 +764,28 @@ model Payout {
   @@index([status, createdAt])
   @@index([stripeTransferId])
   @@map("payouts")
+}
+
+model StorageMetrics {
+  id               String   @id @default(cuid())
+  snapshotDate     DateTime @map("snapshot_date") @db.Timestamptz
+  entityType       String   @map("entity_type")
+  entityId         String?  @map("entity_id")
+  totalBytes       BigInt   @default(0) @map("total_bytes")
+  fileCount        Int      @default(0) @map("file_count")
+  averageFileSize  BigInt   @default(0) @map("average_file_size")
+  largestFileSize  BigInt   @default(0) @map("largest_file_size")
+  largestFileId    String?  @map("largest_file_id")
+  storageTrendBps  Int      @default(0) @map("storage_trend_bps")
+  breakdownByType  Json     @default("{}") @map("breakdown_by_type")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([snapshotDate, entityType, entityId])
+  @@index([snapshotDate(sort: Desc)])
+  @@index([entityType, entityId, snapshotDate(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("storage_metrics")
 }
 
 enum ProjectStatus {

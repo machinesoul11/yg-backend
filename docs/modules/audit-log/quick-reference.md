@@ -46,7 +46,6 @@ The database schema is **correct** and the Prisma client has been **successfully
 ### Created
 - `prisma/migrations/20251010000000_add_audit_entity_fields/migration.sql`
 - `src/lib/api/routers/audit.router.ts`
-- `src/examples/audit-integration-example.ts`
 - `src/__tests__/services/audit.service.test.ts`
 - `docs/AUDIT_LOG_MODULE_COMPLETE.md`
 - `docs/AUDIT_LOG_QUICK_REFERENCE.md` (this file)

@@ -112,9 +112,9 @@ async function main() {
   }
 
   // Summary
-  console.log('\n' + '='.repeat(60));
+  console.log(`\n${  '='.repeat(60)}`);
   console.log('✓ Database health check completed successfully');
-  console.log('='.repeat(60) + '\n');
+  console.log(`${'='.repeat(60)  }\n`);
 
   process.exit(0);
 }

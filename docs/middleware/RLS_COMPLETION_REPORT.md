@@ -104,16 +104,7 @@ All routers updated to use session context instead of temp placeholders:
 - Security filter access matrix
 - Context helper methods reference
 
-### 5. Test Examples
-
-✅ **Test Example File** (`/src/__tests__/security/row-level-security.example.ts`)
-- Example test functions demonstrating RLS behavior
-- Test cases for admin access, creator isolation, brand isolation
-- Test cases for royalty statement access, cross-tenant isolation
-- Test cases for filter composition and resource access checks
-- Can be executed directly: `ts-node src/__tests__/security/row-level-security.example.ts`
-
-### 6. Database Performance Indexes
+### 5. Database Performance Indexes
 
 ✅ **RLS Performance Indexes** (`/prisma/migrations/010_rls_performance_indexes.sql`)
 
@@ -270,7 +261,6 @@ The implementation satisfies all roadmap requirements:
 - Core Implementation: `/src/lib/security/row-level-security.ts`
 - tRPC Context: `/src/lib/trpc.ts`
 - Main Documentation: `/docs/middleware/ROW_LEVEL_SECURITY.md`
-- Test Examples: `/src/__tests__/security/row-level-security.example.ts`
 - Database Indexes: `/prisma/migrations/010_rls_performance_indexes.sql`
 
 ---

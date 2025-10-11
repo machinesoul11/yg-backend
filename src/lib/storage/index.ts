@@ -43,6 +43,27 @@ function createStorageProvider(): IStorageProvider {
 // Export singleton instance
 export const storageProvider = createStorageProvider()
 
-// Re-export types
-export type { IStorageProvider, AssetMetadata, StorageConfig } from './types'
-export { StorageError } from './types'
+// Re-export types and classes
+export type { 
+  IStorageProvider, 
+  AssetMetadata, 
+  StorageConfig,
+} from './types'
+export type {
+  ProgressCallback,
+  ProgressEvent,
+  ValidationResult,
+  StorageOperationConfig,
+} from './base'
+export { 
+  StorageError, 
+  StorageErrorCode,
+  BaseStorageProvider,
+} from './base'
+
+// Export test utilities (for development/testing environments)
+export { 
+  MockStorageProvider, 
+  StorageTestDataGenerator, 
+  StorageTestHarness 
+} from './test-utils'

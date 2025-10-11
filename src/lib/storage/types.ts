@@ -4,6 +4,8 @@
  * Abstract interface for storage operations to support multiple providers (R2, Azure Blob)
  */
 
+import type { ProgressCallback } from './base'
+
 export interface IStorageProvider {
   // Upload operations
   upload(params: {
@@ -11,6 +13,7 @@ export interface IStorageProvider {
     file: Buffer | ReadableStream
     contentType: string
     metadata?: Record<string, string>
+    progressCallback?: ProgressCallback
   }): Promise<{ key: string; url: string; size: number }>
 
   // Generate signed URL for direct frontend upload
@@ -20,6 +23,18 @@ export interface IStorageProvider {
     expiresIn?: number // seconds, default 900 (15 min)
     maxSizeBytes?: number
   }): Promise<{ uploadUrl: string; key: string }>
+
+  // Generate presigned POST for direct browser upload
+  getPresignedPost(params: {
+    key: string
+    contentType: string
+    expiresIn?: number // seconds, default 900 (15 min)
+    maxSizeBytes?: number
+    conditions?: Array<any>
+  }): Promise<{
+    url: string
+    fields: Record<string, string>
+  }>
 
   // Generate signed URL for download
   getDownloadUrl(params: {
@@ -65,16 +80,9 @@ export interface IStorageProvider {
 
 /**
  * Storage Error Class
+ * Re-exported from base.ts for compatibility
  */
-export class StorageError extends Error {
-  constructor(
-    message: string,
-    public details?: any
-  ) {
-    super(message)
-    this.name = 'StorageError'
-  }
-}
+export { StorageError, StorageErrorCode } from './base'
 
 /**
  * Asset Metadata Interfaces

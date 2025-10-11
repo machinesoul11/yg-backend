@@ -66,9 +66,12 @@
 
 - [x] **Cloudflare R2 Implementation**
   - [x] Installed AWS SDK packages (@aws-sdk/client-s3, @aws-sdk/s3-request-presigner)
+  - [x] Installed AWS SDK presigned POST package (@aws-sdk/s3-presigned-post)
   - [x] Created R2StorageProvider class (`src/lib/storage/providers/r2.ts`)
   - [x] Implemented upload method with encryption
+  - [x] Implemented multipart upload for large files (>100MB, 10MB chunks)
   - [x] Implemented getUploadUrl for signed URLs
+  - [x] Implemented getPresignedPost for direct browser uploads
   - [x] Implemented getDownloadUrl with expiry
   - [x] Implemented delete and deleteBatch operations
   - [x] Implemented exists and getMetadata checks
@@ -76,6 +79,7 @@
   - [x] Implemented copy and move operations
   - [x] Added storage key validation (path traversal prevention)
   - [x] Implemented batch operations (1000 files at a time)
+  - [x] Added automatic multipart upload abort on failures
 
 - [x] **Storage Configuration**
   - [x] Created storage config validator (`src/lib/config/storage.ts`)

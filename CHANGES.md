@@ -27,13 +27,7 @@ Complete implementation of Row-Level Security (RLS) for the YesGoddess backend p
   - Common patterns and examples
   - Troubleshooting tips
 
-### 3. Testing
-- **`/src/__tests__/security/row-level-security.example.ts`**
-  - Example test functions
-  - Runnable test demonstrations
-  - Test patterns for future implementation
-
-### 4. Database Migrations
+### 3. Database Migrations
 - **`/prisma/migrations/010_rls_performance_indexes.sql`**
   - Performance indexes for all RLS queries
   - Optimized for tenant-scoped data access

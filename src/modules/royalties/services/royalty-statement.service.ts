@@ -88,7 +88,7 @@ export class RoyaltyStatementService {
     const statement = await this.prisma.royaltyStatement.findFirst({
       where: {
         id: statementId,
-        creatorId: creatorId,
+        creatorId,
       },
     });
 
@@ -126,7 +126,7 @@ export class RoyaltyStatementService {
     const statement = await this.prisma.royaltyStatement.findFirst({
       where: {
         id: statementId,
-        creatorId: creatorId,
+        creatorId,
       },
       include: {
         creator: {
@@ -293,7 +293,7 @@ export class RoyaltyStatementService {
     const statement = await this.prisma.royaltyStatement.findFirst({
       where: {
         id: statementId,
-        creatorId: creatorId,
+        creatorId,
       },
     });
 

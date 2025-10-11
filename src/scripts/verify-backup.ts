@@ -22,9 +22,9 @@ async function main() {
 
   console.log(report);
 
-  console.log('\n' + '='.repeat(60));
+  console.log(`\n${  '='.repeat(60)}`);
   console.log('✓ Backup verification completed');
-  console.log('='.repeat(60) + '\n');
+  console.log(`${'='.repeat(60)  }\n`);
 
   // Check for issues
   if (report.includes('✗ FAIL')) {

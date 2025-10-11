@@ -1,10 +1,17 @@
 import { PrismaClient, AssetStatus, AssetType, ScanStatus } from '@prisma/client';
 import { IStorageProvider } from '@/lib/storage/types';
-import { cuid } from '@paralleldrive/cuid2';
+import { Queue } from 'bullmq';
+import { redis } from '@/lib/redis';
+import { uploadAnalyticsService } from '@/lib/services/upload-analytics.service';
+import type { VirusScanJobData } from '@/jobs/asset-virus-scan.job';
 import {
   IpAssetResponse,
   AssetListResponse,
   DownloadUrlResponse,
+  PreviewUrlResponse,
+  AssetMetadataResponse,
+  AssetVariantsResponse,
+  RegeneratePreviewResponse,
   UploadInitiationResponse,
   InitiateUploadInput,
   ConfirmUploadInput,
@@ -20,6 +27,11 @@ import {
   getAssetTypeFromMime,
   validateStatusTransition,
 } from './validation';
+
+// Generate unique IDs
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+}
 
 /**
  * IP Asset Service
@@ -57,7 +69,7 @@ export class IpAssetService {
         where: {
           id: projectId,
           brand: {
-            userId: userId,
+            userId,
           },
           deletedAt: null,
         },
@@ -69,7 +81,7 @@ export class IpAssetService {
     }
 
     // Generate asset ID and storage key
-    const assetId = cuid();
+    const assetId = generateId();
     const sanitized = sanitizeFileName(fileName);
     const storageKey = `${userId}/${assetId}/${sanitized}`;
 
@@ -100,12 +112,15 @@ export class IpAssetService {
       maxSizeBytes: fileSize,
     });
 
-    // TODO: Track event
-    // eventTracker.track({
-    //   event: 'asset.upload.initiated',
-    //   userId,
-    //   metadata: { assetId, fileSize, mimeType },
-    // });
+    // Track upload initiation
+    await uploadAnalyticsService.trackEvent({
+      userId,
+      assetId,
+      eventType: 'initiated',
+      fileSize,
+      mimeType,
+      timestamp: new Date(),
+    });
 
     return {
       uploadUrl,
@@ -149,7 +164,7 @@ export class IpAssetService {
       data: {
         title,
         description: description || null,
-        metadata: metadata || null,
+        metadata: (metadata || null) as any,
         status: AssetStatus.PROCESSING,
         updatedBy: userId,
       },
@@ -164,29 +179,32 @@ export class IpAssetService {
       },
     });
 
-    // TODO: Queue background jobs
-    // await jobQueue.add('asset:virusScan', {
-    //   assetId,
-    //   storageKey: asset.storageKey,
-    // });
-    // await jobQueue.add('asset:generateThumbnail', {
-    //   assetId,
-    //   storageKey: asset.storageKey,
-    //   type: asset.type,
-    //   mimeType: asset.mimeType,
-    // });
-    // await jobQueue.add('asset:extractMetadata', {
-    //   assetId,
-    //   storageKey: asset.storageKey,
-    //   mimeType: asset.mimeType,
-    // });
+    // Queue virus scan job
+    const virusScanQueue = new Queue<VirusScanJobData>('asset-virus-scan', {
+      connection: redis,
+    });
+    
+    await virusScanQueue.add('scan', {
+      assetId,
+      storageKey: asset.storageKey,
+    }, {
+      priority: 1, // High priority
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
+    });
 
-    // TODO: Track event
-    // eventTracker.track({
-    //   event: 'asset.upload.confirmed',
-    //   userId,
-    //   metadata: { assetId },
-    // });
+    // Track upload confirmation
+    await uploadAnalyticsService.trackEvent({
+      userId,
+      assetId,
+      eventType: 'confirmed',
+      fileSize: Number(asset.fileSize),
+      mimeType: asset.mimeType,
+      timestamp: new Date(),
+    });
 
     return this.formatAssetResponse(updatedAsset, ctx);
   }
@@ -610,6 +628,351 @@ export class IpAssetService {
   }
 
   /**
+   * Get preview URL with size variant
+   */
+  async getPreviewUrl(
+    ctx: AssetServiceContext,
+    assetId: string,
+    size: 'small' | 'medium' | 'large' | 'original' = 'medium'
+  ): Promise<PreviewUrlResponse> {
+    const { userId, userRole } = ctx;
+
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    // Verify access: creator or admin
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    let storageKey: string;
+    let width: number | undefined;
+    let height: number | undefined;
+
+    // Determine which preview to use based on size
+    if (size === 'original' || !asset.metadata) {
+      storageKey = asset.storageKey;
+    } else {
+      const metadata = asset.metadata as any;
+      const thumbnails = metadata?.thumbnails || {};
+
+      // Try to get the specific size thumbnail
+      if (size === 'small' && thumbnails.small) {
+        storageKey = this.extractKeyFromUrl(thumbnails.small);
+        width = 200;
+        height = 200;
+      } else if (size === 'medium' && thumbnails.medium) {
+        storageKey = this.extractKeyFromUrl(thumbnails.medium);
+        width = 400;
+        height = 400;
+      } else if (size === 'large' && thumbnails.large) {
+        storageKey = this.extractKeyFromUrl(thumbnails.large);
+        width = 800;
+        height = 800;
+      } else {
+        // Fallback to primary thumbnail or original
+        storageKey = asset.thumbnailUrl 
+          ? this.extractKeyFromUrl(asset.thumbnailUrl)
+          : asset.storageKey;
+      }
+    }
+
+    // Generate signed URL
+    const { url, expiresAt } = await this.storageAdapter.getDownloadUrl({
+      key: storageKey,
+      expiresIn: ASSET_CONSTANTS.SIGNED_URL_EXPIRY,
+    });
+
+    return {
+      url,
+      size,
+      width,
+      height,
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  /**
+   * Get asset metadata with optional field filtering
+   */
+  async getAssetMetadata(
+    ctx: AssetServiceContext,
+    assetId: string,
+    fields: string[] = ['all']
+  ): Promise<AssetMetadataResponse> {
+    const { userId, userRole } = ctx;
+
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    // Verify access: creator or admin
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    const metadata = (asset.metadata as any) || {};
+    const includeAll = fields.includes('all');
+
+    const response: AssetMetadataResponse = {
+      type: asset.type,
+    };
+
+    // Technical metadata (dimensions, codec, bitrate, etc.)
+    if (includeAll || fields.includes('technical')) {
+      response.technical = {
+        ...(metadata.width && { width: metadata.width }),
+        ...(metadata.height && { height: metadata.height }),
+        ...(metadata.duration && { duration: metadata.duration }),
+        ...(metadata.bitrate && { bitrate: metadata.bitrate }),
+        ...(metadata.codec && { codec: metadata.codec }),
+        ...(metadata.fps && { fps: metadata.fps }),
+        ...(metadata.sampleRate && { sampleRate: metadata.sampleRate }),
+        ...(metadata.channels && { channels: metadata.channels }),
+        ...(metadata.format && { format: metadata.format }),
+        ...(metadata.resolution && { resolution: metadata.resolution }),
+        ...(metadata.colorSpace && { colorSpace: metadata.colorSpace }),
+        ...(metadata.pageCount && { pageCount: metadata.pageCount }),
+      };
+    }
+
+    // Descriptive metadata (title, artist, author, etc.)
+    if (includeAll || fields.includes('descriptive')) {
+      response.descriptive = {
+        ...(metadata.title && { title: metadata.title }),
+        ...(metadata.artist && { artist: metadata.artist }),
+        ...(metadata.album && { album: metadata.album }),
+        ...(metadata.author && { author: metadata.author }),
+        ...(metadata.creator && { creator: metadata.creator }),
+        ...(metadata.subject && { subject: metadata.subject }),
+        ...(metadata.keywords && { keywords: metadata.keywords }),
+        ...(metadata.genre && { genre: metadata.genre }),
+      };
+    }
+
+    // Extracted metadata (EXIF, ID3 tags, etc.)
+    if (includeAll || fields.includes('extracted')) {
+      response.extracted = {
+        ...(metadata.exif && { exif: metadata.exif }),
+        ...(metadata.creationDate && { creationDate: metadata.creationDate }),
+        ...(metadata.modificationDate && { modificationDate: metadata.modificationDate }),
+      };
+    }
+
+    // Processing metadata (status, timestamps)
+    if (includeAll || fields.includes('processing')) {
+      response.processing = {
+        thumbnailGenerated: metadata.thumbnailGenerated || false,
+        thumbnailGeneratedAt: metadata.thumbnailGeneratedAt,
+        previewGenerated: metadata.previewGenerated || false,
+        previewGeneratedAt: metadata.previewGeneratedAt,
+        metadataExtracted: !!metadata.processedAt,
+        metadataExtractedAt: metadata.processedAt,
+      };
+    }
+
+    return response;
+  }
+
+  /**
+   * Get all available variants (thumbnails, previews, etc.)
+   */
+  async getAssetVariants(
+    ctx: AssetServiceContext,
+    assetId: string,
+    type: 'thumbnail' | 'preview' | 'all' = 'all'
+  ): Promise<AssetVariantsResponse> {
+    const { userId, userRole } = ctx;
+
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    // Verify access: creator or admin
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    const metadata = (asset.metadata as any) || {};
+    const response: AssetVariantsResponse = {
+      thumbnails: {},
+      previews: {},
+    };
+
+    // Get thumbnail variants
+    if (type === 'thumbnail' || type === 'all') {
+      const thumbnails = metadata.thumbnails || {};
+      
+      for (const size of ['small', 'medium', 'large'] as const) {
+        if (thumbnails[size]) {
+          const key = this.extractKeyFromUrl(thumbnails[size]);
+          const { url, expiresAt } = await this.storageAdapter.getDownloadUrl({
+            key,
+            expiresIn: ASSET_CONSTANTS.SIGNED_URL_EXPIRY,
+          });
+
+          response.thumbnails[size] = {
+            url,
+            size,
+            width: size === 'small' ? 200 : size === 'medium' ? 400 : 800,
+            height: size === 'small' ? 200 : size === 'medium' ? 400 : 800,
+            expiresAt: expiresAt.toISOString(),
+          };
+        }
+      }
+    }
+
+    // Get preview variants
+    if (type === 'preview' || type === 'all') {
+      if (asset.previewUrl) {
+        const key = this.extractKeyFromUrl(asset.previewUrl);
+        const { url, expiresAt } = await this.storageAdapter.getDownloadUrl({
+          key,
+          expiresIn: ASSET_CONSTANTS.SIGNED_URL_EXPIRY,
+        });
+
+        response.previews.url = url;
+        response.previews.expiresAt = expiresAt.toISOString();
+        
+        if (metadata.previewDuration) {
+          response.previews.duration = metadata.previewDuration;
+        }
+      }
+
+      // Get waveform for audio assets
+      if (asset.type === 'AUDIO' && metadata.waveformUrl) {
+        const key = this.extractKeyFromUrl(metadata.waveformUrl);
+        const { url, expiresAt } = await this.storageAdapter.getDownloadUrl({
+          key,
+          expiresIn: ASSET_CONSTANTS.SIGNED_URL_EXPIRY,
+        });
+
+        response.waveform = {
+          url,
+          expiresAt: expiresAt.toISOString(),
+        };
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Regenerate previews for an asset
+   */
+  async regeneratePreview(
+    ctx: AssetServiceContext,
+    assetId: string,
+    types: string[] = ['all']
+  ): Promise<RegeneratePreviewResponse> {
+    const { userId, userRole } = ctx;
+
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    // Verify access: creator or admin only
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    const includeAll = types.includes('all');
+    const jobTypes: string[] = [];
+
+    // Import job queues
+    const { assetProcessingQueues } = await import('@/jobs/asset-processing-pipeline');
+
+    // Queue thumbnail regeneration
+    if (includeAll || types.includes('thumbnail')) {
+      await assetProcessingQueues.thumbnail.add(
+        `regenerate-thumbnail-${assetId}`,
+        {
+          assetId: asset.id,
+          storageKey: asset.storageKey,
+          type: asset.type,
+          mimeType: asset.mimeType,
+        },
+        {
+          priority: 5, // Higher priority for regeneration
+          attempts: 3,
+        }
+      );
+      jobTypes.push('thumbnail');
+    }
+
+    // Queue preview regeneration
+    if ((includeAll || types.includes('preview')) && (asset.type === 'VIDEO' || asset.type === 'AUDIO')) {
+      await assetProcessingQueues.preview.add(
+        `regenerate-preview-${assetId}`,
+        {
+          assetId: asset.id,
+          storageKey: asset.storageKey,
+          type: asset.type,
+          mimeType: asset.mimeType,
+        },
+        {
+          priority: 5,
+          attempts: 3,
+        }
+      );
+      jobTypes.push('preview');
+    }
+
+    // Queue metadata extraction
+    if (includeAll || types.includes('metadata')) {
+      await assetProcessingQueues.metadata.add(
+        `regenerate-metadata-${assetId}`,
+        {
+          assetId: asset.id,
+          storageKey: asset.storageKey,
+          mimeType: asset.mimeType,
+          type: asset.type,
+        },
+        {
+          priority: 5,
+          attempts: 3,
+        }
+      );
+      jobTypes.push('metadata');
+    }
+
+    return {
+      jobId: `regenerate-${assetId}-${Date.now()}`,
+      status: 'queued',
+      types: jobTypes,
+    };
+  }
+
+  /**
    * List derivatives of an asset
    */
   async getDerivatives(
@@ -724,5 +1087,20 @@ export class IpAssetService {
       canEdit,
       canDelete,
     };
+  }
+
+  /**
+   * Extract storage key from URL
+   */
+  private extractKeyFromUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      // Remove leading slash
+      return pathname.startsWith('/') ? pathname.slice(1) : pathname;
+    } catch {
+      // If not a valid URL, assume it's already a key
+      return url;
+    }
   }
 }

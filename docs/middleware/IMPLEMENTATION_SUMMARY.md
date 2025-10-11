@@ -103,12 +103,6 @@
 10. `/src/app/api/webhooks/stripe/route.ts` - Full Stripe webhook handler
 11. `/src/app/api/webhooks/resend/route.ts` - Updated with new middleware
 
-### Example Implementations
-12. `/src/app/api/examples/admin/route.ts`
-13. `/src/app/api/examples/projects/[projectId]/route.ts`
-14. `/src/app/api/examples/permissions/route.ts`
-15. `/src/app/api/examples/service/route.ts`
-
 ### Documentation
 16. `/docs/middleware/ACCESS_CONTROL.md` - Comprehensive documentation
 17. `/docs/middleware/QUICK_REFERENCE.md` - Quick reference guide
@@ -293,7 +287,6 @@ To use tests:
 
 - **Full Guide**: `/docs/middleware/ACCESS_CONTROL.md`
 - **Quick Reference**: `/docs/middleware/QUICK_REFERENCE.md`
-- **Examples**: `/src/app/api/examples/`
 - **Production Webhooks**: `/src/app/api/webhooks/`
 
 ## ✨ Summary

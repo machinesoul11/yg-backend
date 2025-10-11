@@ -1,90 +1,212 @@
 import type { Job } from 'bullmq';
 import { prisma } from '@/lib/db';
+import { storageProvider } from '@/lib/storage';
+import { extractImageMetadata } from '@/lib/storage/thumbnail-generator';
+import { validateFile } from '@/lib/storage/file-validator';
+import { storageConfig } from '@/lib/config/storage';
+import {
+  extractVideoMetadata,
+} from '@/lib/services/asset-processing/video-processor.service';
+import {
+  extractAudioMetadata,
+  generateSimpleWaveform,
+} from '@/lib/services/asset-processing/audio-processor.service';
+import {
+  extractDocumentMetadata,
+  extractDocumentText,
+} from '@/lib/services/asset-processing/document-processor.service';
+import { AssetType } from '@prisma/client';
 
 /**
  * Metadata Extraction Job
  * 
- * Extracts metadata from uploaded assets (dimensions, duration, EXIF, etc.)
- * 
- * NOTE: This is a placeholder implementation. In production, you would use:
- * - exifr (for image EXIF data)
- * - ffprobe (for video/audio metadata)
- * - pdf-parse (for PDF metadata)
+ * Extracts comprehensive metadata from uploaded assets
+ * - Images: EXIF, dimensions, color space (Sharp)
+ * - Videos: Duration, codec, resolution, bitrate (FFmpeg)
+ * - Audio: ID3 tags, duration, bitrate (music-metadata + FFmpeg)
+ * - Documents: Page count, author, text content (pdf-parse)
  */
 
 export interface MetadataExtractionJobData {
   assetId: string;
   storageKey: string;
   mimeType: string;
+  type: AssetType;
 }
 
 export async function metadataExtractionJob(
   job: Job<MetadataExtractionJobData>
 ) {
-  const { assetId, storageKey, mimeType } = job.data;
+  const { assetId, storageKey, mimeType, type } = job.data;
 
   try {
-    job.log(`Extracting metadata for asset ${assetId}`);
+    job.log(`Extracting metadata for asset ${assetId} (${type})`);
 
-    let metadata: Record<string, any> = {};
+    // Download file from storage
+    const { url: downloadUrl } = await storageProvider.getDownloadUrl({
+      key: storageKey,
+      expiresIn: 900,
+    });
 
-    // TODO: Implement actual metadata extraction
-    // For now, just log what would happen
-    if (mimeType.startsWith('image/')) {
-      job.log('Would extract EXIF data using exifr');
-      // const exif = await exifr.parse(fileBuffer);
-      // metadata = {
-      //   width: exif.ImageWidth,
-      //   height: exif.ImageHeight,
-      //   format: exif.FileType,
-      //   colorSpace: exif.ColorSpace,
-      //   camera: exif.Model,
-      //   dateTaken: exif.DateTimeOriginal,
-      //   location: exif.GPSLatitude ? {
-      //     lat: exif.GPSLatitude,
-      //     lng: exif.GPSLongitude,
-      //   } : undefined,
-      // };
-      
-      metadata = {
-        extractionPending: true,
-        note: 'Metadata extraction not yet implemented',
-      };
-    } else if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) {
-      job.log('Would extract media info using ffprobe');
-      // const info = await ffprobe(filePath);
-      // metadata = {
-      //   duration: info.format.duration,
-      //   codec: info.streams[0].codec_name,
-      //   bitrate: info.format.bit_rate,
-      //   ...(mimeType.startsWith('video/') && {
-      //     width: info.streams[0].width,
-      //     height: info.streams[0].height,
-      //     fps: eval(info.streams[0].r_frame_rate),
-      //     resolution: `${info.streams[0].width}x${info.streams[0].height}`,
-      //   }),
-      // };
-      
-      metadata = {
-        extractionPending: true,
-        note: 'Metadata extraction not yet implemented',
-      };
-    } else if (mimeType === 'application/pdf') {
-      job.log('Would extract PDF metadata using pdf-parse');
-      // const pdfData = await pdfParse(fileBuffer);
-      // metadata = {
-      //   pageCount: pdfData.numpages,
-      //   author: pdfData.info?.Author,
-      //   title: pdfData.info?.Title,
-      //   creator: pdfData.info?.Creator,
-      //   creationDate: pdfData.info?.CreationDate,
-      // };
-      
-      metadata = {
-        extractionPending: true,
-        note: 'Metadata extraction not yet implemented',
-      };
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download file: ${response.statusText}`);
     }
+    const fileBuffer = Buffer.from(await response.arrayBuffer());
+
+    // Extract filename from storage key
+    const filename = storageKey.split('/').pop() || 'unknown';
+
+    // Perform comprehensive file validation with magic number check
+    job.log('Validating file type with magic number verification');
+    const validationResult = await validateFile({
+      buffer: fileBuffer,
+      filename,
+      declaredMimeType: mimeType,
+      allowedTypes: storageConfig.allowedTypes,
+    });
+
+    let metadata: Record<string, any> = {
+      fileSize: fileBuffer.length,
+      declaredMimeType: mimeType,
+      detectedMimeType: validationResult.detectedMimeType,
+      validationPassed: validationResult.isValid,
+      validationWarnings: validationResult.warnings,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    if (!validationResult.isValid) {
+      job.log(`File validation failed: ${validationResult.errors.join(', ')}`);
+      metadata.validationErrors = validationResult.errors;
+    }
+
+    // Extract type-specific metadata
+    if (type === 'IMAGE') {
+      job.log('Extracting image metadata with Sharp');
+      try {
+        const imageMetadata = await extractImageMetadata(fileBuffer);
+        metadata = {
+          ...metadata,
+          width: imageMetadata.width,
+          height: imageMetadata.height,
+          format: imageMetadata.format,
+          colorSpace: imageMetadata.space,
+          channels: imageMetadata.channels,
+          hasAlpha: imageMetadata.hasAlpha,
+          exif: imageMetadata.exif,
+        };
+      } catch (error) {
+        job.log(`Failed to extract image metadata: ${error}`);
+        metadata.metadataError = error instanceof Error ? error.message : String(error);
+      }
+    } else if (type === 'VIDEO') {
+      job.log('Extracting video metadata with FFmpeg');
+      try {
+        // Write to temporary file for ffprobe
+        const tmpPath = `/tmp/video-metadata-${Date.now()}.tmp`;
+        require('fs').writeFileSync(tmpPath, fileBuffer);
+        
+        const videoMetadata = await extractVideoMetadata(tmpPath);
+        
+        // Cleanup temp file
+        require('fs').unlinkSync(tmpPath);
+        
+        metadata = {
+          ...metadata,
+          duration: videoMetadata.duration,
+          width: videoMetadata.width,
+          height: videoMetadata.height,
+          codec: videoMetadata.codec,
+          fps: videoMetadata.fps,
+          bitrate: videoMetadata.bitrate,
+          resolution: videoMetadata.resolution,
+          aspectRatio: videoMetadata.aspectRatio,
+          hasAudio: videoMetadata.hasAudio,
+          audioCodec: videoMetadata.audioCodec,
+        };
+      } catch (error) {
+        job.log(`Failed to extract video metadata: ${error}`);
+        metadata.metadataError = error instanceof Error ? error.message : String(error);
+      }
+    } else if (type === 'AUDIO') {
+      job.log('Extracting audio metadata with music-metadata and FFmpeg');
+      try {
+        // Write to temporary file
+        const tmpPath = `/tmp/audio-metadata-${Date.now()}.tmp`;
+        require('fs').writeFileSync(tmpPath, fileBuffer);
+        
+        const audioMetadata = await extractAudioMetadata(tmpPath);
+        
+        // Generate simple waveform preview
+        const waveform = await generateSimpleWaveform(audioMetadata);
+        
+        // Upload waveform to storage
+        const waveformKey = `${storageKey.replace(/\.[^/.]+$/, '')}_waveform.png`;
+        const { url: waveformUrl } = await storageProvider.upload({
+          key: waveformKey,
+          file: waveform,
+          contentType: 'image/png',
+          metadata: {
+            assetId,
+            type: 'waveform',
+          },
+        });
+        
+        // Cleanup temp file
+        require('fs').unlinkSync(tmpPath);
+        
+        metadata = {
+          ...metadata,
+          duration: audioMetadata.duration,
+          bitrate: audioMetadata.bitrate,
+          sampleRate: audioMetadata.sampleRate,
+          channels: audioMetadata.channels,
+          codec: audioMetadata.codec,
+          format: audioMetadata.format,
+          title: audioMetadata.title,
+          artist: audioMetadata.artist,
+          album: audioMetadata.album,
+          year: audioMetadata.year,
+          genre: audioMetadata.genre,
+          trackNumber: audioMetadata.trackNumber,
+          waveformUrl,
+        };
+      } catch (error) {
+        job.log(`Failed to extract audio metadata: ${error}`);
+        metadata.metadataError = error instanceof Error ? error.message : String(error);
+      }
+    } else if (type === 'DOCUMENT') {
+      job.log('Extracting document metadata with pdf-parse');
+      try {
+        const documentMetadata = await extractDocumentMetadata(fileBuffer);
+        
+        // Extract text content for search indexing
+        const textContent = await extractDocumentText(fileBuffer, {
+          maxLength: 100000, // 100KB of text
+        });
+        
+        metadata = {
+          ...metadata,
+          pageCount: documentMetadata.pageCount,
+          title: documentMetadata.title,
+          author: documentMetadata.author,
+          subject: documentMetadata.subject,
+          creator: documentMetadata.creator,
+          producer: documentMetadata.producer,
+          keywords: documentMetadata.keywords,
+          version: documentMetadata.version,
+          creationDate: documentMetadata.creationDate,
+          modificationDate: documentMetadata.modificationDate,
+          textContent, // Store for search indexing
+          textLength: textContent.length,
+        };
+      } catch (error) {
+        job.log(`Failed to extract document metadata: ${error}`);
+        metadata.metadataError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    metadata.processedAt = new Date().toISOString();
 
     // Update asset with metadata
     await prisma.ipAsset.update({

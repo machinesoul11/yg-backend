@@ -134,7 +134,7 @@ export class RoyaltyCalculationService {
             const statement = await tx.royaltyStatement.create({
               data: {
                 royaltyRunId: runId,
-                creatorId: creatorId,
+                creatorId,
                 totalEarningsCents: earnings.totalCents,
                 status: 'PENDING',
               },

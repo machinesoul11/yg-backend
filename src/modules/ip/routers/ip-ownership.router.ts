@@ -77,7 +77,7 @@ export const ipOwnershipRouter = createTRPCRouter({
         await prisma.auditEvent.create({
           data: {
             action: 'IP_OWNERSHIP_SET',
-            userId: userId,
+            userId,
             afterJson: { ipAssetId: input.ipAssetId, ownerships: result } as any,
           },
         });
@@ -223,7 +223,7 @@ export const ipOwnershipRouter = createTRPCRouter({
         await prisma.auditEvent.create({
           data: {
             action: 'IP_OWNERSHIP_TRANSFERRED',
-            userId: userId,
+            userId,
             afterJson: result as any,
           },
         });
@@ -279,7 +279,7 @@ export const ipOwnershipRouter = createTRPCRouter({
         await prisma.auditEvent.create({
           data: {
             action: 'IP_OWNERSHIP_ENDED',
-            userId: userId,
+            userId,
             beforeJson: ownership as any,
           },
         });

@@ -120,11 +120,10 @@ src/lib/query-filters/
 └── secure-aggregations.ts       # Secure aggregations
 ```
 
-### Documentation & Examples (3 files)
+### Documentation (2 files)
 ```
 src/lib/query-filters/
 └── README.md                    # Module README
-    examples.ts                  # Integration examples
 
 docs/infrastructure/database/
 └── query-filtering.md           # Full documentation

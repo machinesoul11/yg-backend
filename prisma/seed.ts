@@ -363,7 +363,7 @@ async function main() {
   console.log(`  Royalties: ${await prisma.royalty.count()}`);
   console.log(`  Payments: ${await prisma.payment.count()}`);
   console.log(`  Analytics Events: ${await prisma.analyticsEvent.count()}`);
-  console.log('='.repeat(60) + '\n');
+  console.log(`${'='.repeat(60)  }\n`);
 
   console.log('Login credentials:');
   console.log('  Admin:        admin@yesgoddess.com');

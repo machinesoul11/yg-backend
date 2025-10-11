@@ -210,7 +210,7 @@ export async function validateApiKey(apiKey: string): Promise<ApiKeyValidationRe
 
   try {
     // Check cache first
-    let keyInfo = await getCachedApiKey(keyHash);
+    const keyInfo = await getCachedApiKey(keyHash);
 
     // TODO: Query database when api_keys table exists
     // For now, only cached keys work

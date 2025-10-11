@@ -207,7 +207,7 @@ describe('Webhook Verification Middleware', () => {
         .digest('hex');
 
       // Create two similar but different signatures
-      const almostValid = validSignature.slice(0, -2) + 'ab';
+      const almostValid = `${validSignature.slice(0, -2)  }ab`;
 
       const req1 = new NextRequest('http://localhost:3000/api/webhooks', {
         method: 'POST',

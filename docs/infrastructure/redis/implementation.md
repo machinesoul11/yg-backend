@@ -92,8 +92,7 @@
 - [x] `src/__tests__/lib/redis/distributed-lock.test.ts` - Lock unit tests
 - [x] `src/__tests__/integration/redis.integration.test.ts` - Integration tests
 
-### Examples and Documentation
-- [x] `src/services/examples/redis-usage-examples.ts` - Example service implementations
+### Documentation
 - [x] `docs/REDIS_CONFIGURATION.md` - Comprehensive Redis documentation
 
 ### Configuration

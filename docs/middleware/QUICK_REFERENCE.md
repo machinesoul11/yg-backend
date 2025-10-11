@@ -321,6 +321,5 @@ await invalidateOwnershipCache('project', projectId);
 ## See Also
 
 - [Full Documentation](./ACCESS_CONTROL.md)
-- [Example Implementations](/src/app/api/examples/)
 - [Permission Constants](/src/lib/constants/permissions.ts)
 - [Auth Configuration](/src/lib/auth.ts)

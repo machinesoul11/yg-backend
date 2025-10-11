@@ -53,7 +53,7 @@ export function toTitleCase(str: string): string {
  */
 export function truncate(str: string, length: number = 100): string {
   if (str.length <= length) return str;
-  return str.substring(0, length) + '...';
+  return `${str.substring(0, length)  }...`;
 }
 
 /**
@@ -240,5 +240,5 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
 
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))  } ${  sizes[i]}`;
 }

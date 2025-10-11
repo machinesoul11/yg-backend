@@ -410,11 +410,7 @@ The middleware integrates seamlessly with existing authentication infrastructure
 
 ## Testing
 
-See example implementations in:
-- `/api/examples/admin/route.ts` - Admin-only endpoint
-- `/api/examples/projects/[projectId]/route.ts` - Resource ownership
-- `/api/examples/permissions/route.ts` - Permission-based access
-- `/api/examples/service/route.ts` - Service authentication
+See production implementations in:
 - `/api/webhooks/stripe/route.ts` - Stripe webhook handling
 - `/api/webhooks/resend/route.ts` - Resend webhook handling
 

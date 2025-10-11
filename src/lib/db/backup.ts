@@ -198,7 +198,7 @@ ${Object.entries(snapshot.rowCounts)
 
 === Restore Readiness ===
 Status: ${restoreTest.success ? '✓ PASS' : '✗ FAIL'}
-${restoreTest.issues.length > 0 ? 'Issues:\n' + restoreTest.issues.map(i => `  - ${i}`).join('\n') : 'No issues found'}
+${restoreTest.issues.length > 0 ? `Issues:\n${  restoreTest.issues.map(i => `  - ${i}`).join('\n')}` : 'No issues found'}
 
 === Recommendations ===
 1. Verify automated backups are running in Supabase dashboard
