@@ -51,6 +51,7 @@ This directory contains all BullMQ background job definitions for the YesGoddess
 
 ### **Email Jobs**
 - `email-campaign.job.ts` - Sends bulk email campaigns
+- `reputation-monitoring.job.ts` - Daily reputation checks (2 AM)
 
 ### **Other Jobs**
 - `ownership-verification.job.ts` - Verifies IP ownership documents

@@ -1,127 +1,147 @@
 /**
  * YES GODDESS Email Brand Styles
- * Shared styling constants for email templates
+ * Aligned with brand guidelines - docs/brand/guidelines.md
  */
 
 export const EMAIL_COLORS = {
-  // Primary
-  gold: '#D4AF37',
-  goldLight: '#F5E6D3',
-  goldDark: '#B8941F',
+  // Primary Brand Colors (from guidelines.md)
+  VOID: '#0A0A0A',       // Obsidian Black - primary backgrounds, text on light
+  BONE: '#F8F6F3',       // Alabaster White - primary backgrounds (editorial), text on dark
+  ALTAR: '#B8A888',      // Muted Gold - accent only, CTAs, sacred moments
+  SANCTUM: '#C4C0B8',    // Stone Gray - secondary text, borders, disabled states
   
-  // Neutrals
-  black: '#000000',
-  blackSoft: '#1A1A1A',
+  // Extended Palette
+  SHADOW: '#1A1A1A',     // Deep Charcoal - elevated surfaces on VOID
+  WHISPER: '#FDFCFA',    // Warm White - highlighted text, hover states
+  
+  // Functional Colors (system only)
+  AFFIRM: '#7A9B76',     // Trust Green - success states
+  CAUTION: '#C4956C',    // Ember Orange - warnings
+  DENY: '#A67C73',       // Rust Red - errors
+  
+  // Legacy aliases for backwards compatibility
+  gold: '#B8A888',       // Maps to ALTAR
+  goldLight: '#E8E4DF',
+  goldDark: '#9A8A70',
+  black: '#0A0A0A',      // Maps to VOID
+  blackSoft: '#1A1A1A',  // Maps to SHADOW
   white: '#FFFFFF',
   whiteWarm: '#FAF8F5',
-  
-  // Accents
   rose: '#E8B4B8',
   roseLight: '#F5E1E4',
   sage: '#9CAF88',
   cream: '#F5E6D3',
   
-  // Functional
-  text: '#000000',
-  textMuted: '#6B7280',
+  // Functional aliases
+  text: '#0A0A0A',       // VOID
+  textMuted: '#C4C0B8',  // SANCTUM
   border: '#E5E5E5',
-  error: '#C89499',
-  success: '#9CAF88',
-  warning: '#D4AF37',
+  error: '#A67C73',      // DENY
+  success: '#7A9B76',    // AFFIRM
+  warning: '#C4956C',    // CAUTION
 };
 
 export const EMAIL_FONTS = {
+  // Per brand guidelines: Montserrat for body, Playfair Display for display text
   display: '"Playfair Display", Georgia, serif',
   body: 'Montserrat, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   mono: '"JetBrains Mono", "Courier New", monospace',
 };
 
-// Common email component styles
+// Common email component styles aligned with brand guidelines
 export const emailStyles = {
-  // Typography
+  // Typography - following brand guidelines hierarchy
   h1: {
-    color: EMAIL_COLORS.gold,
-    fontFamily: EMAIL_FONTS.display,
+    color: EMAIL_COLORS.BONE,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '32px',
-    fontWeight: '700',
-    letterSpacing: '-0.01em',
-    lineHeight: '1.2',
+    fontWeight: '400',
+    letterSpacing: '2px',      // +200 tracking per guidelines
+    lineHeight: '1.1',
     margin: '0 0 24px',
-    textAlign: 'center' as const,
+    textAlign: 'left' as const,
+    textTransform: 'uppercase' as const,
   },
   
   h2: {
-    color: EMAIL_COLORS.black,
-    fontFamily: EMAIL_FONTS.display,
+    color: EMAIL_COLORS.BONE,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '24px',
-    fontWeight: '600',
-    letterSpacing: '-0.005em',
-    lineHeight: '1.3',
+    fontWeight: '400',
+    letterSpacing: '1.5px',    // +150 tracking per guidelines
+    lineHeight: '1.2',
     margin: '0 0 16px',
   },
   
   h3: {
-    color: EMAIL_COLORS.black,
-    fontFamily: EMAIL_FONTS.display,
-    fontSize: '20px',
-    fontWeight: '600',
-    lineHeight: '1.4',
+    color: EMAIL_COLORS.BONE,
+    fontFamily: EMAIL_FONTS.body,
+    fontSize: '18px',
+    fontWeight: '500',
+    letterSpacing: '1px',      // +100 tracking per guidelines
+    lineHeight: '1.3',
     margin: '0 0 12px',
   },
   
   text: {
-    color: EMAIL_COLORS.text,
+    color: EMAIL_COLORS.BONE,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '16px',
-    lineHeight: '1.7',
+    fontWeight: '400',
+    letterSpacing: '0.5px',    // +25 to +50 tracking per guidelines
+    lineHeight: '1.6',
     margin: '0 0 16px',
   },
   
   textSmall: {
-    color: EMAIL_COLORS.textMuted,
+    color: EMAIL_COLORS.SANCTUM,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '14px',
-    lineHeight: '1.6',
+    fontWeight: '400',
+    letterSpacing: '1.5px',    // +150 tracking for captions
+    lineHeight: '1.4',
     margin: '0 0 12px',
   },
   
-  // Buttons
+  declaration: {
+    color: EMAIL_COLORS.BONE,
+    fontFamily: EMAIL_FONTS.display,
+    fontSize: '16px',
+    fontStyle: 'italic' as const,
+    lineHeight: '1.6',
+    margin: '24px 0',
+  },
+  
+  // Buttons - following brand guidelines
   buttonPrimary: {
-    backgroundColor: EMAIL_COLORS.gold,
-    borderRadius: '8px',
-    color: EMAIL_COLORS.white,
+    backgroundColor: EMAIL_COLORS.ALTAR,
+    borderRadius: '2px',       // Minimal radius per brand aesthetic
+    color: EMAIL_COLORS.VOID,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '16px',
     fontWeight: '600',
-    letterSpacing: '0',
+    letterSpacing: '1px',      // +100 tracking for buttons
     lineHeight: '1.5',
     padding: '14px 32px',
     textAlign: 'center' as const,
     textDecoration: 'none',
+    textTransform: 'uppercase' as const,
   },
   
   buttonSecondary: {
-    backgroundColor: EMAIL_COLORS.black,
-    borderRadius: '8px',
-    color: EMAIL_COLORS.white,
-    fontSize: '16px',
-    fontWeight: '600',
-    letterSpacing: '0',
-    lineHeight: '1.5',
-    padding: '14px 32px',
-    textAlign: 'center' as const,
-    textDecoration: 'none',
-  },
-  
-  buttonOutline: {
     backgroundColor: 'transparent',
-    border: `2px solid ${EMAIL_COLORS.gold}`,
-    borderRadius: '8px',
-    color: EMAIL_COLORS.gold,
+    border: `2px solid ${EMAIL_COLORS.ALTAR}`,
+    borderRadius: '2px',
+    color: EMAIL_COLORS.ALTAR,
+    fontFamily: EMAIL_FONTS.body,
     fontSize: '16px',
     fontWeight: '600',
-    letterSpacing: '0',
+    letterSpacing: '1px',
     lineHeight: '1.5',
     padding: '12px 30px',
     textAlign: 'center' as const,
     textDecoration: 'none',
+    textTransform: 'uppercase' as const,
   },
   
   // Containers

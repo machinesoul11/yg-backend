@@ -12,7 +12,7 @@ import {
   getCategoryFromTemplate,
   type TemplateKey,
   type TemplateVariables,
-} from './templates';
+} from './template-registry';
 
 export interface SendTransactionalParams {
   userId?: string;
@@ -77,7 +77,7 @@ export class EmailService {
       }
 
       // 3. Render template
-      const emailComponent = renderTemplate(params.template, params.variables || {});
+      const emailComponent = renderTemplate(params.template, params.variables as any);
 
       // 4. Send via provider
       const result = await this.provider.sendEmail({
@@ -104,7 +104,7 @@ export class EmailService {
           messageId: result.messageId,
           subject: params.subject,
           templateName: params.template,
-          metadata: params.variables,
+          metadata: params.variables as any,
           sentAt: new Date(),
         },
       });
@@ -195,7 +195,7 @@ export class EmailService {
         data: {
           messageId: event.messageId,
           email: event.email!,
-          eventType,
+          eventType: eventType as any,
           ...(eventType === 'SENT' && { sentAt: event.timestamp }),
           ...(eventType === 'DELIVERED' && { deliveredAt: event.timestamp }),
           ...(eventType === 'OPENED' && { openedAt: event.timestamp }),
@@ -213,7 +213,7 @@ export class EmailService {
       await prisma.emailEvent.update({
         where: { id: existingEvent.id },
         data: {
-          eventType,
+          eventType: eventType as any,
           ...(eventType === 'DELIVERED' && { deliveredAt: event.timestamp }),
           ...(eventType === 'OPENED' && { openedAt: event.timestamp }),
           ...(eventType === 'CLICKED' && {

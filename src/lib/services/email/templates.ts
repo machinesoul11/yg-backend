@@ -12,6 +12,9 @@ import BrandVerificationComplete from '../../../../emails/templates/BrandVerific
 import BrandVerificationRejectedEmail from '../../../../emails/templates/BrandVerificationRejectedEmail';
 import BrandTeamInvitation from '../../../../emails/templates/BrandTeamInvitation';
 import RoleChanged from '../../../../emails/templates/RoleChanged';
+import MonthlyNewsletter from '../../../../emails/templates/MonthlyNewsletter';
+import TransactionReceipt from '../../../../emails/templates/TransactionReceipt';
+import ProjectInvitation from '../../../../emails/templates/ProjectInvitation';
 
 export type TemplateVariables = Record<string, any>;
 
@@ -30,6 +33,9 @@ export const EMAIL_TEMPLATES = {
   'brand-verification-rejected': BrandVerificationRejectedEmail,
   'brand-team-invitation': BrandTeamInvitation,
   'role-changed': RoleChanged,
+  'monthly-newsletter': MonthlyNewsletter,
+  'transaction-receipt': TransactionReceipt,
+  'project-invitation': ProjectInvitation,
 } as const;
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES;
@@ -53,6 +59,9 @@ export function getCategoryFromTemplate(template: string): string {
     'royalty-statement': 'royaltyStatements',
     'license-expiry': 'licenseExpiry',
     'payout-confirmation': 'payouts',
+    'transaction-receipt': 'transactional',
+    'project-invitation': 'projectUpdates',
+    'monthly-newsletter': 'newsletter',
     'welcome': 'system',
     'welcome-email': 'system',
     'email-verification': 'system',
