@@ -12,7 +12,7 @@
 
 import { Queue, Worker, type Job } from 'bullmq';
 import { prisma } from '@/lib/db';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { storageProvider } from '@/lib/storage';
 import { AssetStatus, ScanStatus } from '@prisma/client';
 
@@ -39,7 +39,7 @@ export interface UploadCleanupResult {
  * Create cleanup queue
  */
 export const uploadCleanupQueue = new Queue<UploadCleanupJobData>(QUEUE_NAME, {
-  connection: redis,
+  connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: 100,
     removeOnFail: 100,
@@ -315,7 +315,7 @@ export const uploadCleanupWorker = new Worker<UploadCleanupJobData>(
     return result;
   },
   {
-    connection: redis,
+    connection: redisConnection,
   }
 );
 

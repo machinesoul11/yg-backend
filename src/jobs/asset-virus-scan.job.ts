@@ -8,7 +8,7 @@ import {
   type ScanResult 
 } from '@/lib/services/virus-scanner';
 import { EventService } from '@/modules/analytics/services/event.service';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { Queue } from 'bullmq';
 
 /**
@@ -119,7 +119,7 @@ export async function virusScanJob(job: Job<VirusScanJobData>) {
       job.log(`Scheduling retry ${retryCount + 1}/${MAX_RETRIES}`);
       
       // Re-queue with incremented retry count
-      const jobQueue = new Queue('asset-virus-scan', { connection: redis });
+      const jobQueue = new Queue('asset-virus-scan', { connection: redisConnection });
       await jobQueue.add(
         'scan',
         { ...job.data, retryCount: retryCount + 1 },
@@ -144,7 +144,7 @@ export async function virusScanJob(job: Job<VirusScanJobData>) {
 
   // Track failure event
   try {
-    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redis }));
+    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redisConnection }));
     await eventService.trackEvent(
       {
         eventType: 'asset.scan.failed',
@@ -190,7 +190,7 @@ async function handleCleanFile(
 
   // Track success event
   try {
-    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redis }));
+    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redisConnection }));
     await eventService.trackEvent(
       {
         eventType: 'asset.scan.completed',
@@ -263,7 +263,7 @@ async function handleInfectedFile(
 
   // Track security event
   try {
-    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redis }));
+    const eventService = new EventService(prisma, redis, new Queue('enrich-event', { connection: redisConnection }));
     await eventService.trackEvent(
       {
         eventType: 'security.threat.detected',

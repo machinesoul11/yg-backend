@@ -10,21 +10,21 @@ datasource db {
 }
 
 model User {
-  id                   String               @id @default(cuid())
-  email                String               @unique
+  id                   String                @id @default(cuid())
+  email                String                @unique
   name                 String?
   avatar               String?
-  role                 UserRole             @default(VIEWER)
+  role                 UserRole              @default(VIEWER)
   password_hash        String?
   email_verified       DateTime?
   deleted_at           DateTime?
-  isActive             Boolean              @default(true)
+  isActive             Boolean               @default(true)
   locked_until         DateTime?
-  failed_login_count   Int                  @default(0)
+  failed_login_count   Int                   @default(0)
   last_failed_login    DateTime?
   lastLoginAt          DateTime?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   accounts             Account[]
   auditEvents          AuditEvent[]
   brand                Brand?
@@ -35,22 +35,28 @@ model User {
   scheduledEmails      ScheduledEmail[]
   emailUnsubscribeLogs EmailUnsubscribeLog[]
   // Email campaigns
-  campaignsCreated     EmailCampaign[]      @relation("CampaignCreatedBy")
+  campaignsCreated     EmailCampaign[]       @relation("CampaignCreatedBy")
   campaignRecipients   CampaignRecipient[]
-  assetsCreated        IpAsset[]            @relation("AssetCreator")
-  assetsUpdated        IpAsset[]            @relation("AssetUpdater")
-  ownershipCreated     IpOwnership[]        @relation("IpOwnershipCreatedBy")
-  ownershipUpdated     IpOwnership[]        @relation("IpOwnershipUpdatedBy")
+  assetsCreated        IpAsset[]             @relation("AssetCreator")
+  assetsUpdated        IpAsset[]             @relation("AssetUpdater")
+  ownershipCreated     IpOwnership[]         @relation("IpOwnershipCreatedBy")
+  ownershipUpdated     IpOwnership[]         @relation("IpOwnershipUpdatedBy")
   passwordResetTokens  PasswordResetToken[]
   passwordHistory      PasswordHistory[]
   rememberMeTokens     RememberMeToken[]
-  projectsCreated      Project[]            @relation("ProjectCreatedBy")
-  projectsUpdated      Project[]            @relation("ProjectUpdatedBy")
-  royaltyRunsCreated   RoyaltyRun[]         @relation("RoyaltyRunCreatedBy")
+  projectsCreated      Project[]             @relation("ProjectCreatedBy")
+  projectsUpdated      Project[]             @relation("ProjectUpdatedBy")
+  royaltyRunsCreated   RoyaltyRun[]          @relation("RoyaltyRunCreatedBy")
   sessions             Session[]
   talent               Talent?
   verificationTokens   VerificationToken[]
   notifications        Notification[]
+  sentMessages         Message[]             @relation("SentMessages")
+  receivedMessages     Message[]             @relation("ReceivedMessages")
+  amendmentApprovals   LicenseAmendmentApproval[]
+  statusHistoryEntries LicenseStatusHistory[]
+  extensionsRequested  LicenseExtension[]    @relation("ExtensionRequester")
+  extensionsApproved   LicenseExtension[]    @relation("ExtensionApprover")
 
   @@index([email])
   @@index([role])
@@ -129,16 +135,16 @@ model PasswordHistory {
 }
 
 model RememberMeToken {
-  id              String    @id @default(cuid())
-  userId          String
-  tokenHash       String    @unique @map("token_hash")
-  deviceInfo      String?   @map("device_info")
-  ipAddress       String?   @map("ip_address")
-  userAgent       String?   @map("user_agent")
-  lastUsedAt      DateTime? @map("last_used_at")
-  expiresAt       DateTime  @map("expires_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique @map("token_hash")
+  deviceInfo String?   @map("device_info")
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime  @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tokenHash])
   @@index([userId, expiresAt])
@@ -444,38 +450,43 @@ model IPFile {
 }
 
 model License {
-  id                String            @id @default(cuid())
-  status            LicenseStatus     @default(DRAFT)
-  autoRenew         Boolean           @default(false) @map("auto_renew")
-  billingFrequency  BillingFrequency? @map("billing_frequency")
-  brandId           String            @map("brand_id")
-  createdAt         DateTime          @default(now()) @map("created_at")
-  createdBy         String?           @map("created_by")
-  deletedAt         DateTime?         @map("deleted_at")
-  endDate           DateTime          @map("end_date")
-  feeCents          Int               @default(0) @map("fee_cents")
-  ipAssetId         String            @map("ip_asset_id")
-  licenseType       LicenseType       @map("license_type")
+  id                String              @id @default(cuid())
+  status            LicenseStatus       @default(DRAFT)
+  autoRenew         Boolean             @default(false) @map("auto_renew")
+  billingFrequency  BillingFrequency?   @map("billing_frequency")
+  brandId           String              @map("brand_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  createdBy         String?             @map("created_by")
+  deletedAt         DateTime?           @map("deleted_at")
+  endDate           DateTime            @map("end_date")
+  feeCents          Int                 @default(0) @map("fee_cents")
+  ipAssetId         String              @map("ip_asset_id")
+  licenseType       LicenseType         @map("license_type")
   metadata          Json?
-  parentLicenseId   String?           @map("parent_license_id")
-  paymentTerms      String?           @map("payment_terms")
-  projectId         String?           @map("project_id")
-  renewalNotifiedAt DateTime?         @map("renewal_notified_at")
-  revShareBps       Int               @default(0) @map("rev_share_bps")
-  scopeJson         Json              @map("scope_json")
-  signatureProof    String?           @map("signature_proof")
-  signedAt          DateTime?         @map("signed_at")
-  startDate         DateTime          @map("start_date")
-  updatedAt         DateTime          @updatedAt @map("updated_at")
-  updatedBy         String?           @map("updated_by")
-  brand             Brand             @relation(fields: [brandId], references: [id])
-  ipAsset           IpAsset           @relation(fields: [ipAssetId], references: [id])
-  parentLicense     License?          @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
-  renewals          License[]         @relation("LicenseRenewals")
-  project           Project?          @relation(fields: [projectId], references: [id])
+  parentLicenseId   String?             @map("parent_license_id")
+  paymentTerms      String?             @map("payment_terms")
+  projectId         String?             @map("project_id")
+  renewalNotifiedAt DateTime?           @map("renewal_notified_at")
+  revShareBps       Int                 @default(0) @map("rev_share_bps")
+  scopeJson         Json                @map("scope_json")
+  signatureProof    String?             @map("signature_proof")
+  signedAt          DateTime?           @map("signed_at")
+  startDate         DateTime            @map("start_date")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  updatedBy         String?             @map("updated_by")
+  amendmentCount    Int                 @default(0) @map("amendment_count")
+  extensionCount    Int                 @default(0) @map("extension_count")
+  brand             Brand               @relation(fields: [brandId], references: [id])
+  ipAsset           IpAsset             @relation(fields: [ipAssetId], references: [id])
+  parentLicense     License?            @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
+  renewals          License[]           @relation("LicenseRenewals")
+  project           Project?            @relation(fields: [projectId], references: [id])
   royaltyLines      RoyaltyLine[]
   events            Event[]
   dailyMetrics      DailyMetric[]
+  amendments        LicenseAmendment[]
+  extensions        LicenseExtension[]
+  statusHistory     LicenseStatusHistory[]
 
   @@index([ipAssetId, status, endDate])
   @@index([brandId, status])
@@ -483,6 +494,106 @@ model License {
   @@index([deletedAt])
   @@index([projectId])
   @@map("licenses")
+}
+
+model LicenseAmendment {
+  id              String                       @id @default(cuid())
+  licenseId       String                       @map("license_id")
+  amendmentNumber Int                          @map("amendment_number")
+  proposedBy      String                       @map("proposed_by")
+  proposedByRole  String                       @map("proposed_by_role")
+  proposedAt      DateTime                     @default(now()) @map("proposed_at")
+  approvedAt      DateTime?                    @map("approved_at")
+  rejectedAt      DateTime?                    @map("rejected_at")
+  status          LicenseAmendmentStatus       @default(PROPOSED)
+  amendmentType   LicenseAmendmentType         @map("amendment_type")
+  justification   String
+  fieldsChanged   Json                         @default("[]") @map("fields_changed")
+  beforeValues    Json                         @default("{}") @map("before_values")
+  afterValues     Json                         @default("{}") @map("after_values")
+  approvalDeadline DateTime?                   @map("approval_deadline")
+  rejectionReason String?                      @map("rejection_reason")
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+  license         License                      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  approvals       LicenseAmendmentApproval[]
+
+  @@unique([licenseId, amendmentNumber])
+  @@index([licenseId])
+  @@index([status])
+  @@index([proposedAt])
+  @@map("license_amendments")
+}
+
+model LicenseAmendmentApproval {
+  id           String              @id @default(cuid())
+  amendmentId  String              @map("amendment_id")
+  approverId   String              @map("approver_id")
+  approverRole String              @map("approver_role")
+  status       ApprovalStatus      @default(PENDING)
+  approvedAt   DateTime?           @map("approved_at")
+  rejectedAt   DateTime?           @map("rejected_at")
+  comments     String?
+  ipAddress    String?             @map("ip_address")
+  userAgent    String?             @map("user_agent")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  amendment    LicenseAmendment    @relation(fields: [amendmentId], references: [id], onDelete: Cascade)
+  approver     User                @relation(fields: [approverId], references: [id], onDelete: Cascade)
+
+  @@unique([amendmentId, approverId])
+  @@index([amendmentId])
+  @@index([approverId])
+  @@index([status])
+  @@map("license_amendment_approvals")
+}
+
+model LicenseStatusHistory {
+  id             String    @id @default(cuid())
+  licenseId      String    @map("license_id")
+  fromStatus     String    @map("from_status")
+  toStatus       String    @map("to_status")
+  transitionedAt DateTime  @default(now()) @map("transitioned_at")
+  transitionedBy String?   @map("transitioned_by")
+  reason         String?
+  metadata       Json?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  license        License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [transitionedBy], references: [id], onDelete: SetNull)
+
+  @@index([licenseId])
+  @@index([transitionedAt])
+  @@index([fromStatus])
+  @@index([toStatus])
+  @@map("license_status_history")
+}
+
+model LicenseExtension {
+  id               String     @id @default(cuid())
+  licenseId        String     @map("license_id")
+  requestedBy      String     @map("requested_by")
+  requestedAt      DateTime   @default(now()) @map("requested_at")
+  approvedAt       DateTime?  @map("approved_at")
+  rejectedAt       DateTime?  @map("rejected_at")
+  status           ExtensionStatus @default(PENDING)
+  originalEndDate  DateTime   @map("original_end_date")
+  newEndDate       DateTime   @map("new_end_date")
+  extensionDays    Int        @map("extension_days")
+  additionalFeeCents Int      @default(0) @map("additional_fee_cents")
+  justification    String
+  approvalRequired Boolean    @default(true) @map("approval_required")
+  approvedBy       String?    @map("approved_by")
+  rejectionReason  String?    @map("rejection_reason")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  license          License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  requester        User       @relation("ExtensionRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
+  approver         User?      @relation("ExtensionApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([licenseId])
+  @@index([status])
+  @@index([requestedAt])
+  @@map("license_extensions")
 }
 
 model Royalty {
@@ -646,21 +757,21 @@ model DomainReputationLog {
 }
 
 model EmailTest {
-  id                             String              @id @default(cuid())
+  id                             String                @id @default(cuid())
   name                           String
   description                    String?
-  status                         EmailTestStatus     @default(DRAFT)
-  testType                       String              @map("test_type")
-  startDate                      DateTime?           @map("start_date")
-  endDate                        DateTime?           @map("end_date")
+  status                         EmailTestStatus       @default(DRAFT)
+  testType                       String                @map("test_type")
+  startDate                      DateTime?             @map("start_date")
+  endDate                        DateTime?             @map("end_date")
   variants                       Json
-  allocationPercentage           Json                @map("allocation_percentage")
-  winningVariantId               String?             @map("winning_variant_id")
-  primaryMetric                  String              @map("primary_metric")
-  statisticalSignificanceReached Boolean             @default(false) @map("statistical_significance_reached")
-  confidenceLevel                Float?              @map("confidence_level")
-  createdAt                      DateTime            @default(now()) @map("created_at")
-  updatedAt                      DateTime            @updatedAt @map("updated_at")
+  allocationPercentage           Json                  @map("allocation_percentage")
+  winningVariantId               String?               @map("winning_variant_id")
+  primaryMetric                  String                @map("primary_metric")
+  statisticalSignificanceReached Boolean               @default(false) @map("statistical_significance_reached")
+  confidenceLevel                Float?                @map("confidence_level")
+  createdAt                      DateTime              @default(now()) @map("created_at")
+  updatedAt                      DateTime              @updatedAt @map("updated_at")
   assignments                    EmailTestAssignment[]
 
   @@index([status])
@@ -772,19 +883,19 @@ model EmailCampaignAnalytics {
 }
 
 model EmailUnsubscribeLog {
-  id                  String    @id @default(cuid())
-  userId              String?   @map("user_id")
+  id                  String   @id @default(cuid())
+  userId              String?  @map("user_id")
   email               String
-  unsubscribeAction   String    @map("unsubscribe_action")
-  unsubscribeSource   String    @map("unsubscribe_source")
-  campaignId          String?   @map("campaign_id")
-  categoriesAffected  String[]  @map("categories_affected")
-  previousPreferences Json?     @map("previous_preferences")
-  newPreferences      Json?     @map("new_preferences")
-  userAgent           String?   @map("user_agent")
-  ipAddress           String?   @map("ip_address")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  user                User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  unsubscribeAction   String   @map("unsubscribe_action")
+  unsubscribeSource   String   @map("unsubscribe_source")
+  campaignId          String?  @map("campaign_id")
+  categoriesAffected  String[] @map("categories_affected")
+  previousPreferences Json?    @map("previous_preferences")
+  newPreferences      Json?    @map("new_preferences")
+  userAgent           String?  @map("user_agent")
+  ipAddress           String?  @map("ip_address")
+  createdAt           DateTime @default(now()) @map("created_at")
+  user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([email])
@@ -797,54 +908,54 @@ model EmailUnsubscribeLog {
 // ===========================
 
 model EmailCampaign {
-  id                  String                 @id @default(cuid())
-  name                String                 @db.VarChar(255)
-  description         String?
-  createdBy           String                 @map("created_by")
-  status              EmailCampaignStatus    @default(DRAFT)
-  templateId          String                 @map("template_id")
-  subject             String                 @db.VarChar(500)
-  previewText         String?                @map("preview_text") @db.VarChar(200)
-  
+  id          String              @id @default(cuid())
+  name        String              @db.VarChar(255)
+  description String?
+  createdBy   String              @map("created_by")
+  status      EmailCampaignStatus @default(DRAFT)
+  templateId  String              @map("template_id")
+  subject     String              @db.VarChar(500)
+  previewText String?             @map("preview_text") @db.VarChar(200)
+
   // Audience and Segmentation
-  segmentCriteria     Json?                  @map("segment_criteria")
-  recipientCount      Int                    @default(0) @map("recipient_count")
-  
+  segmentCriteria Json? @map("segment_criteria")
+  recipientCount  Int   @default(0) @map("recipient_count")
+
   // Scheduling
-  scheduledSendTime   DateTime             @map("scheduled_send_time")
-  timezone            String?                @default("UTC")
-  sendStartedAt       DateTime?              @map("send_started_at")
-  sendCompletedAt     DateTime?              @map("send_completed_at")
-  
+  scheduledSendTime DateTime  @map("scheduled_send_time")
+  timezone          String?   @default("UTC")
+  sendStartedAt     DateTime? @map("send_started_at")
+  sendCompletedAt   DateTime? @map("send_completed_at")
+
   // Rate Limiting Configuration
-  messagesPerHour     Int                    @default(1000) @map("messages_per_hour")
-  batchSize           Int                    @default(100) @map("batch_size")
-  
+  messagesPerHour Int @default(1000) @map("messages_per_hour")
+  batchSize       Int @default(100) @map("batch_size")
+
   // Tracking and Analytics
-  sentCount           Int                    @default(0) @map("sent_count")
-  deliveredCount      Int                    @default(0) @map("delivered_count")
-  openedCount         Int                    @default(0) @map("opened_count")
-  clickedCount        Int                    @default(0) @map("clicked_count")
-  bouncedCount        Int                    @default(0) @map("bounced_count")
-  unsubscribedCount   Int                    @default(0) @map("unsubscribed_count")
-  complainedCount     Int                    @default(0) @map("complained_count")
-  failedCount         Int                    @default(0) @map("failed_count")
-  
+  sentCount         Int @default(0) @map("sent_count")
+  deliveredCount    Int @default(0) @map("delivered_count")
+  openedCount       Int @default(0) @map("opened_count")
+  clickedCount      Int @default(0) @map("clicked_count")
+  bouncedCount      Int @default(0) @map("bounced_count")
+  unsubscribedCount Int @default(0) @map("unsubscribed_count")
+  complainedCount   Int @default(0) @map("complained_count")
+  failedCount       Int @default(0) @map("failed_count")
+
   // Metadata
-  tags                String[]               @default([])
-  metadata            Json?
-  cancelledAt         DateTime?              @map("cancelled_at")
-  cancelledBy         String?                @map("cancelled_by")
-  cancellationReason  String?                @map("cancellation_reason")
-  
+  tags               String[]  @default([])
+  metadata           Json?
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancelledBy        String?   @map("cancelled_by")
+  cancellationReason String?   @map("cancellation_reason")
+
   // Timestamps
-  createdAt           DateTime               @default(now()) @map("created_at")
-  updatedAt           DateTime               @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
-  creator             User                   @relation("CampaignCreatedBy", fields: [createdBy], references: [id])
-  recipients          CampaignRecipient[]
-  
+  creator    User                @relation("CampaignCreatedBy", fields: [createdBy], references: [id])
+  recipients CampaignRecipient[]
+
   @@index([createdBy])
   @@index([status])
   @@index([scheduledSendTime])
@@ -853,39 +964,39 @@ model EmailCampaign {
 }
 
 model CampaignRecipient {
-  id                  String                    @id @default(cuid())
-  campaignId          String                    @map("campaign_id")
-  userId              String?                   @map("user_id")
-  email               String
-  
+  id         String  @id @default(cuid())
+  campaignId String  @map("campaign_id")
+  userId     String? @map("user_id")
+  email      String
+
   // Send Status
-  status              CampaignRecipientStatus   @default(PENDING)
-  sentAt              DateTime?                 @map("sent_at")
-  deliveredAt         DateTime?                 @map("delivered_at")
-  openedAt            DateTime?                 @map("opened_at")
-  firstClickedAt      DateTime?                 @map("first_clicked_at")
-  bouncedAt           DateTime?                 @map("bounced_at")
-  unsubscribedAt      DateTime?                 @map("unsubscribed_at")
-  complainedAt        DateTime?                 @map("complained_at")
-  
+  status         CampaignRecipientStatus @default(PENDING)
+  sentAt         DateTime?               @map("sent_at")
+  deliveredAt    DateTime?               @map("delivered_at")
+  openedAt       DateTime?               @map("opened_at")
+  firstClickedAt DateTime?               @map("first_clicked_at")
+  bouncedAt      DateTime?               @map("bounced_at")
+  unsubscribedAt DateTime?               @map("unsubscribed_at")
+  complainedAt   DateTime?               @map("complained_at")
+
   // Error Tracking
-  errorMessage        String?                   @map("error_message")
-  retryCount          Int                       @default(0) @map("retry_count")
-  
+  errorMessage String? @map("error_message")
+  retryCount   Int     @default(0) @map("retry_count")
+
   // Personalization Data
-  personalizationData Json?                     @map("personalization_data")
-  
+  personalizationData Json? @map("personalization_data")
+
   // External References
-  messageId           String?                   @map("message_id")
-  
+  messageId String? @map("message_id")
+
   // Timestamps
-  createdAt           DateTime                  @default(now()) @map("created_at")
-  updatedAt           DateTime                  @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   // Relations
-  campaign            EmailCampaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  user                User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([campaignId, status])
   @@index([userId])
   @@index([email])
@@ -894,41 +1005,41 @@ model CampaignRecipient {
 }
 
 model SavedEmailSegment {
-  id                  String   @id @default(cuid())
-  name                String   @db.VarChar(255)
-  description         String?
-  criteria            Json
-  estimatedSize       Int?     @map("estimated_size")
-  lastCalculatedAt    DateTime? @map("last_calculated_at")
-  
+  id               String    @id @default(cuid())
+  name             String    @db.VarChar(255)
+  description      String?
+  criteria         Json
+  estimatedSize    Int?      @map("estimated_size")
+  lastCalculatedAt DateTime? @map("last_calculated_at")
+
   // Access Control
-  createdBy           String   @map("created_by")
-  isPublic            Boolean  @default(false) @map("is_public")
-  
+  createdBy String  @map("created_by")
+  isPublic  Boolean @default(false) @map("is_public")
+
   // Timestamps
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([createdBy])
   @@index([isPublic])
   @@map("saved_email_segments")
 }
 
 model EmailCampaignClick {
-  id                  String   @id @default(cuid())
-  campaignId          String   @map("campaign_id")
-  recipientId         String?  @map("recipient_id")
-  email               String
-  clickedUrl          String   @map("clicked_url")
-  linkPosition        Int?     @map("link_position")
-  clickedAt           DateTime @default(now()) @map("clicked_at")
-  
+  id           String   @id @default(cuid())
+  campaignId   String   @map("campaign_id")
+  recipientId  String?  @map("recipient_id")
+  email        String
+  clickedUrl   String   @map("clicked_url")
+  linkPosition Int?     @map("link_position")
+  clickedAt    DateTime @default(now()) @map("clicked_at")
+
   // Tracking Data
-  userAgent           String?  @map("user_agent")
-  ipAddress           String?  @map("ip_address")
-  deviceType          String?  @map("device_type")
-  geographicData      Json?    @map("geographic_data")
-  
+  userAgent      String? @map("user_agent")
+  ipAddress      String? @map("ip_address")
+  deviceType     String? @map("device_type")
+  geographicData Json?   @map("geographic_data")
+
   @@index([campaignId])
   @@index([recipientId])
   @@index([clickedAt])
@@ -936,57 +1047,57 @@ model EmailCampaignClick {
 }
 
 model EmailCampaignReport {
-  id                  String    @id @default(cuid())
-  campaignId          String    @unique @map("campaign_id")
-  reportType          String    @map("report_type")
-  
+  id         String @id @default(cuid())
+  campaignId String @unique @map("campaign_id")
+  reportType String @map("report_type")
+
   // Aggregated Metrics (pre-computed for performance)
   metrics             Json
-  deviceBreakdown     Json?     @map("device_breakdown")
-  geographicBreakdown Json?     @map("geographic_breakdown")
-  hourlyBreakdown     Json?     @map("hourly_breakdown")
-  linkPerformance     Json?     @map("link_performance")
-  
+  deviceBreakdown     Json? @map("device_breakdown")
+  geographicBreakdown Json? @map("geographic_breakdown")
+  hourlyBreakdown     Json? @map("hourly_breakdown")
+  linkPerformance     Json? @map("link_performance")
+
   // Generation Info
-  generatedAt         DateTime  @default(now()) @map("generated_at")
-  lastUpdatedAt       DateTime  @updatedAt @map("last_updated_at")
-  
+  generatedAt   DateTime @default(now()) @map("generated_at")
+  lastUpdatedAt DateTime @updatedAt @map("last_updated_at")
+
   @@index([generatedAt])
   @@map("email_campaign_reports")
 }
 
 model IpAsset {
-  id            String        @id @default(cuid())
-  projectId     String?       @map("project_id")
-  title         String        @db.VarChar(255)
-  description   String?
-  type          AssetType
-  storageKey    String        @unique @map("storage_key")
-  fileSize      BigInt        @map("file_size")
-  mimeType      String        @map("mime_type") @db.VarChar(100)
-  thumbnailUrl  String?       @map("thumbnail_url")
-  previewUrl    String?       @map("preview_url")
-  version       Int           @default(1)
-  parentAssetId String?       @map("parent_asset_id")
-  metadata      Json?
-  status        AssetStatus   @default(DRAFT)
-  scanStatus    ScanStatus    @default(PENDING) @map("scan_status")
-  scanResult    Json?         @map("scan_result")
-  createdBy     String        @map("created_by")
-  updatedBy     String?       @map("updated_by")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-  deletedAt     DateTime?     @map("deleted_at")
-  creator       User          @relation("AssetCreator", fields: [createdBy], references: [id])
-  parentAsset   IpAsset?      @relation("AssetDerivatives", fields: [parentAssetId], references: [id], onDelete: Restrict)
-  derivatives   IpAsset[]     @relation("AssetDerivatives")
-  project       Project?      @relation(fields: [projectId], references: [id])
-  updater       User?         @relation("AssetUpdater", fields: [updatedBy], references: [id])
-  ownerships    IpOwnership[]
-  licenses      License[]
-  royaltyLines  RoyaltyLine[]
-  events        Event[]
-  dailyMetrics  DailyMetric[]
+  id                  String             @id @default(cuid())
+  projectId           String?            @map("project_id")
+  title               String             @db.VarChar(255)
+  description         String?
+  type                AssetType
+  storageKey          String             @unique @map("storage_key")
+  fileSize            BigInt             @map("file_size")
+  mimeType            String             @map("mime_type") @db.VarChar(100)
+  thumbnailUrl        String?            @map("thumbnail_url")
+  previewUrl          String?            @map("preview_url")
+  version             Int                @default(1)
+  parentAssetId       String?            @map("parent_asset_id")
+  metadata            Json?
+  status              AssetStatus        @default(DRAFT)
+  scanStatus          ScanStatus         @default(PENDING) @map("scan_status")
+  scanResult          Json?              @map("scan_result")
+  createdBy           String             @map("created_by")
+  updatedBy           String?            @map("updated_by")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  deletedAt           DateTime?          @map("deleted_at")
+  creator             User               @relation("AssetCreator", fields: [createdBy], references: [id])
+  parentAsset         IpAsset?           @relation("AssetDerivatives", fields: [parentAssetId], references: [id], onDelete: Restrict)
+  derivatives         IpAsset[]          @relation("AssetDerivatives")
+  project             Project?           @relation(fields: [projectId], references: [id])
+  updater             User?              @relation("AssetUpdater", fields: [updatedBy], references: [id])
+  ownerships          IpOwnership[]
+  licenses            License[]
+  royaltyLines        RoyaltyLine[]
+  events              Event[]
+  dailyMetrics        DailyMetric[]
   sourceRelationships FileRelationship[] @relation("SourceRelationships")
   targetRelationships FileRelationship[] @relation("TargetRelationships")
 
@@ -1144,19 +1255,19 @@ model Payout {
 }
 
 model StorageMetrics {
-  id               String   @id @default(cuid())
-  snapshotDate     DateTime @map("snapshot_date") @db.Timestamptz
-  entityType       String   @map("entity_type")
-  entityId         String?  @map("entity_id")
-  totalBytes       BigInt   @default(0) @map("total_bytes")
-  fileCount        Int      @default(0) @map("file_count")
-  averageFileSize  BigInt   @default(0) @map("average_file_size")
-  largestFileSize  BigInt   @default(0) @map("largest_file_size")
-  largestFileId    String?  @map("largest_file_id")
-  storageTrendBps  Int      @default(0) @map("storage_trend_bps")
-  breakdownByType  Json     @default("{}") @map("breakdown_by_type")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(cuid())
+  snapshotDate    DateTime @map("snapshot_date") @db.Timestamptz
+  entityType      String   @map("entity_type")
+  entityId        String?  @map("entity_id")
+  totalBytes      BigInt   @default(0) @map("total_bytes")
+  fileCount       Int      @default(0) @map("file_count")
+  averageFileSize BigInt   @default(0) @map("average_file_size")
+  largestFileSize BigInt   @default(0) @map("largest_file_size")
+  largestFileId   String?  @map("largest_file_id")
+  storageTrendBps Int      @default(0) @map("storage_trend_bps")
+  breakdownByType Json     @default("{}") @map("breakdown_by_type")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([snapshotDate, entityType, entityId])
   @@index([snapshotDate(sort: Desc)])
@@ -1205,10 +1316,42 @@ enum LicenseType {
 enum LicenseStatus {
   DRAFT
   PENDING_APPROVAL
+  PENDING_SIGNATURE
   ACTIVE
+  EXPIRING_SOON
   EXPIRED
+  RENEWED
   TERMINATED
+  DISPUTED
+  CANCELED
   SUSPENDED
+}
+
+enum LicenseAmendmentStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum LicenseAmendmentType {
+  FINANCIAL
+  SCOPE
+  DATES
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
 }
 
 enum BillingFrequency {
@@ -1440,12 +1583,71 @@ model Notification {
   @@map("notifications")
 }
 
+model MessageThread {
+  id               String    @id @default(cuid())
+  subject          String?   @db.VarChar(255)
+  participantsJson Json      @map("participants_json")
+  lastMessageAt    DateTime  @map("last_message_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  // Relations
+  messages Message[]
+
+  @@index([lastMessageAt])
+  @@index([participantsJson], type: Gin)
+  @@index([deletedAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id          String    @id @default(cuid())
+  threadId    String    @map("thread_id")
+  senderId    String    @map("sender_id")
+  recipientId String    @map("recipient_id")
+  body        String    @db.Text
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SentMessages", fields: [senderId], references: [id])
+  recipient   User                @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  attachments MessageAttachment[]
+
+  @@index([threadId, createdAt])
+  @@index([recipientId, readAt])
+  @@index([senderId])
+  @@index([deletedAt])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id         String   @id @default(cuid())
+  messageId  String   @map("message_id")
+  storageKey String   @map("storage_key")
+  fileName   String   @map("file_name")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
 enum NotificationType {
   LICENSE
   PAYOUT
   ROYALTY
   PROJECT
   SYSTEM
+  MESSAGE
 }
 
 enum NotificationPriority {

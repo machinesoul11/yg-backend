@@ -6,7 +6,7 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { prisma } from '@/lib/db';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { AuditService } from '@/lib/services/audit.service';
 import { RoyaltyCalculationService } from '@/modules/royalties/services/royalty-calculation.service';
 import type { RoyaltyCalculationJobData } from '@/modules/royalties/types';
@@ -16,7 +16,7 @@ const auditService = new AuditService(prisma);
 export const royaltyCalculationQueue = new Queue<RoyaltyCalculationJobData>(
   'royalty-calculation',
   {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -67,7 +67,7 @@ export const royaltyCalculationWorker = new Worker<RoyaltyCalculationJobData>(
     }
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 2, // Only 2 concurrent calculations
   }
 );

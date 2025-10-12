@@ -6,14 +6,14 @@
  */
 
 import { Queue, Worker } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { prisma } from '@/lib/db';
 
 const QUEUE_NAME = 'notification-cleanup';
 
 // Create queue
 export const notificationCleanupQueue = new Queue(QUEUE_NAME, {
-  connection: redis,
+  connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: 100,
     removeOnFail: 100,
@@ -46,7 +46,7 @@ export const notificationCleanupWorker = new Worker(
     return result;
   },
   {
-    connection: redis,
+    connection: redisConnection,
   }
 );
 

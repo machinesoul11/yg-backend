@@ -5,7 +5,7 @@
 
 import { Queue, Worker, type Job } from 'bullmq';
 import { prisma } from '@/lib/db';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { MetricsAggregationService } from '@/modules/analytics/services/metrics-aggregation.service';
 import type {
   EnrichEventJobData,
@@ -58,7 +58,7 @@ function parseUserAgent(userAgent: string): ParsedUserAgent {
 export const enrichEventQueue = new Queue<EnrichEventJobData>(
   'enrich-event',
   {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 2,
       backoff: {
@@ -109,7 +109,7 @@ export const enrichEventWorker = new Worker<EnrichEventJobData>(
       );
     }
   },
-  { connection: redis }
+  { connection: redisConnection }
 );
 
 /**
@@ -117,7 +117,7 @@ export const enrichEventWorker = new Worker<EnrichEventJobData>(
  */
 export const aggregateDailyMetricsQueue =
   new Queue<AggregateDailyMetricsJobData>('aggregate-daily-metrics', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -165,7 +165,7 @@ export const aggregateDailyMetricsWorker =
         throw error;
       }
     },
-    { connection: redis }
+    { connection: redisConnection }
   );
 
 /**

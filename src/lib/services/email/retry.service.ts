@@ -11,6 +11,7 @@
 
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';
 import { Queue, Worker, type Job } from 'bullmq';
 import { emailService } from './email.service';
 import type { TemplateKey } from './templates';
@@ -47,7 +48,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
  * BullMQ queue for email retries
  */
 export const emailRetryQueue = new Queue('email-retry', {
-  connection: redis,
+  connection: redisConnection,
   defaultJobOptions: {
     attempts: 1, // We handle retries manually for better control
     removeOnComplete: 1000,
@@ -564,7 +565,7 @@ export const emailRetryWorker = new Worker(
     await retryService.processRetry(job);
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 5, // Process 5 retries concurrently
   }
 );

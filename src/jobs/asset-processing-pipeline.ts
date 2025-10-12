@@ -12,8 +12,8 @@
  * This service manages job enqueueing and tracks processing status
  */
 
-import { Queue } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { Queue, Worker } from 'bullmq';
+import { redisConnection } from '@/lib/db/redis';
 import { AssetType } from '@prisma/client';
 import type {
   ThumbnailGenerationJobData,
@@ -75,7 +75,7 @@ export interface AssetProcessingConfig {
  */
 export const assetProcessingQueues = {
   thumbnail: new Queue<ThumbnailGenerationJobData>('asset-thumbnail-generation', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -85,7 +85,7 @@ export const assetProcessingQueues = {
   }),
 
   metadata: new Queue<MetadataExtractionJobData>('asset-metadata-extraction', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
@@ -95,7 +95,7 @@ export const assetProcessingQueues = {
   }),
 
   preview: new Queue<PreviewGenerationJobData>('asset-preview-generation', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 2,
       backoff: { type: 'exponential', delay: 10000 },
@@ -105,7 +105,7 @@ export const assetProcessingQueues = {
   }),
 
   formatConversion: new Queue<FormatConversionJobData>('asset-format-conversion', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 2,
       backoff: { type: 'exponential', delay: 30000 },
@@ -115,7 +115,7 @@ export const assetProcessingQueues = {
   }),
 
   watermarking: new Queue<WatermarkingJobData>('asset-watermarking', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 2,
       backoff: { type: 'exponential', delay: 10000 },
@@ -125,7 +125,7 @@ export const assetProcessingQueues = {
   }),
 
   qualityValidation: new Queue<QualityValidationJobData>('asset-quality-validation', {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 2,
       backoff: { type: 'exponential', delay: 5000 },

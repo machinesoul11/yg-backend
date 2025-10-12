@@ -8,6 +8,7 @@ import { emailCampaignsRouter, emailCampaignsEnhancedRouter } from '@/modules/em
 import { projectsRouter } from '@/modules/projects';
 import { ipAssetsRouter } from '@/modules/ip';
 import { ipOwnershipRouter } from '@/modules/ip/routers/ip-ownership.router';
+import { messagesRouter } from '@/modules/messages';
 
 /**
  * This is the primary router for your server.
@@ -25,6 +26,7 @@ export const appRouter = createTRPCRouter({
   projects: projectsRouter,
   ipAssets: ipAssetsRouter,
   ipOwnership: ipOwnershipRouter,
+  messages: messagesRouter,
   // Add your routers here
   // Example:
   // licenses: licensesRouter,

@@ -205,8 +205,163 @@ export interface LicenseStats {
 }
 
 /**
- * Custom errors
+ * Amendment proposal input
  */
+export interface ProposeAmendmentInput {
+  licenseId: string;
+  amendmentType: 'FINANCIAL' | 'SCOPE' | 'DATES' | 'OTHER';
+  justification: string;
+  changes: Array<{
+    field: string;
+    currentValue: any;
+    proposedValue: any;
+  }>;
+  approvalDeadlineDays?: number;
+}
+
+/**
+ * Amendment approval input
+ */
+export interface AmendmentApprovalInput {
+  amendmentId: string;
+  action: 'approve' | 'reject';
+  comments?: string;
+}
+
+/**
+ * Extension request input
+ */
+export interface ExtensionRequestInput {
+  licenseId: string;
+  extensionDays: number;
+  justification: string;
+}
+
+/**
+ * Extension approval input
+ */
+export interface ExtensionApprovalInput {
+  extensionId: string;
+  action: 'approve' | 'reject';
+  rejectionReason?: string;
+}
+
+/**
+ * Status transition input
+ */
+export interface StatusTransitionInput {
+  licenseId: string;
+  toStatus: LicenseStatus;
+  reason?: string;
+}
+
+/**
+ * Enhanced update context
+ */
+export interface UpdateContext {
+  userId: string;
+  userRole: 'brand' | 'creator' | 'admin';
+  ipAddress?: string;
+  userAgent?: string;
+  reason?: string;
+}
+
+/**
+ * Renewal eligibility result
+ */
+export interface RenewalEligibilityResult {
+  eligible: boolean;
+  reasons: string[];
+  suggestedTerms?: {
+    durationDays: number;
+    feeCents: number;
+    revShareBps: number;
+    startDate: string;
+    endDate: string;
+    adjustments: {
+      feeAdjustmentPercent: number;
+      revShareAdjustmentBps: number;
+      loyaltyDiscount?: number;
+      performanceBonus?: number;
+    };
+  };
+}
+
+/**
+ * Renewal offer acceptance input
+ */
+export interface AcceptRenewalOfferInput {
+  licenseId: string;
+  offerId: string;
+}
+
+/**
+ * Conflict preview result
+ */
+export interface ConflictPreviewResult {
+  activeLicenses: number;
+  exclusiveLicenses: number;
+  availableTerritories: string[];
+  blockedMediaTypes: string[];
+  suggestedStartDate: string | null;
+}
+
+/**
+ * Status history entry
+ */
+export interface StatusHistoryEntry {
+  id: string;
+  fromStatus: string;
+  toStatus: string;
+  transitionedAt: string;
+  transitionedBy: string | null;
+  reason: string | null;
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+}
+
+/**
+ * Amendment with approvals
+ */
+export interface AmendmentWithApprovals {
+  id: string;
+  amendmentNumber: number;
+  type: string;
+  proposedAt: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  status: string;
+  changes: string[];
+  justification: string;
+  approvals: Array<{
+    id: string;
+    approverId: string;
+    approverRole: string;
+    status: string;
+    approvedAt: string | null;
+    rejectedAt: string | null;
+    comments: string | null;
+  }>;
+}
+
+/**
+ * Extension with details
+ */
+export interface ExtensionWithDetails {
+  id: string;
+  requestedAt: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  status: string;
+  extensionDays: number;
+  additionalFeeCents: number;
+  justification: string;
+  approvalRequired: boolean;
+}
+
 export class LicenseConflictError extends Error {
   constructor(public conflicts: Conflict[]) {
     super('License conflicts detected');
@@ -222,15 +377,15 @@ export class LicensePermissionError extends Error {
 }
 
 export class LicenseValidationError extends Error {
-  constructor(message: string) {
+  constructor(message: string, public validationErrors: string[]) {
     super(message);
     this.name = 'LicenseValidationError';
   }
 }
 
 export class LicenseNotFoundError extends Error {
-  constructor(licenseId: string) {
-    super(`License not found: ${licenseId}`);
+  constructor(message: string = 'License not found') {
+    super(message);
     this.name = 'LicenseNotFoundError';
   }
 }

@@ -9,7 +9,7 @@
  */
 
 import { Queue, Worker, type Job } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { emailReputationService } from '@/lib/services/email/reputation.service';
 
 const SENDER_DOMAIN = process.env.RESEND_SENDER_DOMAIN || 'yesgoddess.com';
@@ -22,7 +22,7 @@ export interface ReputationMonitoringJobData {
 export const reputationMonitoringQueue = new Queue<ReputationMonitoringJobData>(
   'reputation-monitoring',
   {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -93,7 +93,7 @@ export const reputationMonitoringWorker = new Worker<ReputationMonitoringJobData
     }
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 1, // Run one at a time
   }
 );

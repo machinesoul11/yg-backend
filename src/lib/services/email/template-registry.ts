@@ -26,6 +26,8 @@ import ProjectInvitation from '../../../../emails/templates/ProjectInvitation';
 import CreatorWelcome from '../../../../emails/templates/CreatorWelcome';
 import CreatorVerificationApproved from '../../../../emails/templates/CreatorVerificationApproved';
 import CreatorVerificationRejected from '../../../../emails/templates/CreatorVerificationRejected';
+import NewMessage from '../../../../emails/templates/NewMessage';
+import MessageDigest from '../../../../emails/templates/MessageDigest';
 import { EmailTemplateError } from '@/lib/services/email/errors';
 
 /**
@@ -175,6 +177,33 @@ export interface CreatorVerificationRejectedProps {
   resubmitUrl?: string;
 }
 
+export interface NewMessageProps {
+  recipientName?: string;
+  senderName: string;
+  senderAvatar?: string;
+  threadSubject?: string;
+  messagePreview: string;
+  threadUrl: string;
+}
+
+export interface MessageDigestProps {
+  recipientName?: string;
+  frequency: 'daily' | 'weekly';
+  threads: Array<{
+    threadId: string;
+    threadSubject: string | null;
+    messageCount: number;
+    senders: string[];
+    latestMessage: {
+      senderName: string;
+      body: string;
+      createdAt: Date;
+    };
+  }>;
+  totalUnreadCount: number;
+  inboxUrl: string;
+}
+
 /**
  * Template registry mapping template keys to their components and props types
  */
@@ -259,6 +288,14 @@ export const TEMPLATE_REGISTRY = {
     component: CreatorVerificationRejected,
     category: 'system',
   },
+  'new-message': {
+    component: NewMessage,
+    category: 'messages',
+  },
+  'message-digest': {
+    component: MessageDigest,
+    category: 'messages',
+  },
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATE_REGISTRY;
@@ -287,6 +324,8 @@ export interface TemplateVariablesMap {
   'creator-welcome': CreatorWelcomeProps;
   'creator-verification-approved': CreatorVerificationApprovedProps;
   'creator-verification-rejected': CreatorVerificationRejectedProps;
+  'new-message': NewMessageProps;
+  'message-digest': MessageDigestProps;
 }
 
 export type TemplateVariables<T extends TemplateKey = TemplateKey> = TemplateVariablesMap[T];
@@ -373,6 +412,8 @@ function getRequiredFields(templateKey: TemplateKey): string[] {
     'creator-welcome': ['creatorName', 'dashboardUrl'],
     'creator-verification-approved': ['creatorName', 'approvedAt', 'dashboardUrl'],
     'creator-verification-rejected': ['creatorName', 'rejectionReason'],
+    'new-message': ['senderName', 'messagePreview', 'threadUrl'],
+    'message-digest': ['frequency', 'threads', 'totalUnreadCount', 'inboxUrl'],
   };
 
   return requiredFieldsMap[templateKey] || [];

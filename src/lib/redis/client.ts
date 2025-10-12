@@ -43,7 +43,7 @@ const createRedisClient = () => {
     console.warn('[Redis] Redis connection closed');
   });
 
-  client.on('reconnecting', (delay) => {
+  client.on('reconnecting', (delay: number) => {
     console.warn(`[Redis] Reconnecting to Redis in ${delay}ms`);
   });
 
@@ -54,8 +54,55 @@ const createRedisClient = () => {
   return client;
 };
 
+// BullMQ-specific Redis configuration (maxRetriesPerRequest must be null)
+const bullmqRedisConfig = {
+  maxRetriesPerRequest: null, // BullMQ handles retries
+  enableReadyCheck: false,
+  retryStrategy: (times: number) => {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  },
+  reconnectOnError: (err: Error) => {
+    const targetErrors = ['READONLY', 'ETIMEDOUT', 'ECONNRESET'];
+    return targetErrors.some((target) => err.message.includes(target));
+  },
+  lazyConnect: true,
+  connectTimeout: 10000,
+  commandTimeout: 5000,
+  keepAlive: 30000,
+};
+
+// Create BullMQ Redis client instance
+const createBullMQRedisClient = () => {
+  if (!process.env.REDIS_URL) {
+    throw new Error('REDIS_URL environment variable is not set');
+  }
+
+  const client = new Redis(process.env.REDIS_URL, bullmqRedisConfig);
+
+  // Event listeners for monitoring
+  client.on('connect', () => {
+    console.log('[Redis:BullMQ] Connected to Redis');
+  });
+
+  client.on('error', (err) => {
+    console.error('[Redis:BullMQ] Redis error:', err);
+  });
+
+  client.on('close', () => {
+    console.warn('[Redis:BullMQ] Redis connection closed');
+  });
+
+  client.on('reconnecting', (delay: number) => {
+    console.warn(`[Redis:BullMQ] Reconnecting to Redis in ${delay}ms`);
+  });
+
+  return client;
+};
+
 // Singleton pattern for serverless environments
 let redisClient: Redis | null = null;
+let bullmqRedisClient: Redis | null = null;
 
 export function getRedisClient(): Redis {
   if (!redisClient) {
@@ -64,13 +111,30 @@ export function getRedisClient(): Redis {
   return redisClient;
 }
 
+export function getBullMQRedisClient(): Redis {
+  if (!bullmqRedisClient) {
+    bullmqRedisClient = createBullMQRedisClient();
+  }
+  return bullmqRedisClient;
+}
+
 // Graceful shutdown
 export async function closeRedisClient(): Promise<void> {
+  const promises = [];
+  
   if (redisClient) {
-    await redisClient.quit();
+    promises.push(redisClient.quit());
     redisClient = null;
     console.log('[Redis] Client closed successfully');
   }
+  
+  if (bullmqRedisClient) {
+    promises.push(bullmqRedisClient.quit());
+    bullmqRedisClient = null;
+    console.log('[Redis:BullMQ] Client closed successfully');
+  }
+  
+  await Promise.all(promises);
 }
 
 // Health check

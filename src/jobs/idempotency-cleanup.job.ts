@@ -6,7 +6,7 @@
  */
 
 import { Queue, Worker } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { prisma } from '@/lib/db';
 import { IdempotencyService } from '@/modules/system';
 
@@ -14,7 +14,7 @@ const QUEUE_NAME = 'idempotency-cleanup';
 
 // Create queue
 export const idempotencyCleanupQueue = new Queue(QUEUE_NAME, {
-  connection: redis,
+  connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: 100,
     removeOnFail: 100,
@@ -42,7 +42,7 @@ export const idempotencyCleanupWorker = new Worker(
     return result;
   },
   {
-    connection: redis,
+    connection: redisConnection,
   }
 );
 

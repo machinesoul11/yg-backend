@@ -6,6 +6,20 @@
 import { prisma } from '@/lib/db';
 import { storageProvider } from '@/lib/storage';
 import { EmailService } from '@/lib/services/email/email.service';
+// Import new enhanced services
+import { licenseGenerationService } from './services/licenseGenerationService';
+import { licenseApprovalWorkflowService } from './services/approvalWorkflowService';
+import { licenseSigningService } from './services/signingService';
+import { licenseTermsGenerationService } from './services/licenseTermsGenerationService';
+import { feeCalculationService } from './services/feeCalculationService';
+// Import new management services
+import { licenseUpdateService } from './services/licenseUpdateService';
+import { licenseStatusTransitionService } from './services/licenseStatusTransitionService';
+import { licenseAmendmentService } from './services/licenseAmendmentService';
+import { licenseExtensionService } from './services/licenseExtensionService';
+import { licenseConflictDetectionService } from './services/licenseConflictDetectionService';
+import { enhancedLicenseRenewalService } from './services/enhancedLicenseRenewalService';
+import { licenseValidationService } from './services/licenseValidationService';
 import type {
   CreateLicenseInput,
   UpdateLicenseInput,
@@ -21,6 +35,15 @@ import type {
   LicensePermissionError,
   LicenseValidationError,
   LicenseNotFoundError,
+  ProposeAmendmentInput,
+  AmendmentApprovalInput,
+  ExtensionRequestInput,
+  ExtensionApprovalInput,
+  StatusTransitionInput,
+  UpdateContext,
+  RenewalEligibilityResult,
+  AcceptRenewalOfferInput,
+  ConflictPreviewResult,
 } from './types';
 import type { License, Prisma } from '@prisma/client';
 import { addDays, differenceInDays, startOfDay, endOfDay } from 'date-fns';
@@ -895,6 +918,356 @@ export class LicenseService {
         updatedBy: userId,
       },
     });
+  }
+
+  /**
+   * Enhanced license creation with full validation and fee calculation
+   */
+  async createLicenseEnhanced(
+    input: CreateLicenseInput,
+    userId: string,
+    requestContext?: {
+      ipAddress?: string;
+      userAgent?: string;
+      requestId?: string;
+    }
+  ) {
+    return licenseGenerationService.generateLicense(input, userId, requestContext);
+  }
+
+  /**
+   * Calculate fee for a license
+   */
+  async calculateFee(input: {
+    ipAssetId: string;
+    licenseType: any;
+    scope: any;
+    startDate: Date;
+    endDate: Date;
+    brandId?: string;
+  }) {
+    return feeCalculationService.calculateFee(input);
+  }
+
+  /**
+   * Generate license terms document
+   */
+  async generateLicenseTerms(licenseId: string) {
+    return licenseTermsGenerationService.generateTerms(licenseId);
+  }
+
+  /**
+   * Approve or reject a license
+   */
+  async processLicenseApproval(
+    licenseId: string,
+    context: {
+      userId: string;
+      userRole: 'creator' | 'brand' | 'admin';
+      action: 'approve' | 'reject' | 'request_changes';
+      comments?: string;
+      requestedChanges?: string[];
+      ipAddress?: string;
+      userAgent?: string;
+    }
+  ) {
+    return licenseApprovalWorkflowService.processApproval(licenseId, context);
+  }
+
+  /**
+   * Sign a license
+   */
+  async signLicense(
+    licenseId: string,
+    userId: string,
+    userRole: 'creator' | 'brand',
+    context: {
+      ipAddress: string;
+      userAgent: string;
+    }
+  ) {
+    return licenseSigningService.signLicense(licenseId, userId, userRole, context);
+  }
+
+  /**
+   * Verify license signature
+   */
+  async verifyLicenseSignature(licenseId: string) {
+    return licenseSigningService.verifySignature(licenseId);
+  }
+
+  /**
+   * Get pending approvals for user
+   */
+  async getPendingApprovalsForUser(
+    userId: string,
+    userRole: 'creator' | 'brand' | 'admin'
+  ) {
+    return licenseApprovalWorkflowService.getPendingApprovals(userId, userRole);
+  }
+
+  /**
+   * Generate digital certificate
+   */
+  async generateLicenseCertificate(licenseId: string) {
+    return licenseSigningService.generateCertificate(licenseId);
+  }
+
+  /**
+   * Enhanced update with full validation and audit trail
+   */
+  async updateLicenseEnhanced(
+    licenseId: string,
+    input: UpdateLicenseInput,
+    context: UpdateContext
+  ): Promise<License> {
+    return licenseUpdateService.updateLicense(licenseId, input, context);
+  }
+
+  /**
+   * Transition license status with validation
+   */
+  async transitionStatus(input: StatusTransitionInput, context: UpdateContext): Promise<void> {
+    return licenseStatusTransitionService.transition(input.licenseId, input.toStatus, {
+      userId: context.userId,
+      reason: input.reason,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+  }
+
+  /**
+   * Get status history for a license
+   */
+  async getStatusHistory(licenseId: string) {
+    return licenseStatusTransitionService.getStatusHistory(licenseId);
+  }
+
+  /**
+   * Get status distribution analytics
+   */
+  async getStatusDistribution(brandId?: string) {
+    return licenseStatusTransitionService.getStatusDistribution(brandId);
+  }
+
+  /**
+   * Propose an amendment to a license
+   */
+  async proposeAmendment(input: ProposeAmendmentInput, context: UpdateContext) {
+    return licenseAmendmentService.proposeAmendment({
+      licenseId: input.licenseId,
+      proposedBy: context.userId,
+      proposedByRole: context.userRole,
+      amendmentType: input.amendmentType,
+      justification: input.justification,
+      changes: input.changes,
+      approvalDeadlineDays: input.approvalDeadlineDays,
+    });
+  }
+
+  /**
+   * Approve or reject an amendment
+   */
+  async processAmendmentApproval(
+    input: AmendmentApprovalInput,
+    context: UpdateContext
+  ) {
+    return licenseAmendmentService.processAmendmentApproval({
+      amendmentId: input.amendmentId,
+      approverId: context.userId,
+      approverRole: context.userRole,
+      action: input.action,
+      comments: input.comments,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+  }
+
+  /**
+   * Get amendments for a license
+   */
+  async getAmendments(licenseId: string) {
+    return licenseAmendmentService.getAmendments(licenseId);
+  }
+
+  /**
+   * Get pending amendments for a user
+   */
+  async getPendingAmendments(userId: string, userRole: string) {
+    return licenseAmendmentService.getPendingAmendmentsForUser(userId, userRole);
+  }
+
+  /**
+   * Get amendment history
+   */
+  async getAmendmentHistory(licenseId: string) {
+    return licenseAmendmentService.getAmendmentHistory(licenseId);
+  }
+
+  /**
+   * Request a license extension
+   */
+  async requestExtension(input: ExtensionRequestInput, context: UpdateContext) {
+    return licenseExtensionService.requestExtension({
+      licenseId: input.licenseId,
+      requestedBy: context.userId,
+      extensionDays: input.extensionDays,
+      justification: input.justification,
+    });
+  }
+
+  /**
+   * Approve or reject an extension
+   */
+  async processExtensionApproval(
+    input: ExtensionApprovalInput,
+    context: UpdateContext
+  ) {
+    return licenseExtensionService.processExtensionApproval({
+      extensionId: input.extensionId,
+      approverId: context.userId,
+      action: input.action,
+      rejectionReason: input.rejectionReason,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+  }
+
+  /**
+   * Get extensions for a license
+   */
+  async getExtensions(licenseId: string) {
+    return licenseExtensionService.getExtensions(licenseId);
+  }
+
+  /**
+   * Get pending extensions for a user
+   */
+  async getPendingExtensions(userId: string) {
+    return licenseExtensionService.getPendingExtensionsForUser(userId);
+  }
+
+  /**
+   * Get extension analytics
+   */
+  async getExtensionAnalytics(brandId?: string) {
+    return licenseExtensionService.getExtensionAnalytics(brandId);
+  }
+
+  /**
+   * Enhanced conflict detection
+   */
+  async checkConflictsEnhanced(input: ConflictCheckInput): Promise<ConflictResult> {
+    return licenseConflictDetectionService.checkConflicts({
+      ipAssetId: input.ipAssetId,
+      startDate: new Date(input.startDate),
+      endDate: new Date(input.endDate),
+      licenseType: input.licenseType,
+      scope: input.scope,
+      excludeLicenseId: input.excludeLicenseId,
+    });
+  }
+
+  /**
+   * Get conflict preview for IP asset
+   */
+  async getConflictPreview(ipAssetId: string): Promise<ConflictPreviewResult> {
+    const preview = await licenseConflictDetectionService.getConflictPreview(ipAssetId);
+    return {
+      ...preview,
+      suggestedStartDate: preview.suggestedStartDate?.toISOString() || null,
+    };
+  }
+
+  /**
+   * Check renewal eligibility
+   */
+  async checkRenewalEligibility(licenseId: string): Promise<RenewalEligibilityResult> {
+    const result = await enhancedLicenseRenewalService.checkRenewalEligibility(licenseId);
+    
+    return {
+      eligible: result.eligible,
+      reasons: result.reasons,
+      suggestedTerms: result.suggestedTerms ? {
+        ...result.suggestedTerms,
+        startDate: result.suggestedTerms.startDate.toISOString(),
+        endDate: result.suggestedTerms.endDate.toISOString(),
+      } : undefined,
+    };
+  }
+
+  /**
+   * Generate renewal offer
+   */
+  async generateRenewalOffer(licenseId: string, userId: string) {
+    return enhancedLicenseRenewalService.generateRenewalOffer(licenseId, userId);
+  }
+
+  /**
+   * Accept renewal offer
+   */
+  async acceptRenewalOffer(input: AcceptRenewalOfferInput, userId: string) {
+    return enhancedLicenseRenewalService.acceptRenewalOffer(
+      input.licenseId,
+      input.offerId,
+      userId
+    );
+  }
+
+  /**
+   * Process automated status transitions (background job)
+   */
+  async processAutomatedTransitions() {
+    return licenseStatusTransitionService.processAutomatedTransitions();
+  }
+
+  /**
+   * Process auto-renewals (background job)
+   */
+  async processAutoRenewals() {
+    return enhancedLicenseRenewalService.processAutoRenewals();
+  }
+
+  /**
+   * Comprehensive license validation
+   * Runs all six validation checks: date overlap, exclusivity, scope conflict,
+   * budget availability, ownership verification, and approval requirements
+   */
+  async validateLicenseComprehensive(input: CreateLicenseInput): Promise<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    conflicts: Conflict[];
+    approvalRequired: boolean;
+    approvalReasons: string[];
+  }> {
+    const startDate = new Date(input.startDate);
+    const endDate = new Date(input.endDate);
+
+    const validationResult = await licenseValidationService.validateLicense(
+      {
+        ipAssetId: input.ipAssetId,
+        brandId: input.brandId,
+        licenseType: input.licenseType,
+        startDate,
+        endDate,
+        scope: input.scope,
+        feeCents: input.feeCents,
+        revShareBps: input.revShareBps,
+      },
+      { validateAll: true } // Run all validations even if some fail
+    );
+
+    return {
+      valid: validationResult.valid,
+      errors: validationResult.allErrors,
+      warnings: validationResult.allWarnings,
+      conflicts: validationResult.conflicts,
+      approvalRequired:
+        validationResult.checks.approvalRequirements.details?.approvalRequired || false,
+      approvalReasons:
+        validationResult.checks.approvalRequirements.details?.reasons || [],
+    };
   }
 }
 

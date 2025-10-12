@@ -15,7 +15,7 @@
  */
 
 import { Queue, Worker, type Job } from 'bullmq';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';
 import { emailDeliverabilityService } from '@/lib/services/email/deliverability.service';
 
 export interface DeliverabilityMonitoringJobData {
@@ -26,7 +26,7 @@ export interface DeliverabilityMonitoringJobData {
 export const deliverabilityMonitoringQueue = new Queue<DeliverabilityMonitoringJobData>(
   'deliverability-monitoring',
   {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -106,7 +106,7 @@ export const deliverabilityMonitoringWorker = new Worker<DeliverabilityMonitorin
     }
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 1, // Run one at a time
   }
 );

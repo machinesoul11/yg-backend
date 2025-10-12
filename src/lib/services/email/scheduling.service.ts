@@ -10,7 +10,7 @@
  */
 
 import { prisma } from '@/lib/db';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';
 import { Queue, Worker, type Job } from 'bullmq';
 import { emailService } from './email.service';
 import type { ScheduledEmailStatus } from '@prisma/client';
@@ -29,7 +29,7 @@ export interface ScheduleEmailParams {
 }
 
 export const scheduledEmailQueue = new Queue('scheduled-emails', {
-  connection: redis,
+  connection: redisConnection,
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -338,7 +338,7 @@ export const scheduledEmailWorker = new Worker(
     await service.processScheduledEmail(scheduledEmailId);
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 10,
   }
 );

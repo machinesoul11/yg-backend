@@ -5,7 +5,7 @@
 
 import { Queue, Worker, Job } from 'bullmq';
 import { prisma } from '@/lib/db';
-import { redis } from '@/lib/redis';
+import { redisConnection } from '@/lib/db/redis';;
 import { EmailService } from '@/lib/services/email/email.service';
 import { AuditService } from '@/lib/services/audit.service';
 import { RoyaltyStatementService } from '@/modules/royalties/services/royalty-statement.service';
@@ -17,7 +17,7 @@ const auditService = new AuditService(prisma);
 export const statementNotificationQueue = new Queue<StatementNotificationJobData>(
   'statement-notification',
   {
-    connection: redis,
+    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -92,7 +92,7 @@ export const statementNotificationWorker = new Worker<StatementNotificationJobDa
     return { success: true, notified: successCount, failed: failureCount };
   },
   {
-    connection: redis,
+    connection: redisConnection,
     concurrency: 1, // Sequential processing
   }
 );
