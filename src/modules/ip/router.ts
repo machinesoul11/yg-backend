@@ -21,6 +21,9 @@ import {
   getMetadataSchema,
   getVariantsSchema,
   regeneratePreviewSchema,
+  getAssetOwnersSchema,
+  addAssetOwnerSchema,
+  getAssetLicensesSchema,
 } from './validation';
 
 /**
@@ -315,6 +318,67 @@ export const ipAssetsRouter = createTRPCRouter({
           { userId, userRole },
           input.assetIds,
           input.status
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Get asset owners
+   */
+  getOwners: protectedProcedure
+    .input(getAssetOwnersSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.getAssetOwners(
+          { userId, userRole },
+          input.id
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Add owner to asset
+   */
+  addOwner: protectedProcedure
+    .input(addAssetOwnerSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const { id, ...ownerParams } = input;
+
+        return await ipAssetService.addAssetOwner(
+          { userId, userRole },
+          id,
+          ownerParams
+        );
+      } catch (error) {
+        handleAssetError(error);
+      }
+    }),
+
+  /**
+   * Get licenses for an asset
+   */
+  getLicenses: protectedProcedure
+    .input(getAssetLicensesSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        return await ipAssetService.getAssetLicenses(
+          { userId, userRole },
+          input.id,
+          input.status === 'ALL' ? undefined : input.status
         );
       } catch (error) {
         handleAssetError(error);

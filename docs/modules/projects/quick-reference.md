@@ -20,6 +20,11 @@ The Projects module manages creative campaigns and licensing opportunities creat
 - [x] Email templates (2)
 - [x] README documentation
 - [x] Implementation summary
+- [x] Team management (add/remove/update members)
+- [x] Timeline management (milestones CRUD)
+- [x] Budget tracking (expenses CRUD, budget summary)
+- [x] Enhanced team member retrieval
+- [x] 13 new tRPC endpoints for extended features
 
 ### 🔄 Next Steps (Before Use)
 - [ ] Run `npx prisma generate` to update Prisma client
@@ -98,114 +103,264 @@ const { data } = await trpc.projects.list.useQuery({
 
 ### Update Project
 ```typescript
-const updated = await trpc.projects.update.mutate({
-  id: "clxxx...",
-  status: "ACTIVE"
+const project = await trpc.projects.update.mutate({
+  id: "project-id",
+  status: "IN_PROGRESS"
 });
 ```
 
 ### Delete Project
 ```typescript
-await trpc.projects.delete.mutate({ id: "clxxx..." });
+await trpc.projects.delete.mutate({
+  id: "project-id"
+});
 ```
 
-## 🔑 Key Features
-
-- ✅ Full CRUD operations
-- ✅ Row-level security
-- ✅ Status lifecycle validation
-- ✅ Soft delete
-- ✅ Redis caching
-- ✅ Analytics events
-- ✅ Audit logging
-- ✅ Background jobs
-- ✅ Email notifications
-
-## 🎨 Status Flow
-
-```
-DRAFT → ACTIVE → IN_PROGRESS → COMPLETED → ARCHIVED
-         ↓          ↓
-      CANCELLED  CANCELLED
+### Get Project Statistics
+```typescript
+const stats = await trpc.projects.getStatistics.useQuery({
+  brandId: "optional-brand-id"
+});
 ```
 
-## 🛡️ Security
+## 👥 Team Management Endpoints
 
-- Only brands can create projects
-- Row-level security on all operations
-- Input validation on all endpoints
-- Projects with active licenses can't be deleted
-- All mutations logged in audit trail
-
-## 📊 Database Schema
-
-```sql
-projects (
-  id, brandId, name, description, status,
-  budgetCents, startDate, endDate,
-  objectives (JSONB), requirements (JSONB), metadata (JSONB),
-  projectType, createdBy, updatedBy,
-  createdAt, updatedAt, deletedAt
-)
-
-events (
-  id, eventType, actorType, actorId,
-  projectId, userId, brandId, creatorId,
-  propsJson (JSONB), createdAt
-)
+### Add Team Member
+```typescript
+const member = await trpc.projects.addTeamMember.mutate({
+  projectId: "project-id",
+  userId: "user-id",
+  role: "collaborator" // or "viewer"
+});
 ```
 
-## 📧 Email Templates
-
-1. **ProjectMatchNotification** - Sent to creators when matched
-2. **ProjectExpired** - Sent to brands when project auto-archives
-
-## 🔄 Background Jobs
-
-1. **project-match-creators** - Matches creators when project goes ACTIVE
-2. **project-expiry-check** - Auto-archives expired projects daily
-
-## 🧪 Testing
-
-```bash
-# Run tests (when implemented)
-npm test src/modules/projects
-
-# Test manually with Prisma Studio
-npx prisma studio
+### Remove Team Member
+```typescript
+await trpc.projects.removeTeamMember.mutate({
+  projectId: "project-id",
+  userId: "user-id"
+});
 ```
 
-## 🐛 Common Issues
+### Update Team Member Role
+```typescript
+const member = await trpc.projects.updateTeamMemberRole.mutate({
+  projectId: "project-id",
+  userId: "user-id",
+  role: "viewer"
+});
+```
 
-### TypeScript Errors After Creation
-**Solution:** Run `npx prisma generate` to update types
+### Get Enhanced Team
+```typescript
+const team = await trpc.projects.getEnhancedTeam.useQuery({
+  projectId: "project-id"
+});
+// Returns: brand admin + all team members from metadata
+```
 
-### "Project table not found"
-**Solution:** Run the migration SQL file
+## 📅 Timeline/Milestone Endpoints
 
-### Cache not working
-**Solution:** Verify Redis connection in `.env`
+### Create Milestone
+```typescript
+const milestone = await trpc.projects.createMilestone.mutate({
+  projectId: "project-id",
+  name: "Complete Asset Review",
+  description: "Review all submitted assets",
+  dueDate: "2025-12-31T23:59:59Z"
+});
+```
 
-### Background jobs not running
-**Solution:** Set up job scheduler (BullMQ, etc.)
+### Update Milestone
+```typescript
+const milestone = await trpc.projects.updateMilestone.mutate({
+  projectId: "project-id",
+  milestoneId: "milestone-id",
+  status: "completed",
+  name: "Updated Name (optional)"
+});
+```
 
-## 📚 Related Documentation
+### Delete Milestone
+```typescript
+await trpc.projects.deleteMilestone.mutate({
+  projectId: "project-id",
+  milestoneId: "milestone-id"
+});
+```
 
-- [Full README](./README.md)
-- [Implementation Summary](../../docs/PROJECTS_IMPLEMENTATION_SUMMARY.md)
-- [Brand Guidelines](../../docs/YES%20GODDESS%20Brand%20Guidelines.md)
+### List Milestones
+```typescript
+const milestones = await trpc.projects.listMilestones.useQuery({
+  projectId: "project-id",
+  status: "pending" // optional: "pending" | "in_progress" | "completed" | "cancelled"
+});
+// Returns sorted by due date (ascending)
+```
 
-## 🆘 Support
+## 💰 Budget Tracking Endpoints
 
-If issues arise:
-1. Check TypeScript errors → Run `npx prisma generate`
-2. Check database → Verify migration ran successfully
-3. Check Redis → Verify connection and cache keys
-4. Check logs → Look for service/router errors
-5. Review implementation summary for troubleshooting
+### Add Expense
+```typescript
+const expense = await trpc.projects.addExpense.mutate({
+  projectId: "project-id",
+  description: "Professional photography",
+  amountCents: 150000, // $1,500.00
+  category: "Production",
+  date: "2025-10-15T00:00:00Z",
+  metadata: { vendor: "PhotoStudio Inc" } // optional
+});
+```
 
----
+### Update Expense
+```typescript
+const expense = await trpc.projects.updateExpense.mutate({
+  projectId: "project-id",
+  expenseId: "expense-id",
+  amountCents: 175000, // Updated amount
+  description: "Updated description (optional)"
+});
+```
 
-**Module Version:** 1.0.0  
-**Last Updated:** October 10, 2025  
-**Status:** ✅ Production Ready
+### Delete Expense
+```typescript
+await trpc.projects.deleteExpense.mutate({
+  projectId: "project-id",
+  expenseId: "expense-id"
+});
+```
+
+### Get Budget Summary
+```typescript
+const summary = await trpc.projects.getBudgetSummary.useQuery({
+  projectId: "project-id"
+});
+
+// Returns:
+// {
+//   budgetCents: 500000,
+//   spentCents: 325000,
+//   remainingCents: 175000,
+//   utilizationPercent: 65,
+//   expenseCount: 8,
+//   expenses: [/* sorted by date, newest first */]
+// }
+```
+
+## 🏗️ Service Layer Usage
+
+### Direct Service Usage (if needed)
+```typescript
+import { ProjectService } from '@/modules/projects';
+import { prisma } from '@/lib/db';
+import { EmailService } from '@/lib/services/email';
+import { AuditService } from '@/lib/services/audit';
+
+const emailService = new EmailService();
+const auditService = new AuditService(prisma);
+const projectService = new ProjectService(prisma, emailService, auditService);
+
+// Team Management
+const member = await projectService.addTeamMember(
+  'project-id',
+  { userId: 'user-id', role: 'collaborator' },
+  'current-user-id',
+  'ADMIN'
+);
+
+// Timeline Management
+const milestone = await projectService.createMilestone(
+  'project-id',
+  { name: 'Milestone', dueDate: '2025-12-31T00:00:00Z' },
+  'user-id',
+  'ADMIN'
+);
+
+// Budget Tracking
+const expense = await projectService.addExpense(
+  'project-id',
+  { description: 'Expense', amountCents: 10000, category: 'Production', date: '2025-10-15T00:00:00Z' },
+  'user-id',
+  'ADMIN'
+);
+
+const summary = await projectService.getBudgetSummary(
+  'project-id',
+  'user-id',
+  'ADMIN'
+);
+```
+
+## 📊 Data Structures
+
+### Project Metadata Structure
+```typescript
+{
+  // Team members (stored in metadata.teamMembers)
+  teamMembers: [
+    {
+      userId: "user-123",
+      role: "collaborator" | "viewer",
+      addedAt: "2025-10-11T...",
+      addedBy: "admin-user-id"
+    }
+  ],
+  
+  // Milestones (stored in metadata.milestones)
+  milestones: [
+    {
+      id: "ms_1728...",
+      name: "Milestone Name",
+      description: "Optional description",
+      dueDate: "2025-12-31T...",
+      status: "pending" | "in_progress" | "completed" | "cancelled",
+      completedAt: "2025-11-15T..." (if completed),
+      completedBy: "user-id" (if completed),
+      createdAt: "2025-10-11T...",
+      createdBy: "user-id"
+    }
+  ],
+  
+  // Expenses (stored in metadata.expenses)
+  expenses: [
+    {
+      id: "exp_1728...",
+      description: "Expense description",
+      amountCents: 150000,
+      category: "Production",
+      date: "2025-10-15T...",
+      metadata: { vendor: "..." },
+      createdBy: "user-id",
+      createdAt: "2025-10-11T..."
+    }
+  ]
+}
+```
+
+## 🔒 Authorization
+
+All endpoints enforce row-level security:
+- **Brands** can only access their own projects
+- **Admins** can access all projects
+- Team members must be explicitly added to collaborate
+- Only project owners and admins can modify team/timeline/budget
+
+## 🎯 Best Practices
+
+### Team Management
+- Always verify user exists before adding to team
+- Don't allow removing brand admin (protected)
+- Use appropriate roles: `collaborator` for active work, `viewer` for read-only
+
+### Timeline Management
+- Keep milestones within project start/end dates
+- Mark milestones complete as they're achieved
+- Use status transitions: pending → in_progress → completed
+
+### Budget Tracking
+- Track all expenses by category for better reporting
+- Budget warnings are logged but don't block expenses
+- Use metadata field for vendor info, invoice numbers, etc.
+- Review budget summary regularly: `utilizationPercent > 80` = time to review
+
+## 🧪 Testing Data

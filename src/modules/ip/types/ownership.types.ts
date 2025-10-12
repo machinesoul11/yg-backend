@@ -22,6 +22,13 @@ export interface IpOwnershipResponse {
   contractReference: string | null;
   legalDocUrl: string | null;
   notes: Record<string, any> | null;
+  disputed: boolean;
+  disputedAt: string | null;
+  disputeReason: string | null;
+  disputedBy: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNotes: string | null;
   createdAt: string;
   updatedAt: string;
   
@@ -101,9 +108,39 @@ export interface OwnershipTransferResult {
 
 export interface OwnershipHistoryEntry {
   ownership: IpOwnershipResponse;
-  changeType: 'CREATED' | 'UPDATED' | 'ENDED' | 'TRANSFERRED';
+  changeType: 'CREATED' | 'UPDATED' | 'ENDED' | 'TRANSFERRED' | 'DISPUTED' | 'RESOLVED';
   changedAt: string;
   changedBy: string;
+}
+
+// ============================================================================
+// Dispute Types
+// ============================================================================
+
+export interface DisputeOwnershipInput {
+  ownershipId: string;
+  reason: string;
+  supportingDocuments?: string[];
+}
+
+export interface ResolveDisputeInput {
+  ownershipId: string;
+  action: 'CONFIRM' | 'MODIFY' | 'REMOVE';
+  resolutionNotes: string;
+  modifiedData?: {
+    shareBps?: number;
+    ownershipType?: OwnershipType;
+    startDate?: Date;
+    endDate?: Date;
+  };
+}
+
+export interface DisputeResolutionResult {
+  ownershipId: string;
+  action: 'CONFIRM' | 'MODIFY' | 'REMOVE';
+  resolvedAt: string;
+  resolvedBy: string;
+  updatedOwnership?: IpOwnershipResponse;
 }
 
 // ============================================================================

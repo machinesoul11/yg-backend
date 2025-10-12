@@ -181,3 +181,95 @@ export const trackEventSchema = z.object({
 });
 
 export type TrackEventInput = z.infer<typeof trackEventSchema>;
+
+// Team Management Schemas
+export const addTeamMemberSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  userId: z.string().cuid('Invalid user ID'),
+  role: z.enum(['collaborator', 'viewer']).default('collaborator'),
+});
+
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>;
+
+export const removeTeamMemberSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  userId: z.string().cuid('Invalid user ID'),
+});
+
+export type RemoveTeamMemberInput = z.infer<typeof removeTeamMemberSchema>;
+
+export const updateTeamMemberRoleSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  userId: z.string().cuid('Invalid user ID'),
+  role: z.enum(['collaborator', 'viewer']),
+});
+
+export type UpdateTeamMemberRoleInput = z.infer<typeof updateTeamMemberRoleSchema>;
+
+// Timeline/Milestone Schemas
+export const createMilestoneSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  name: z.string().min(3, 'Milestone name must be at least 3 characters').max(200),
+  description: z.string().max(1000).optional(),
+  dueDate: z.string().datetime(),
+});
+
+export type CreateMilestoneInput = z.infer<typeof createMilestoneSchema>;
+
+export const updateMilestoneSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  milestoneId: z.string().cuid('Invalid milestone ID'),
+  name: z.string().min(3).max(200).optional(),
+  description: z.string().max(1000).optional().nullable(),
+  dueDate: z.string().datetime().optional(),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+});
+
+export type UpdateMilestoneInput = z.infer<typeof updateMilestoneSchema>;
+
+export const deleteMilestoneSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  milestoneId: z.string().cuid('Invalid milestone ID'),
+});
+
+export const listMilestonesSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
+});
+
+export type ListMilestonesInput = z.infer<typeof listMilestonesSchema>;
+
+// Budget Tracking Schemas
+export const addExpenseSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  description: z.string().min(3).max(500),
+  amountCents: z.number().int().min(1, 'Amount must be positive'),
+  category: z.string().min(1).max(100),
+  date: z.string().datetime(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type AddExpenseInput = z.infer<typeof addExpenseSchema>;
+
+export const updateExpenseSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  expenseId: z.string().cuid('Invalid expense ID'),
+  description: z.string().min(3).max(500).optional(),
+  amountCents: z.number().int().min(1).optional(),
+  category: z.string().min(1).max(100).optional(),
+  date: z.string().datetime().optional(),
+  metadata: z.record(z.string(), z.any()).optional().nullable(),
+});
+
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+
+export const deleteExpenseSchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+  expenseId: z.string().cuid('Invalid expense ID'),
+});
+
+export const getBudgetSummarySchema = z.object({
+  projectId: z.string().cuid('Invalid project ID'),
+});
+
+export type GetBudgetSummaryInput = z.infer<typeof getBudgetSummarySchema>;

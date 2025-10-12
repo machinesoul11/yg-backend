@@ -15,6 +15,7 @@ export type {
   ProjectListResponse,
   ProjectStatistics,
   TeamMember,
+  TeamMemberRole,
   ProjectEvent,
   ProjectStatus,
   ProjectType,
@@ -22,6 +23,14 @@ export type {
   SortOrder,
   ProjectRequirements,
   ProjectMetadata,
+  ProjectMilestone,
+  MilestoneStatus,
+  BudgetExpense,
+  BudgetSummary,
+  CreateMilestoneInput,
+  UpdateMilestoneInput,
+  CreateExpenseInput,
+  TeamMemberUpdate,
 } from './types/project.types';
 
 // Schema exports
@@ -35,6 +44,17 @@ export {
   getProjectTeamSchema,
   getProjectStatisticsSchema,
   trackEventSchema,
+  addTeamMemberSchema,
+  removeTeamMemberSchema,
+  updateTeamMemberRoleSchema,
+  createMilestoneSchema,
+  updateMilestoneSchema,
+  deleteMilestoneSchema,
+  listMilestonesSchema,
+  addExpenseSchema,
+  updateExpenseSchema,
+  deleteExpenseSchema,
+  getBudgetSummarySchema,
 } from './schemas/project.schema';
 
 export type {
@@ -42,11 +62,19 @@ export type {
   UpdateProjectInput,
   ListProjectsInput,
   TrackEventInput,
+  AddTeamMemberInput,
+  RemoveTeamMemberInput,
+  UpdateTeamMemberRoleInput,
+  ListMilestonesInput,
+  AddExpenseInput,
+  UpdateExpenseInput,
+  GetBudgetSummaryInput,
 } from './schemas/project.schema';
 
 // Service exports
 export { ProjectService } from './services/project.service';
 export { EventService } from './services/event.service';
+export { ProjectValidationService } from './services/validation.service';
 
 // Router export
 export { projectsRouter } from './routers/projects.router';
@@ -63,4 +91,10 @@ export {
   ProjectHasActiveLicensesError,
   OnlyBrandsCanCreateProjectsError,
   InvalidDateRangeError,
+  TeamMemberNotFoundError,
+  TeamMemberAlreadyExistsError,
+  CannotRemoveBrandAdminError,
+  MilestoneNotFoundError,
+  ExpenseNotFoundError,
+  BudgetExceededError,
 } from './errors/project.errors';

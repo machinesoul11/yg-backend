@@ -30,6 +30,9 @@ import type {
 import type {
   WatermarkingJobData,
 } from './asset-watermarking.job';
+import type {
+  QualityValidationJobData,
+} from './asset-quality-validation.job';
 
 /**
  * Asset Processing Configuration
@@ -39,6 +42,7 @@ export interface AssetProcessingConfig {
   enableVirusScan?: boolean; // Default: true
   enableThumbnailGeneration?: boolean; // Default: true
   enableMetadataExtraction?: boolean; // Default: true
+  enableQualityValidation?: boolean; // Default: true
 
   // Optional processing
   enablePreviewGeneration?: boolean; // Default: false (video/audio only)
@@ -119,6 +123,16 @@ export const assetProcessingQueues = {
       removeOnFail: 200,
     },
   }),
+
+  qualityValidation: new Queue<QualityValidationJobData>('asset-quality-validation', {
+    connection: redis,
+    defaultJobOptions: {
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: 100,
+      removeOnFail: 200,
+    },
+  }),
 };
 
 /**
@@ -137,12 +151,14 @@ export async function enqueueAssetProcessing(
     preview?: string;
     formatConversion?: string;
     watermarking?: string;
+    qualityValidation?: string;
   };
   totalJobsEnqueued: number;
 }> {
   const {
     enableThumbnailGeneration = true,
     enableMetadataExtraction = true,
+    enableQualityValidation = true,
     enablePreviewGeneration = false,
     enableFormatConversion = false,
     enableWatermarking = false,
@@ -250,6 +266,25 @@ export async function enqueueAssetProcessing(
     totalJobsEnqueued++;
   }
 
+  // 6. Quality validation (high priority, runs after metadata extraction)
+  if (enableQualityValidation) {
+    const qualityJob = await assetProcessingQueues.qualityValidation.add(
+      `quality-${assetId}`,
+      {
+        assetId,
+        storageKey,
+        type,
+        mimeType,
+      },
+      {
+        priority: 3, // High priority (after thumbnails and metadata)
+        delay: 2000, // Wait 2 seconds to ensure metadata is extracted
+      }
+    );
+    jobIds.qualityValidation = qualityJob.id!;
+    totalJobsEnqueued++;
+  }
+
   return {
     jobIds,
     totalJobsEnqueued,
@@ -264,6 +299,7 @@ export function getDefaultProcessingConfig(type: AssetType): AssetProcessingConf
     enableVirusScan: true,
     enableThumbnailGeneration: true,
     enableMetadataExtraction: true,
+    enableQualityValidation: true,
     enablePreviewGeneration: false,
     enableFormatConversion: false,
     enableWatermarking: false,
@@ -312,6 +348,7 @@ export function getDefaultProcessingConfig(type: AssetType): AssetProcessingConf
 export async function getAssetProcessingStatus(assetId: string): Promise<{
   thumbnail: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
   metadata: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
+  qualityValidation: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped' | 'not-enabled';
   preview: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped' | 'not-applicable';
   formatConversion: 'pending' | 'processing' | 'completed' | 'failed' | 'not-enabled';
   watermarking: 'pending' | 'processing' | 'completed' | 'failed' | 'not-enabled';
@@ -322,6 +359,7 @@ export async function getAssetProcessingStatus(assetId: string): Promise<{
   return {
     thumbnail: 'completed',
     metadata: 'completed',
+    qualityValidation: 'completed',
     preview: 'not-applicable',
     formatConversion: 'not-enabled',
     watermarking: 'not-enabled',

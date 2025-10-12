@@ -1023,6 +1023,244 @@ export class IpAssetService {
   }
 
   /**
+   * Get asset owners
+   */
+  async getAssetOwners(
+    ctx: AssetServiceContext,
+    assetId: string
+  ): Promise<Array<{
+    id: string;
+    creatorId: string;
+    creatorName: string;
+    shareBps: number;
+    percentage: number;
+    ownershipType: string;
+    startDate: string;
+    endDate: string | null;
+  }>> {
+    const { userId, userRole } = ctx;
+
+    // Verify asset exists and user has access
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    // Get current owners
+    const now = new Date();
+    const owners = await this.prisma.ipOwnership.findMany({
+      where: {
+        ipAssetId: assetId,
+        startDate: { lte: now },
+        OR: [
+          { endDate: null },
+          { endDate: { gte: now } },
+        ],
+      },
+      include: {
+        creator: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        shareBps: 'desc',
+      },
+    });
+
+    return owners.map((owner) => ({
+      id: owner.id,
+      creatorId: owner.creatorId,
+      creatorName: owner.creator.user.name || owner.creator.user.email,
+      shareBps: owner.shareBps,
+      percentage: owner.shareBps / 100,
+      ownershipType: owner.ownershipType,
+      startDate: owner.startDate.toISOString(),
+      endDate: owner.endDate?.toISOString() || null,
+    }));
+  }
+
+  /**
+   * Add owner to asset
+   */
+  async addAssetOwner(
+    ctx: AssetServiceContext,
+    assetId: string,
+    params: {
+      creatorId: string;
+      shareBps: number;
+      ownershipType?: 'PRIMARY' | 'SECONDARY' | 'DERIVATIVE';
+      contractReference?: string;
+      legalDocUrl?: string;
+      notes?: Record<string, any>;
+    }
+  ): Promise<{
+    id: string;
+    creatorId: string;
+    shareBps: number;
+    ownershipType: string;
+  }> {
+    const { userId, userRole } = ctx;
+
+    // Verify asset exists and user has permission
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    // Only admins or asset creator can add owners
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    // Verify creator exists
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: params.creatorId },
+    });
+
+    if (!creator) {
+      throw new Error(`Creator ${params.creatorId} not found`);
+    }
+
+    // Check if total ownership would exceed 100%
+    const currentOwners = await this.prisma.ipOwnership.findMany({
+      where: {
+        ipAssetId: assetId,
+        OR: [
+          { endDate: null },
+          { endDate: { gte: new Date() } },
+        ],
+      },
+    });
+
+    const currentTotal = currentOwners.reduce((sum, o) => sum + o.shareBps, 0);
+    if (currentTotal + params.shareBps > 10000) {
+      throw new Error(
+        `Adding ${params.shareBps} bps would exceed 100% (current: ${currentTotal} bps)`
+      );
+    }
+
+    // Create ownership record
+    const ownership = await this.prisma.ipOwnership.create({
+      data: {
+        ipAssetId: assetId,
+        creatorId: params.creatorId,
+        shareBps: params.shareBps,
+        ownershipType: (params.ownershipType || 'SECONDARY') as any,
+        contractReference: params.contractReference,
+        legalDocUrl: params.legalDocUrl,
+        notes: params.notes as any,
+        createdBy: userId,
+        updatedBy: userId,
+      },
+    });
+
+    return {
+      id: ownership.id,
+      creatorId: ownership.creatorId,
+      shareBps: ownership.shareBps,
+      ownershipType: ownership.ownershipType,
+    };
+  }
+
+  /**
+   * Get asset licenses
+   */
+  async getAssetLicenses(
+    ctx: AssetServiceContext,
+    assetId: string,
+    statusFilter?: 'ACTIVE' | 'EXPIRED' | 'TERMINATED' | 'ALL'
+  ): Promise<Array<{
+    id: string;
+    brandId: string;
+    brandName: string;
+    status: string;
+    startDate: string;
+    endDate: string | null;
+    terms: string | null;
+    revenueCents: number;
+  }>> {
+    const { userId, userRole } = ctx;
+
+    // Verify asset exists and user has access
+    const asset = await this.prisma.ipAsset.findFirst({
+      where: {
+        id: assetId,
+        deletedAt: null,
+      },
+    });
+
+    if (!asset) {
+      throw AssetErrors.notFound(assetId);
+    }
+
+    if (userRole !== 'ADMIN' && asset.createdBy !== userId) {
+      throw AssetErrors.accessDenied(assetId);
+    }
+
+    // Build where clause for licenses
+    const where: any = {
+      ipAssetId: assetId,
+    };
+
+    if (statusFilter && statusFilter !== 'ALL') {
+      where.status = statusFilter;
+    }
+
+    // Get licenses
+    const licenses = await this.prisma.license.findMany({
+      where,
+      include: {
+        brand: {
+          include: {
+            user: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return licenses.map((license) => ({
+      id: license.id,
+      brandId: license.brandId,
+      brandName: license.brand.user.name || license.brand.companyName,
+      status: license.status,
+      startDate: license.startDate.toISOString(),
+      endDate: license.endDate?.toISOString() || null,
+      terms: license.paymentTerms || null,
+      revenueCents: Number(license.feeCents),
+    }));
+  }
+
+  /**
    * Bulk status update (admin only)
    */
   async bulkUpdateStatus(

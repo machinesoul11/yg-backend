@@ -16,8 +16,20 @@ import {
   getProjectByIdSchema,
   listProjectsSchema,
   deleteProjectSchema,
+  getProjectAssetsSchema,
   getProjectTeamSchema,
   getProjectStatisticsSchema,
+  addTeamMemberSchema,
+  removeTeamMemberSchema,
+  updateTeamMemberRoleSchema,
+  createMilestoneSchema,
+  updateMilestoneSchema,
+  deleteMilestoneSchema,
+  listMilestonesSchema,
+  addExpenseSchema,
+  updateExpenseSchema,
+  deleteExpenseSchema,
+  getBudgetSummarySchema,
 } from '../schemas/project.schema';
 import {
   ProjectNotFoundError,
@@ -28,6 +40,12 @@ import {
   InvalidStatusTransitionError,
   ProjectHasActiveLicensesError,
   OnlyBrandsCanCreateProjectsError,
+  TeamMemberNotFoundError,
+  TeamMemberAlreadyExistsError,
+  CannotRemoveBrandAdminError,
+  MilestoneNotFoundError,
+  ExpenseNotFoundError,
+  BudgetExceededError,
 } from '../errors/project.errors';
 
 // Initialize services
@@ -60,14 +78,30 @@ function mapErrorToTRPC(error: unknown): TRPCError {
     });
   }
 
-  if (error instanceof InvalidStatusTransitionError) {
+  if (
+    error instanceof InvalidStatusTransitionError ||
+    error instanceof ProjectHasActiveLicensesError ||
+    error instanceof TeamMemberAlreadyExistsError ||
+    error instanceof CannotRemoveBrandAdminError
+  ) {
     return new TRPCError({
       code: 'BAD_REQUEST',
       message: error.message,
     });
   }
 
-  if (error instanceof ProjectHasActiveLicensesError) {
+  if (
+    error instanceof TeamMemberNotFoundError ||
+    error instanceof MilestoneNotFoundError ||
+    error instanceof ExpenseNotFoundError
+  ) {
+    return new TRPCError({
+      code: 'NOT_FOUND',
+      message: error.message,
+    });
+  }
+
+  if (error instanceof BudgetExceededError) {
     return new TRPCError({
       code: 'BAD_REQUEST',
       message: error.message,
@@ -240,6 +274,30 @@ export const projectsRouter = createTRPCRouter({
     }),
 
   /**
+   * READ - Get project assets with pagination
+   */
+  getAssets: protectedProcedure
+    .input(getProjectAssetsSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const result = await projectService.getProjectAssets(
+          input.projectId,
+          input.page,
+          input.limit,
+          userId,
+          userRole
+        );
+
+        return { data: result };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
    * READ - Get project statistics
    */
   getStatistics: protectedProcedure
@@ -299,6 +357,308 @@ export const projectsRouter = createTRPCRouter({
         );
 
         return { data: result };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  // ============================================================================
+  // TEAM MANAGEMENT
+  // ============================================================================
+
+  /**
+   * CREATE - Add team member to project
+   */
+  addTeamMember: protectedProcedure
+    .input(addTeamMemberSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const member = await projectService.addTeamMember(
+          input.projectId,
+          input,
+          userId,
+          userRole
+        );
+
+        return { data: member };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * DELETE - Remove team member from project
+   */
+  removeTeamMember: protectedProcedure
+    .input(removeTeamMemberSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        await projectService.removeTeamMember(
+          input.projectId,
+          input.userId,
+          userId,
+          userRole
+        );
+
+        return { 
+          success: true,
+          message: 'Team member removed successfully',
+        };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * UPDATE - Update team member role
+   */
+  updateTeamMemberRole: protectedProcedure
+    .input(updateTeamMemberRoleSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const member = await projectService.updateTeamMemberRole(
+          input.projectId,
+          input.userId,
+          input.role,
+          userId,
+          userRole
+        );
+
+        return { data: member };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * READ - Get enhanced project team members
+   */
+  getEnhancedTeam: protectedProcedure
+    .input(getProjectTeamSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const team = await projectService.getEnhancedProjectTeam(
+          input.projectId,
+          userId,
+          userRole
+        );
+
+        return { data: team };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  // ============================================================================
+  // TIMELINE/MILESTONE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * CREATE - Create milestone
+   */
+  createMilestone: protectedProcedure
+    .input(createMilestoneSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const { projectId, ...data } = input;
+        const milestone = await projectService.createMilestone(
+          projectId,
+          data,
+          userId,
+          userRole
+        );
+
+        return { data: milestone };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * UPDATE - Update milestone
+   */
+  updateMilestone: protectedProcedure
+    .input(updateMilestoneSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const { projectId, milestoneId, ...data } = input;
+        const milestone = await projectService.updateMilestone(
+          projectId,
+          milestoneId,
+          data,
+          userId,
+          userRole
+        );
+
+        return { data: milestone };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * DELETE - Delete milestone
+   */
+  deleteMilestone: protectedProcedure
+    .input(deleteMilestoneSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        await projectService.deleteMilestone(
+          input.projectId,
+          input.milestoneId,
+          userId,
+          userRole
+        );
+
+        return { 
+          success: true,
+          message: 'Milestone deleted successfully',
+        };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * READ - List milestones
+   */
+  listMilestones: protectedProcedure
+    .input(listMilestonesSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const milestones = await projectService.listMilestones(
+          input.projectId,
+          input.status,
+          userId,
+          userRole
+        );
+
+        return { data: milestones };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  // ============================================================================
+  // BUDGET TRACKING
+  // ============================================================================
+
+  /**
+   * CREATE - Add expense
+   */
+  addExpense: protectedProcedure
+    .input(addExpenseSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const { projectId, ...data } = input;
+        const expense = await projectService.addExpense(
+          projectId,
+          data,
+          userId,
+          userRole
+        );
+
+        return { data: expense };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * UPDATE - Update expense
+   */
+  updateExpense: protectedProcedure
+    .input(updateExpenseSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const { projectId, expenseId, ...data } = input;
+        const expense = await projectService.updateExpense(
+          projectId,
+          expenseId,
+          data,
+          userId,
+          userRole
+        );
+
+        return { data: expense };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * DELETE - Delete expense
+   */
+  deleteExpense: protectedProcedure
+    .input(deleteExpenseSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        await projectService.deleteExpense(
+          input.projectId,
+          input.expenseId,
+          userId,
+          userRole
+        );
+
+        return { 
+          success: true,
+          message: 'Expense deleted successfully',
+        };
+      } catch (error) {
+        throw mapErrorToTRPC(error);
+      }
+    }),
+
+  /**
+   * READ - Get budget summary
+   */
+  getBudgetSummary: protectedProcedure
+    .input(getBudgetSummarySchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        const summary = await projectService.getBudgetSummary(
+          input.projectId,
+          userId,
+          userRole
+        );
+
+        return { data: summary };
       } catch (error) {
         throw mapErrorToTRPC(error);
       }

@@ -314,4 +314,147 @@ export const ipOwnershipRouter = createTRPCRouter({
         handleOwnershipError(error);
       }
     }),
+
+  /**
+   * Flag an ownership record as disputed
+   */
+  flagDispute: protectedProcedure
+    .input(
+      z.object({
+        ownershipId: z.string().cuid(),
+        reason: z.string().min(10).max(1000),
+        supportingDocuments: z.array(z.string().url()).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        // Get ownership record to check permissions
+        const ownership = await prisma.ipOwnership.findUnique({
+          where: { id: input.ownershipId },
+          include: { creator: true },
+        });
+
+        if (!ownership) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Ownership record not found',
+          });
+        }
+
+        // Only admins or the creator themselves can flag disputes
+        if (userRole !== 'ADMIN' && ownership.creator.userId !== userId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to dispute this ownership',
+          });
+        }
+
+        const result = await ipOwnershipService.flagDispute(
+          input.ownershipId,
+          input.reason,
+          userId,
+          input.supportingDocuments
+        );
+
+        return {
+          success: true,
+          data: result,
+        };
+      } catch (error) {
+        handleOwnershipError(error);
+      }
+    }),
+
+  /**
+   * Resolve an ownership dispute (admin only)
+   */
+  resolveDispute: protectedProcedure
+    .input(
+      z.object({
+        ownershipId: z.string().cuid(),
+        action: z.enum(['CONFIRM', 'MODIFY', 'REMOVE']),
+        resolutionNotes: z.string().min(10).max(2000),
+        modifiedData: z
+          .object({
+            shareBps: z.number().int().min(1).max(10000).optional(),
+            ownershipType: z.nativeEnum(OwnershipType).optional(),
+            startDate: z.date().optional(),
+            endDate: z.date().optional(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        // Only admins can resolve disputes
+        if (userRole !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only administrators can resolve disputes',
+          });
+        }
+
+        const result = await ipOwnershipService.resolveDispute(
+          input.ownershipId,
+          input.action,
+          input.resolutionNotes,
+          userId,
+          input.modifiedData
+        );
+
+        return {
+          success: true,
+          data: result,
+        };
+      } catch (error) {
+        handleOwnershipError(error);
+      }
+    }),
+
+  /**
+   * Get all disputed ownership records
+   */
+  getDisputedOwnerships: protectedProcedure
+    .input(
+      z.object({
+        ipAssetId: z.string().cuid().optional(),
+        creatorId: z.string().cuid().optional(),
+        includeResolved: z.boolean().default(false),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        const userRole = ctx.session.user.role;
+
+        // Only admins can view all disputes
+        if (userRole !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only administrators can view disputed ownerships',
+          });
+        }
+
+        const disputes = await ipOwnershipService.getDisputedOwnerships({
+          ipAssetId: input.ipAssetId,
+          creatorId: input.creatorId,
+          includeResolved: input.includeResolved,
+        });
+
+        return {
+          data: disputes,
+          meta: {
+            count: disputes.length,
+            hasUnresolved: disputes.some((d) => !d.resolvedAt),
+          },
+        };
+      } catch (error) {
+        handleOwnershipError(error);
+      }
+    }),
 });

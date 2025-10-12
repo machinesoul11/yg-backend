@@ -5,6 +5,9 @@ import { auditRouter } from './routers/audit.router';
 import { rolesRouter } from './routers/roles.router';
 import { systemRouter } from '@/modules/system';
 import { emailCampaignsRouter, emailCampaignsEnhancedRouter } from '@/modules/email-campaigns';
+import { projectsRouter } from '@/modules/projects';
+import { ipAssetsRouter } from '@/modules/ip';
+import { ipOwnershipRouter } from '@/modules/ip/routers/ip-ownership.router';
 
 /**
  * This is the primary router for your server.
@@ -19,9 +22,11 @@ export const appRouter = createTRPCRouter({
   system: systemRouter,
   emailCampaigns: emailCampaignsRouter,
   emailCampaignsEnhanced: emailCampaignsEnhancedRouter,
+  projects: projectsRouter,
+  ipAssets: ipAssetsRouter,
+  ipOwnership: ipOwnershipRouter,
   // Add your routers here
   // Example:
-  // ip: ipRouter,
   // licenses: licensesRouter,
   // royalties: royaltiesRouter,
   // talent: talentRouter,

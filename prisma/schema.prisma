@@ -1030,6 +1030,13 @@ model IpOwnership {
   contractReference String?       @map("contract_reference")
   legalDocUrl       String?       @map("legal_doc_url")
   notes             Json?
+  disputed          Boolean       @default(false)
+  disputedAt        DateTime?     @map("disputed_at")
+  disputeReason     String?       @map("dispute_reason")
+  disputedBy        String?       @map("disputed_by")
+  resolvedAt        DateTime?     @map("resolved_at")
+  resolvedBy        String?       @map("resolved_by")
+  resolutionNotes   String?       @map("resolution_notes")
   createdBy         String        @map("created_by")
   updatedBy         String        @map("updated_by")
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -1042,6 +1049,7 @@ model IpOwnership {
   @@index([ipAssetId, startDate, endDate])
   @@index([creatorId])
   @@index([ownershipType])
+  @@index([disputed])
   @@map("ip_ownerships")
 }
 

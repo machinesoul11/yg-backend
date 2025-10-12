@@ -124,8 +124,74 @@ export interface TeamMember {
   id: string;
   name: string | null;
   email: string;
-  role: 'brand_admin' | 'creator';
+  role: 'brand_admin' | 'creator' | 'collaborator' | 'viewer';
   avatarUrl: string | null;
+  addedAt?: string;
+  addedBy?: string;
+}
+
+export type TeamMemberRole = 'brand_admin' | 'creator' | 'collaborator' | 'viewer';
+
+export interface TeamMemberUpdate {
+  userId: string;
+  role: TeamMemberRole;
+}
+
+// Timeline & Milestones
+export interface ProjectMilestone {
+  id: string;
+  name: string;
+  description?: string;
+  dueDate: string;
+  status: MilestoneStatus;
+  completedAt?: string;
+  completedBy?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface CreateMilestoneInput {
+  name: string;
+  description?: string;
+  dueDate: string;
+}
+
+export interface UpdateMilestoneInput {
+  name?: string;
+  description?: string;
+  dueDate?: string;
+  status?: MilestoneStatus;
+}
+
+// Budget Tracking
+export interface BudgetExpense {
+  id: string;
+  description: string;
+  amountCents: number;
+  category: string;
+  date: string;
+  createdBy: string;
+  createdAt: string;
+  metadata?: Record<string, any>;
+}
+
+export interface CreateExpenseInput {
+  description: string;
+  amountCents: number;
+  category: string;
+  date: string;
+  metadata?: Record<string, any>;
+}
+
+export interface BudgetSummary {
+  budgetCents: number;
+  spentCents: number;
+  remainingCents: number;
+  utilizationPercent: number;
+  expenseCount: number;
+  expenses: BudgetExpense[];
 }
 
 // Analytics Event

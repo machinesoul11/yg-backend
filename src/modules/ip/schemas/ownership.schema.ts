@@ -119,6 +119,51 @@ export const getOwnershipFiltersSchema = z.object({
   includeExpired: z.boolean().default(false),
 });
 
+/**
+ * Flag ownership dispute
+ */
+export const flagDisputeSchema = z.object({
+  ownershipId: z.string().cuid('Invalid ownership ID format'),
+  reason: z.string().min(10, 'Dispute reason must be at least 10 characters').max(1000),
+  supportingDocuments: z.array(z.string().url()).optional(),
+});
+
+/**
+ * Resolve ownership dispute
+ */
+export const resolveDisputeSchema = z.object({
+  ownershipId: z.string().cuid('Invalid ownership ID format'),
+  action: z.enum(['CONFIRM', 'MODIFY', 'REMOVE']),
+  resolutionNotes: z.string().min(10, 'Resolution notes must be at least 10 characters').max(2000),
+  modifiedData: z.object({
+    shareBps: z.number().int().min(1).max(10000).optional(),
+    ownershipType: z.nativeEnum(OwnershipType).optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
+  }).optional(),
+}).refine(
+  (data) => {
+    // If action is MODIFY, modifiedData is required
+    if (data.action === 'MODIFY' && !data.modifiedData) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Modified data is required when action is MODIFY',
+    path: ['modifiedData'],
+  }
+);
+
+/**
+ * Get disputed ownerships filters
+ */
+export const getDisputedOwnershipsSchema = z.object({
+  ipAssetId: z.string().cuid().optional(),
+  creatorId: z.string().cuid().optional(),
+  includeResolved: z.boolean().default(false),
+});
+
 // ============================================================================
 // Type Exports
 // ============================================================================
@@ -129,3 +174,6 @@ export type UpdateOwnershipInput = z.infer<typeof updateOwnershipSchema>;
 export type SetAssetOwnershipInput = z.infer<typeof setAssetOwnershipSchema>;
 export type TransferOwnershipInput = z.infer<typeof transferOwnershipSchema>;
 export type GetOwnershipFilters = z.infer<typeof getOwnershipFiltersSchema>;
+export type FlagDisputeInput = z.infer<typeof flagDisputeSchema>;
+export type ResolveDisputeInput = z.infer<typeof resolveDisputeSchema>;
+export type GetDisputedOwnershipsInput = z.infer<typeof getDisputedOwnershipsSchema>;

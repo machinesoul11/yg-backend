@@ -18,6 +18,7 @@ import {
   OWNERSHIP_CONSTANTS,
   AssetOwnershipSummary,
   OwnershipHistoryEntry,
+  DisputeResolutionResult,
 } from '../types/ownership.types';
 import {
   OwnershipValidationError,
@@ -499,6 +500,516 @@ export class IpOwnershipService {
   }
 
   // ==========================================================================
+  // Dispute Management
+  // ==========================================================================
+
+  /**
+   * Flag an ownership record as disputed
+   */
+  async flagDispute(
+    ownershipId: string,
+    reason: string,
+    userId: string,
+    supportingDocuments?: string[]
+  ): Promise<IpOwnershipResponse> {
+    // Get ownership record
+    const ownership = await this.prisma.ipOwnership.findUnique({
+      where: { id: ownershipId },
+      include: { creator: true, ipAsset: true },
+    });
+
+    if (!ownership) {
+      throw new OwnershipValidationError('Ownership record not found', {
+        requiredBps: 0,
+        providedBps: 0,
+      });
+    }
+
+    // Cannot dispute already resolved disputes
+    if (ownership.disputed && ownership.resolvedAt) {
+      throw new OwnershipValidationError(
+        'Cannot dispute an ownership that has already been resolved',
+        { requiredBps: 0, providedBps: 0 }
+      );
+    }
+
+    // Update ownership to mark as disputed
+    const updated = await this.prisma.ipOwnership.update({
+      where: { id: ownershipId },
+      data: {
+        disputed: true,
+        disputedAt: new Date(),
+        disputeReason: reason,
+        disputedBy: userId,
+        updatedBy: userId,
+      },
+      include: { creator: true },
+    });
+
+    // Create audit log
+    await this.prisma.auditEvent.create({
+      data: {
+        action: 'IP_OWNERSHIP_DISPUTED',
+        userId,
+        entityType: 'ip_ownership',
+        entityId: ownershipId,
+        beforeJson: ownership as any,
+        afterJson: {
+          ...updated,
+          supportingDocuments,
+        } as any,
+      },
+    });
+
+    // Notify relevant parties
+    await this.notifyDisputeFlagged(ownership, reason, userId);
+
+    // Invalidate caches
+    await this.invalidateOwnershipCaches(ownership.ipAssetId, [ownership.creatorId]);
+
+    return this.toResponse(updated);
+  }
+
+  /**
+   * Resolve an ownership dispute
+   */
+  async resolveDispute(
+    ownershipId: string,
+    action: 'CONFIRM' | 'MODIFY' | 'REMOVE',
+    resolutionNotes: string,
+    userId: string,
+    modifiedData?: {
+      shareBps?: number;
+      ownershipType?: OwnershipType;
+      startDate?: Date;
+      endDate?: Date;
+    }
+  ): Promise<DisputeResolutionResult> {
+    // Get ownership record
+    const ownership = await this.prisma.ipOwnership.findUnique({
+      where: { id: ownershipId },
+      include: { creator: true, ipAsset: true },
+    });
+
+    if (!ownership) {
+      throw new OwnershipValidationError('Ownership record not found', {
+        requiredBps: 0,
+        providedBps: 0,
+      });
+    }
+
+    if (!ownership.disputed) {
+      throw new OwnershipValidationError('Ownership is not currently disputed', {
+        requiredBps: 0,
+        providedBps: 0,
+      });
+    }
+
+    let updatedOwnership: IpOwnershipResponse | undefined;
+
+    // Perform resolution based on action
+    switch (action) {
+      case 'CONFIRM':
+        // Confirm existing ownership as correct - clear dispute flags
+        const confirmed = await this.prisma.ipOwnership.update({
+          where: { id: ownershipId },
+          data: {
+            disputed: false,
+            resolvedAt: new Date(),
+            resolvedBy: userId,
+            resolutionNotes,
+            updatedBy: userId,
+          },
+          include: { creator: true },
+        });
+        updatedOwnership = this.toResponse(confirmed);
+        break;
+
+      case 'MODIFY':
+        // Modify the ownership details
+        if (!modifiedData) {
+          throw new OwnershipValidationError(
+            'Modified data required for MODIFY action',
+            { requiredBps: 0, providedBps: 0 }
+          );
+        }
+
+        // If modifying shareBps, validate the new split
+        if (modifiedData.shareBps !== undefined) {
+          await this.validateModifiedShare(
+            ownership.ipAssetId,
+            ownershipId,
+            ownership.shareBps,
+            modifiedData.shareBps
+          );
+        }
+
+        const modified = await this.prisma.ipOwnership.update({
+          where: { id: ownershipId },
+          data: {
+            ...modifiedData,
+            disputed: false,
+            resolvedAt: new Date(),
+            resolvedBy: userId,
+            resolutionNotes,
+            updatedBy: userId,
+          },
+          include: { creator: true },
+        });
+        updatedOwnership = this.toResponse(modified);
+        break;
+
+      case 'REMOVE':
+        // Remove the ownership by setting end date
+        await this.prisma.ipOwnership.update({
+          where: { id: ownershipId },
+          data: {
+            endDate: new Date(),
+            disputed: false,
+            resolvedAt: new Date(),
+            resolvedBy: userId,
+            resolutionNotes,
+            updatedBy: userId,
+          },
+        });
+        break;
+    }
+
+    // Create audit log
+    await this.prisma.auditEvent.create({
+      data: {
+        action: 'IP_OWNERSHIP_DISPUTE_RESOLVED',
+        userId,
+        entityType: 'ip_ownership',
+        entityId: ownershipId,
+        beforeJson: ownership as any,
+        afterJson: {
+          action,
+          resolutionNotes,
+          modifiedData,
+          resolvedAt: new Date(),
+        } as any,
+      },
+    });
+
+    // Notify relevant parties
+    await this.notifyDisputeResolved(ownership, action, resolutionNotes, userId);
+
+    // Invalidate caches
+    await this.invalidateOwnershipCaches(ownership.ipAssetId, [ownership.creatorId]);
+
+    return {
+      ownershipId,
+      action,
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: userId,
+      updatedOwnership,
+    };
+  }
+
+  /**
+   * Get all disputed ownership records
+   */
+  async getDisputedOwnerships(options?: {
+    ipAssetId?: string;
+    creatorId?: string;
+    includeResolved?: boolean;
+  }): Promise<IpOwnershipResponse[]> {
+    const where: Prisma.IpOwnershipWhereInput = {
+      disputed: true,
+    };
+
+    if (options?.ipAssetId) {
+      where.ipAssetId = options.ipAssetId;
+    }
+
+    if (options?.creatorId) {
+      where.creatorId = options.creatorId;
+    }
+
+    if (!options?.includeResolved) {
+      where.resolvedAt = null;
+    }
+
+    const ownerships = await this.prisma.ipOwnership.findMany({
+      where,
+      include: { creator: true },
+      orderBy: { disputedAt: 'desc' },
+    });
+
+    return ownerships.map((o) => this.toResponse(o));
+  }
+
+  // ==========================================================================
+  // Enhanced Validation Methods
+  // ==========================================================================
+
+  /**
+   * Validate modified share doesn't break total ownership constraint
+   */
+  private async validateModifiedShare(
+    ipAssetId: string,
+    ownershipId: string,
+    currentShareBps: number,
+    newShareBps: number
+  ): Promise<void> {
+    const activeOwnerships = await this.getAssetOwners({ ipAssetId });
+    
+    const totalBps = activeOwnerships
+      .filter((o) => o.id !== ownershipId)
+      .reduce((sum, o) => sum + o.shareBps, 0);
+
+    const newTotal = totalBps + newShareBps;
+
+    if (newTotal !== OWNERSHIP_CONSTANTS.TOTAL_BPS) {
+      throw new OwnershipValidationError(
+        `Modified ownership would result in total of ${newTotal} BPS instead of ${OWNERSHIP_CONSTANTS.TOTAL_BPS}`,
+        {
+          requiredBps: OWNERSHIP_CONSTANTS.TOTAL_BPS,
+          providedBps: newTotal,
+          excessBps: newTotal > OWNERSHIP_CONSTANTS.TOTAL_BPS ? newTotal - OWNERSHIP_CONSTANTS.TOTAL_BPS : undefined,
+          missingBps: newTotal < OWNERSHIP_CONSTANTS.TOTAL_BPS ? OWNERSHIP_CONSTANTS.TOTAL_BPS - newTotal : undefined,
+        }
+      );
+    }
+  }
+
+  /**
+   * Validate temporal ownership - ensures no overlapping periods exceed 100%
+   */
+  async validateTemporalOwnership(
+    ipAssetId: string,
+    proposedOwnerships: Array<{
+      creatorId: string;
+      shareBps: number;
+      startDate: Date;
+      endDate?: Date;
+    }>
+  ): Promise<ValidationResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Get all existing ownerships for this asset
+    const existingOwnerships = await this.prisma.ipOwnership.findMany({
+      where: { ipAssetId },
+      orderBy: { startDate: 'asc' },
+    });
+
+    // Combine existing and proposed ownerships
+    const allOwnerships = [
+      ...existingOwnerships.map((o) => ({
+        creatorId: o.creatorId,
+        shareBps: o.shareBps,
+        startDate: o.startDate,
+        endDate: o.endDate || undefined,
+      })),
+      ...proposedOwnerships,
+    ];
+
+    // Extract all unique time boundaries
+    const timePoints = new Set<number>();
+    allOwnerships.forEach((o) => {
+      timePoints.add(o.startDate.getTime());
+      if (o.endDate) {
+        timePoints.add(o.endDate.getTime());
+      }
+    });
+
+    const sortedTimePoints = Array.from(timePoints).sort((a, b) => a - b);
+
+    // Check each time segment
+    for (let i = 0; i < sortedTimePoints.length - 1; i++) {
+      const segmentStart = new Date(sortedTimePoints[i]);
+      const segmentEnd = new Date(sortedTimePoints[i + 1]);
+
+      // Calculate total ownership in this segment
+      const activeInSegment = allOwnerships.filter((o) => {
+        const ownershipStart = o.startDate.getTime();
+        const ownershipEnd = o.endDate ? o.endDate.getTime() : Infinity;
+        
+        return ownershipStart <= segmentStart.getTime() && ownershipEnd > segmentStart.getTime();
+      });
+
+      const totalBps = activeInSegment.reduce((sum, o) => sum + o.shareBps, 0);
+
+      if (totalBps !== OWNERSHIP_CONSTANTS.TOTAL_BPS) {
+        errors.push(
+          `Invalid ownership total in period ${segmentStart.toISOString()} to ${segmentEnd.toISOString()}: ${totalBps} BPS`
+        );
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+    };
+  }
+
+  // ==========================================================================
+  // Notification Methods
+  // ==========================================================================
+
+  /**
+   * Notify relevant parties when a dispute is flagged
+   */
+  private async notifyDisputeFlagged(
+    ownership: any,
+    reason: string,
+    disputedBy: string
+  ): Promise<void> {
+    try {
+      // Get all co-owners of the asset
+      const coOwners = await this.prisma.ipOwnership.findMany({
+        where: {
+          ipAssetId: ownership.ipAssetId,
+          endDate: null,
+        },
+        include: {
+          creator: {
+            include: { user: true },
+          },
+        },
+      });
+
+      // Notify the creator whose ownership is disputed
+      if (ownership.creator?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: ownership.creator.userId,
+            type: 'SYSTEM',
+            priority: 'HIGH',
+            title: 'Ownership Dispute Flagged',
+            message: `Your ownership of "${ownership.ipAsset.title}" has been disputed. Reason: ${reason}`,
+            actionUrl: `/admin/ip-assets/${ownership.ipAssetId}/ownership`,
+            metadata: {
+              ownershipId: ownership.id,
+              ipAssetId: ownership.ipAssetId,
+              disputeReason: reason,
+            } as any,
+          },
+        });
+      }
+
+      // Notify other co-owners
+      for (const coOwner of coOwners) {
+        if (coOwner.id !== ownership.id && coOwner.creator?.userId) {
+          await this.prisma.notification.create({
+            data: {
+              userId: coOwner.creator.userId,
+              type: 'SYSTEM',
+              priority: 'MEDIUM',
+              title: 'Co-Ownership Dispute',
+              message: `Ownership dispute flagged for "${ownership.ipAsset.title}"`,
+              actionUrl: `/admin/ip-assets/${ownership.ipAssetId}/ownership`,
+              metadata: {
+                ownershipId: ownership.id,
+                ipAssetId: ownership.ipAssetId,
+              } as any,
+            },
+          });
+        }
+      }
+
+      // Notify admins
+      const admins = await this.prisma.user.findMany({
+        where: { role: 'ADMIN', deleted_at: null },
+        select: { id: true },
+      });
+
+      for (const admin of admins) {
+        await this.prisma.notification.create({
+          data: {
+            userId: admin.id,
+            type: 'SYSTEM',
+            priority: 'HIGH',
+            title: 'Ownership Dispute Requires Review',
+            message: `Ownership dispute flagged for "${ownership.ipAsset.title}". Requires admin resolution.`,
+            actionUrl: `/admin/disputes/ownership/${ownership.id}`,
+            metadata: {
+              ownershipId: ownership.id,
+              ipAssetId: ownership.ipAssetId,
+              disputeReason: reason,
+            } as any,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send dispute notifications:', error);
+      // Don't throw - notifications are not critical
+    }
+  }
+
+  /**
+   * Notify relevant parties when a dispute is resolved
+   */
+  private async notifyDisputeResolved(
+    ownership: any,
+    action: string,
+    resolutionNotes: string,
+    resolvedBy: string
+  ): Promise<void> {
+    try {
+      // Get all co-owners
+      const coOwners = await this.prisma.ipOwnership.findMany({
+        where: {
+          ipAssetId: ownership.ipAssetId,
+          endDate: null,
+        },
+        include: {
+          creator: {
+            include: { user: true },
+          },
+        },
+      });
+
+      // Notify the creator whose ownership was disputed
+      if (ownership.creator?.userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: ownership.creator.userId,
+            type: 'SYSTEM',
+            priority: 'HIGH',
+            title: 'Ownership Dispute Resolved',
+            message: `Your ownership dispute for "${ownership.ipAsset.title}" has been resolved. Action: ${action}`,
+            actionUrl: `/admin/ip-assets/${ownership.ipAssetId}/ownership`,
+            metadata: {
+              ownershipId: ownership.id,
+              ipAssetId: ownership.ipAssetId,
+              action,
+              resolutionNotes,
+            } as any,
+          },
+        });
+      }
+
+      // Notify other co-owners
+      for (const coOwner of coOwners) {
+        if (coOwner.id !== ownership.id && coOwner.creator?.userId) {
+          await this.prisma.notification.create({
+            data: {
+              userId: coOwner.creator.userId,
+              type: 'SYSTEM',
+              priority: 'MEDIUM',
+              title: 'Co-Ownership Dispute Resolved',
+              message: `Ownership dispute resolved for "${ownership.ipAsset.title}"`,
+              actionUrl: `/admin/ip-assets/${ownership.ipAssetId}/ownership`,
+              metadata: {
+                ownershipId: ownership.id,
+                ipAssetId: ownership.ipAssetId,
+                action,
+              } as any,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send resolution notifications:', error);
+      // Don't throw - notifications are not critical
+    }
+  }
+
+  // ==========================================================================
   // Private Helper Methods
   // ==========================================================================
 
@@ -518,6 +1029,13 @@ export class IpOwnershipService {
       contractReference: ownership.contractReference,
       legalDocUrl: ownership.legalDocUrl,
       notes: ownership.notes as Record<string, any> | null,
+      disputed: ownership.disputed,
+      disputedAt: ownership.disputedAt?.toISOString() || null,
+      disputeReason: ownership.disputeReason,
+      disputedBy: ownership.disputedBy,
+      resolvedAt: ownership.resolvedAt?.toISOString() || null,
+      resolvedBy: ownership.resolvedBy,
+      resolutionNotes: ownership.resolutionNotes,
       createdAt: ownership.createdAt.toISOString(),
       updatedAt: ownership.updatedAt.toISOString(),
       creator: ownership.creator ? {
@@ -534,6 +1052,12 @@ export class IpOwnershipService {
   private determineChangeType(ownership: IpOwnership): OwnershipHistoryEntry['changeType'] {
     if (ownership.endDate && ownership.endDate < new Date()) {
       return 'ENDED';
+    }
+    if (ownership.disputed && !ownership.resolvedAt) {
+      return 'DISPUTED';
+    }
+    if (ownership.resolvedAt) {
+      return 'RESOLVED';
     }
     if (ownership.ownershipType === OwnershipType.TRANSFERRED) {
       return 'TRANSFERRED';

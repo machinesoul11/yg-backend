@@ -156,6 +156,28 @@ export const getDerivativesSchema = z.object({
   parentAssetId: z.string().cuid(),
 });
 
+export const getAssetOwnersSchema = z.object({
+  id: z.string().cuid(),
+});
+
+export const addAssetOwnerSchema = z.object({
+  id: z.string().cuid(),
+  creatorId: z.string().cuid(),
+  shareBps: z.number()
+    .int('Share must be an integer')
+    .min(1, 'Share must be at least 1 basis point')
+    .max(10000, 'Share cannot exceed 10000 basis points (100%)'),
+  ownershipType: z.enum(['PRIMARY', 'SECONDARY', 'DERIVATIVE']).optional().default('SECONDARY'),
+  contractReference: z.string().max(255).optional(),
+  legalDocUrl: z.string().url().optional(),
+  notes: z.record(z.string(), z.any()).optional(),
+});
+
+export const getAssetLicensesSchema = z.object({
+  id: z.string().cuid(),
+  status: z.enum(['ACTIVE', 'EXPIRED', 'TERMINATED', 'ALL']).optional().default('ALL'),
+});
+
 // ============================================================================
 // Metadata Validation
 // ============================================================================

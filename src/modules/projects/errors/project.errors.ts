@@ -72,3 +72,45 @@ export class InvalidDateRangeError extends ProjectError {
     this.name = 'InvalidDateRangeError';
   }
 }
+
+export class TeamMemberNotFoundError extends ProjectError {
+  constructor(userId?: string) {
+    super(userId ? `Team member ${userId} not found` : 'Team member not found');
+    this.name = 'TeamMemberNotFoundError';
+  }
+}
+
+export class TeamMemberAlreadyExistsError extends ProjectError {
+  constructor(userId: string) {
+    super(`User ${userId} is already a team member`);
+    this.name = 'TeamMemberAlreadyExistsError';
+  }
+}
+
+export class CannotRemoveBrandAdminError extends ProjectError {
+  constructor() {
+    super('Cannot remove brand admin from project team');
+    this.name = 'CannotRemoveBrandAdminError';
+  }
+}
+
+export class MilestoneNotFoundError extends ProjectError {
+  constructor(milestoneId?: string) {
+    super(milestoneId ? `Milestone ${milestoneId} not found` : 'Milestone not found');
+    this.name = 'MilestoneNotFoundError';
+  }
+}
+
+export class ExpenseNotFoundError extends ProjectError {
+  constructor(expenseId?: string) {
+    super(expenseId ? `Expense ${expenseId} not found` : 'Expense not found');
+    this.name = 'ExpenseNotFoundError';
+  }
+}
+
+export class BudgetExceededError extends ProjectError {
+  constructor(budgetCents: number, totalExpenses: number) {
+    super(`Budget exceeded: ${totalExpenses} cents spent, budget is ${budgetCents} cents`);
+    this.name = 'BudgetExceededError';
+  }
+}

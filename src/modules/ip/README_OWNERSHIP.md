@@ -184,6 +184,131 @@ const { data } = await trpc.ipOwnership.getCreatorAssets.query({
 
 ---
 
+## Ownership Dispute Handling
+
+### Flagging Disputes
+
+When ownership percentages or terms are contested:
+
+```typescript
+// Creator or admin flags a dispute
+await trpc.ipOwnership.flagDispute.mutate({
+  ownershipId: 'ownership_123',
+  reason: 'Ownership percentage does not match the signed contract',
+  supportingDocuments: ['https://storage.yesgoddess.com/contracts/agreement.pdf'],
+});
+```
+
+**Who can flag disputes:**
+- The creator whose ownership is in question
+- Platform administrators
+
+**What happens:**
+- Ownership record is marked as `disputed: true`
+- Notifications sent to:
+  - Creator whose ownership is disputed (HIGH priority)
+  - All co-owners of the asset (MEDIUM priority)
+  - All administrators (HIGH priority)
+- Full audit trail created
+- Dispute remains active until admin resolves
+
+### Resolving Disputes (Admin Only)
+
+Administrators can resolve disputes in three ways:
+
+#### 1. CONFIRM - Ownership is correct as-is
+```typescript
+await trpc.ipOwnership.resolveDispute.mutate({
+  ownershipId: 'ownership_123',
+  action: 'CONFIRM',
+  resolutionNotes: 'Verified against signed contract dated 2025-01-15. Ownership split is correct.',
+});
+```
+
+#### 2. MODIFY - Update ownership details
+```typescript
+await trpc.ipOwnership.resolveDispute.mutate({
+  ownershipId: 'ownership_123',
+  action: 'MODIFY',
+  resolutionNotes: 'Updated share percentage based on contract amendment',
+  modifiedData: {
+    shareBps: 4000, // Changed from 5000
+    contractReference: 'AMENDMENT-2025-002',
+  },
+});
+```
+
+**Note:** Modified shares are validated to ensure total still equals 10,000 BPS.
+
+#### 3. REMOVE - End the ownership
+```typescript
+await trpc.ipOwnership.resolveDispute.mutate({
+  ownershipId: 'ownership_123',
+  action: 'REMOVE',
+  resolutionNotes: 'Ownership found to be fraudulent. Removed from system per legal review.',
+});
+```
+
+**Note:** This sets `endDate` to now, preserving the record for audit purposes.
+
+### Viewing Disputed Ownerships (Admin Dashboard)
+
+```typescript
+// Get all active disputes
+const { data } = await trpc.ipOwnership.getDisputedOwnerships.query({
+  includeResolved: false,
+});
+
+// Get disputes for specific asset
+const assetDisputes = await trpc.ipOwnership.getDisputedOwnerships.query({
+  ipAssetId: 'asset_123',
+  includeResolved: true, // Include history
+});
+```
+
+### Dispute Workflow
+
+```
+Creator/Admin flags dispute
+         ↓
+Notifications sent to stakeholders
+         ↓
+Admin reviews supporting documents
+         ↓
+Admin takes action (CONFIRM/MODIFY/REMOVE)
+         ↓
+Resolution notifications sent
+         ↓
+Audit trail updated
+```
+
+### Dispute Business Rules
+
+1. **Cannot dispute resolved disputes** - Once resolved, dispute is final
+2. **Admin-only resolution** - Only platform admins can resolve
+3. **Validation on MODIFY** - Modified shares must still total 10,000 BPS
+4. **Immutable history** - Disputed records are never deleted, only marked resolved
+5. **Notification cascade** - All stakeholders notified at each step
+
+### Dispute Data Structure
+
+```typescript
+interface IpOwnershipResponse {
+  // ...existing fields...
+  
+  // Dispute fields
+  disputed: boolean;
+  disputedAt: string | null;
+  disputeReason: string | null;
+  disputedBy: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNotes: string | null;
+}
+```
+
+---
+
 ## Database Schema
 
 ```prisma
@@ -198,24 +323,25 @@ model IpOwnership {
   contractReference String?
   legalDocUrl       String?
   notes             Json?         @db.JsonB
+  
+  // Dispute tracking
+  disputed          Boolean       @default(false)
+  disputedAt        DateTime?
+  disputeReason     String?
+  disputedBy        String?
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  resolutionNotes   String?
+  
   createdBy         String
   updatedBy         String
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   
-  // Relations...
+  @@index([disputed])
   @@map("ip_ownerships")
 }
-
-enum OwnershipType {
-  PRIMARY      // Original creator
-  CONTRIBUTOR  // Collaborator on original work
-  DERIVATIVE   // Creator of derivative work
-  TRANSFERRED  // Ownership transferred from another
-}
 ```
-
-**Database Constraint:** Ownership shares for each asset must sum to exactly 10,000 BPS at any given time.
 
 ---
 
