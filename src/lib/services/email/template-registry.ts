@@ -28,6 +28,12 @@ import CreatorVerificationApproved from '../../../../emails/templates/CreatorVer
 import CreatorVerificationRejected from '../../../../emails/templates/CreatorVerificationRejected';
 import NewMessage from '../../../../emails/templates/NewMessage';
 import MessageDigest from '../../../../emails/templates/MessageDigest';
+import LicenseRenewalOffer from '../../../../emails/templates/LicenseRenewalOffer';
+import LicenseRenewalReminder from '../../../../emails/templates/LicenseRenewalReminder';
+import LicenseRenewalComplete from '../../../../emails/templates/LicenseRenewalComplete';
+import LicenseExpiry90DayNotice from '../../../../emails/templates/LicenseExpiry90DayNotice';
+import LicenseExpiry60DayNotice from '../../../../emails/templates/LicenseExpiry60DayNotice';
+import LicenseExpiry30DayNotice from '../../../../emails/templates/LicenseExpiry30DayNotice';
 import { EmailTemplateError } from '@/lib/services/email/errors';
 
 /**
@@ -204,6 +210,88 @@ export interface MessageDigestProps {
   inboxUrl: string;
 }
 
+export interface LicenseRenewalOfferProps {
+  brandName: string;
+  contactName: string;
+  licenseName: string;
+  ipAssetTitle: string;
+  currentEndDate: string;
+  proposedStartDate: string;
+  proposedEndDate: string;
+  originalFeeDollars: string;
+  renewalFeeDollars: string;
+  feeChange: string;
+  revSharePercent: string;
+  daysUntilExpiration: number;
+  renewalUrl: string;
+  adjustmentsSummary?: string[];
+}
+
+export interface LicenseRenewalReminderProps {
+  brandName: string;
+  contactName: string;
+  licenseName: string;
+  ipAssetTitle: string;
+  expirationDate: string;
+  daysRemaining: number;
+  renewalFeeDollars: string;
+  renewalUrl: string;
+  urgencyLevel: 'final' | 'high' | 'medium';
+}
+
+export interface LicenseRenewalCompleteProps {
+  recipientName: string;
+  recipientType: 'brand' | 'creator';
+  licenseName: string;
+  ipAssetTitle: string;
+  newStartDate: string;
+  newEndDate: string;
+  renewalFeeDollars: string;
+  revSharePercent: string;
+  confirmationNumber: string;
+  licenseUrl: string;
+  brandName?: string;
+  creatorNames?: string[];
+}
+
+export interface LicenseExpiry90DayNoticeProps {
+  userName: string;
+  licenseName: string;
+  brandName: string;
+  expiryDate: string;
+  daysRemaining: string;
+  renewalUrl?: string;
+  licenseUrl: string;
+  autoRenewEnabled?: boolean;
+  recipientRole?: 'brand' | 'creator';
+}
+
+export interface LicenseExpiry60DayNoticeProps {
+  userName: string;
+  licenseName: string;
+  brandName: string;
+  expiryDate: string;
+  daysRemaining: string;
+  renewalUrl?: string;
+  licenseUrl: string;
+  autoRenewEnabled?: boolean;
+  recipientRole?: 'brand' | 'creator';
+}
+
+export interface LicenseExpiry30DayNoticeProps {
+  userName: string;
+  licenseName: string;
+  brandName: string;
+  expiryDate: string;
+  daysRemaining: string;
+  renewalUrl?: string;
+  licenseUrl: string;
+  autoRenewEnabled?: boolean;
+  recipientRole?: 'brand' | 'creator';
+  gracePeriodActive?: boolean;
+  expired?: boolean;
+}
+
 /**
  * Template registry mapping template keys to their components and props types
  */
@@ -296,6 +384,30 @@ export const TEMPLATE_REGISTRY = {
     component: MessageDigest,
     category: 'messages',
   },
+  'license-renewal-offer': {
+    component: LicenseRenewalOffer,
+    category: 'licenseExpiry',
+  },
+  'license-renewal-reminder': {
+    component: LicenseRenewalReminder,
+    category: 'licenseExpiry',
+  },
+  'license-renewal-complete': {
+    component: LicenseRenewalComplete,
+    category: 'licenseExpiry',
+  },
+  'license-expiry-90-day': {
+    component: LicenseExpiry90DayNotice,
+    category: 'licenseExpiry',
+  },
+  'license-expiry-60-day': {
+    component: LicenseExpiry60DayNotice,
+    category: 'licenseExpiry',
+  },
+  'license-expiry-30-day': {
+    component: LicenseExpiry30DayNotice,
+    category: 'licenseExpiry',
+  },
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATE_REGISTRY;
@@ -326,6 +438,12 @@ export interface TemplateVariablesMap {
   'creator-verification-rejected': CreatorVerificationRejectedProps;
   'new-message': NewMessageProps;
   'message-digest': MessageDigestProps;
+  'license-renewal-offer': LicenseRenewalOfferProps;
+  'license-renewal-reminder': LicenseRenewalReminderProps;
+  'license-renewal-complete': LicenseRenewalCompleteProps;
+  'license-expiry-90-day': LicenseExpiry90DayNoticeProps;
+  'license-expiry-60-day': LicenseExpiry60DayNoticeProps;
+  'license-expiry-30-day': LicenseExpiry30DayNoticeProps;
 }
 
 export type TemplateVariables<T extends TemplateKey = TemplateKey> = TemplateVariablesMap[T];
@@ -414,6 +532,12 @@ function getRequiredFields(templateKey: TemplateKey): string[] {
     'creator-verification-rejected': ['creatorName', 'rejectionReason'],
     'new-message': ['senderName', 'messagePreview', 'threadUrl'],
     'message-digest': ['frequency', 'threads', 'totalUnreadCount', 'inboxUrl'],
+    'license-renewal-offer': ['brandName', 'contactName', 'licenseName', 'ipAssetTitle', 'currentEndDate', 'proposedStartDate', 'proposedEndDate', 'originalFeeDollars', 'renewalFeeDollars', 'feeChange', 'revSharePercent', 'daysUntilExpiration', 'renewalUrl'],
+    'license-renewal-reminder': ['brandName', 'contactName', 'licenseName', 'ipAssetTitle', 'expirationDate', 'daysRemaining', 'renewalFeeDollars', 'renewalUrl', 'urgencyLevel'],
+    'license-renewal-complete': ['recipientName', 'recipientType', 'licenseName', 'ipAssetTitle', 'newStartDate', 'newEndDate', 'renewalFeeDollars', 'revSharePercent', 'confirmationNumber', 'licenseUrl'],
+    'license-expiry-90-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
+    'license-expiry-60-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
+    'license-expiry-30-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
   };
 
   return requiredFieldsMap[templateKey] || [];

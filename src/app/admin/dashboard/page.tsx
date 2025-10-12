@@ -1,6 +1,15 @@
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Container, Logo } from '@/components/ui';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
 
-export default function AdminDashboard() {
+export default async function AdminDashboard() {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    redirect('/auth/signin');
+  }
+
   return (
     <div className="min-h-screen bg-brand-white-warm">
       {/* Header */}
@@ -8,9 +17,10 @@ export default function AdminDashboard() {
         <Container>
           <div className="flex items-center justify-between py-6">
             <div className="flex items-center gap-4">
-              <Logo size="md" priority />
+              <Logo size="md" priority variant="text" />
               <div>
                 <p className="text-brand-white text-body-sm">Admin Dashboard</p>
+                <p className="text-brand-gold text-body-xs">{session.user?.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-4">

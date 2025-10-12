@@ -362,6 +362,41 @@ export interface ExtensionWithDetails {
   approvalRequired: boolean;
 }
 
+/**
+ * License revenue tracking data
+ */
+export interface LicenseRevenueData {
+  licenseId: string;
+  initialFeeCents: number;
+  totalRevenueShareCents: number;
+  totalRevenueCents: number;
+  projectedRevenueCents: number;
+  revenueByPeriod: Array<{
+    period: string;
+    startDate: string;
+    endDate: string;
+    revenueCents: number;
+  }>;
+  revenueByCreator: Array<{
+    creatorId: string;
+    creatorName: string;
+    shareBps: number;
+    totalRevenueCents: number;
+    paidCents: number;
+    pendingCents: number;
+  }>;
+  usageMetrics?: {
+    totalImpressions: number;
+    totalClicks: number;
+    averageCostPerImpression: number;
+  };
+  paymentStatus: {
+    totalPaid: number;
+    totalPending: number;
+    nextPaymentDate: string | null;
+  };
+}
+
 export class LicenseConflictError extends Error {
   constructor(public conflicts: Conflict[]) {
     super('License conflicts detected');

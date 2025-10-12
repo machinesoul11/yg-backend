@@ -70,3 +70,68 @@ export {
   type ApprovalRequirement,
 } from './services/licenseValidationService';
 
+// Renewal Services
+export {
+  renewalEligibilityService,
+  RenewalEligibilityService,
+} from './services/renewal-eligibility.service';
+export type {
+  RenewalEligibilityContext,
+  SingleLicenseEligibilityCheck,
+  BatchEligibilityResult,
+} from './services/renewal-eligibility.service';
+
+export {
+  renewalPricingService,
+  RenewalPricingService,
+} from './services/renewal-pricing.service';
+export type {
+  PricingStrategy,
+  RenewalPricingInput,
+  RenewalPricingBreakdown,
+  PricingAdjustment,
+  PricingConfiguration,
+} from './services/renewal-pricing.service';
+
+export {
+  renewalNotificationService,
+  RenewalNotificationService,
+} from './services/renewal-notifications.service';
+export type {
+  NotificationStage,
+  RenewalNotificationLog,
+  NotificationResult,
+} from './services/renewal-notifications.service';
+
+export {
+  renewalAnalyticsService,
+  RenewalAnalyticsService,
+} from './services/renewal-analytics.service';
+export type {
+  RenewalMetrics,
+  RenewalPipelineSnapshot,
+  BrandRenewalPerformance,
+} from './services/renewal-analytics.service';
+
+export {
+  enhancedLicenseRenewalService,
+  EnhancedLicenseRenewalService,
+} from './services/enhancedLicenseRenewalService';
+export type {
+  RenewalEligibility,
+  RenewalTerms,
+  RenewalOffer,
+} from './services/enhancedLicenseRenewalService';
+
+// Expiry Management Services
+export {
+  licenseExpiryMonitorService,
+  LicenseExpiryMonitorService,
+} from './services/license-expiry-monitor.service';
+export type {
+  ExpiryNotificationStage,
+  LicenseWithDetails,
+  ExpiryMonitoringResult,
+  ExpiryProcessingResult,
+} from './services/license-expiry-monitor.service';
+

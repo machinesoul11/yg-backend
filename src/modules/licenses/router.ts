@@ -58,7 +58,7 @@ const CreateLicenseSchema = z.object({
   billingFrequency: z.enum(['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
   scope: LicenseScopeSchema,
   autoRenew: z.boolean().default(false),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const UpdateLicenseSchema = z.object({
@@ -71,7 +71,7 @@ const UpdateLicenseSchema = z.object({
   billingFrequency: z.enum(['ONE_TIME', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
   scope: LicenseScopeSchema.optional(),
   autoRenew: z.boolean().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const LicenseFiltersSchema = z.object({
@@ -561,6 +561,326 @@ export const licensesRouter = createTRPCRouter({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error.message || 'Failed to list licenses',
+        });
+      }
+    }),
+
+  /**
+   * POST: Sign a license (digital signing)
+   */
+  sign: protectedProcedure
+    .input(z.object({
+      id: z.string().cuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const existingLicense = await licenseService.getLicenseById(input.id, false);
+        if (!existingLicense) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'License not found',
+          });
+        }
+
+        // Verify license is in signable status
+        if (!['DRAFT', 'PENDING_APPROVAL'].includes(existingLicense.status)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'License is not in a signable state',
+          });
+        }
+
+        // Determine user role for signing
+        let userRole: 'creator' | 'brand' = 'brand';
+        
+        if (ctx.session.user.role === 'CREATOR') {
+          // Verify creator owns the asset
+          const fullLicense = await ctx.db.license.findUnique({
+            where: { id: input.id },
+            include: {
+              ipAsset: {
+                include: {
+                  ownerships: {
+                    include: { creator: true },
+                  },
+                },
+              },
+            },
+          });
+
+          const isOwner = fullLicense?.ipAsset.ownerships.some(
+            (o) => o.creator.userId === ctx.session.user.id
+          );
+
+          if (!isOwner) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'You do not own this IP asset',
+            });
+          }
+          userRole = 'creator';
+        } else if (ctx.session.user.role === 'BRAND') {
+          // Verify brand owns the license
+          const userBrand = await ctx.db.brand.findUnique({
+            where: { userId: ctx.session.user.id },
+          });
+
+          if (!userBrand || userBrand.id !== existingLicense.brandId) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'You do not own this license',
+            });
+          }
+        } else if (ctx.session.user.role !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Only creators, brands, or admins can sign licenses',
+          });
+        }
+
+        // Get IP address and user agent from request
+        const ipAddress = ctx.req.headers.get('x-forwarded-for') || 
+                          ctx.req.headers.get('x-real-ip') || 
+                          'unknown';
+        const userAgent = ctx.req.headers.get('user-agent') || 'unknown';
+
+        const result = await licenseService.signLicense(
+          input.id,
+          ctx.session.user.id,
+          userRole,
+          {
+            ipAddress,
+            userAgent,
+          }
+        );
+
+        return { 
+          data: transformLicenseForAPI(result.license),
+          meta: {
+            signatureProof: result.signatureProof,
+            allPartiesSigned: result.allPartiesSigned,
+            executedAt: result.executedAt?.toISOString(),
+            message: result.message,
+          }
+        };
+      } catch (error: any) {
+        if (error.code) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to sign license',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get license revenue tracking
+   */
+  getRevenue: protectedProcedure
+    .input(z.object({ id: z.string().cuid() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const license = await licenseService.getLicenseById(input.id, false);
+
+        if (!license) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'License not found',
+          });
+        }
+
+        // Verify access
+        if (!canAccessLicense(ctx.session.user, license)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to view this license revenue',
+          });
+        }
+
+        const revenueData = await licenseService.getLicenseRevenue(input.id);
+        return { data: revenueData };
+      } catch (error: any) {
+        if (error.code) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get license revenue',
+        });
+      }
+    }),
+
+  /**
+   * GET: Check renewal eligibility
+   */
+  checkRenewalEligibility: protectedProcedure
+    .input(z.object({ licenseId: z.string().cuid() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { renewalEligibilityService } = await import('./services/renewal-eligibility.service');
+        
+        const eligibility = await renewalEligibilityService.checkEligibility(input.licenseId);
+        
+        return { data: eligibility };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to check renewal eligibility',
+        });
+      }
+    }),
+
+  /**
+   * POST: Generate renewal offer
+   */
+  generateRenewalOffer: protectedProcedure
+    .input(
+      z.object({
+        licenseId: z.string().cuid(),
+        pricingStrategy: z.enum(['FLAT_RENEWAL', 'USAGE_BASED', 'MARKET_RATE', 'PERFORMANCE_BASED', 'NEGOTIATED', 'AUTOMATIC']).optional(),
+        customAdjustmentPercent: z.number().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { enhancedLicenseRenewalService } = await import('./services/enhancedLicenseRenewalService');
+        const { renewalPricingService } = await import('./services/renewal-pricing.service');
+
+        // Calculate pricing
+        const pricing = await renewalPricingService.calculateRenewalPricing({
+          licenseId: input.licenseId,
+          strategy: input.pricingStrategy || 'AUTOMATIC',
+          customAdjustmentPercent: input.customAdjustmentPercent,
+        });
+
+        // Generate offer
+        const offerId = await enhancedLicenseRenewalService.generateRenewalOffer(
+          input.licenseId,
+          ctx.session.user.id
+        );
+
+        return {
+          data: {
+            offerId,
+            pricing,
+          },
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to generate renewal offer',
+        });
+      }
+    }),
+
+  /**
+   * POST: Accept renewal offer
+   */
+  acceptRenewalOffer: protectedProcedure
+    .input(
+      z.object({
+        licenseId: z.string().cuid(),
+        offerId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { enhancedLicenseRenewalService } = await import('./services/enhancedLicenseRenewalService');
+
+        const renewal = await enhancedLicenseRenewalService.acceptRenewalOffer(
+          input.licenseId,
+          input.offerId,
+          ctx.session.user.id
+        );
+
+        return { data: transformLicenseForAPI(renewal) };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to accept renewal offer',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get renewal analytics
+   */
+  getRenewalAnalytics: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().datetime().optional(),
+        endDate: z.string().datetime().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const { renewalAnalyticsService } = await import('./services/renewal-analytics.service');
+
+        const startDate = input.startDate ? new Date(input.startDate) : undefined;
+        const endDate = input.endDate ? new Date(input.endDate) : undefined;
+
+        const metrics = await renewalAnalyticsService.calculateRenewalMetrics(
+          startDate,
+          endDate
+        );
+
+        return { data: metrics };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get renewal analytics',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get renewal pipeline snapshot
+   */
+  getRenewalPipeline: adminProcedure.query(async () => {
+    try {
+      const { renewalAnalyticsService } = await import('./services/renewal-analytics.service');
+
+      const pipeline = await renewalAnalyticsService.getRenewalPipelineSnapshot();
+
+      return { data: pipeline };
+    } catch (error: any) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error.message || 'Failed to get renewal pipeline',
+      });
+    }
+  }),
+
+  /**
+   * GET: Get brand renewal performance
+   */
+  getBrandRenewalPerformance: protectedProcedure
+    .input(z.object({ brandId: z.string().cuid() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        // Verify user has access to this brand data
+        if (ctx.session.user.role !== 'ADMIN') {
+          const userBrand = await ctx.db.brand.findUnique({
+            where: { userId: ctx.session.user.id },
+          });
+
+          if (!userBrand || userBrand.id !== input.brandId) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'You can only view your own brand performance',
+            });
+          }
+        }
+
+        const { renewalAnalyticsService } = await import('./services/renewal-analytics.service');
+
+        const performance = await renewalAnalyticsService.analyzeBrandRenewalPerformance(
+          input.brandId
+        );
+
+        return { data: performance };
+      } catch (error: any) {
+        if (error.code) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get brand renewal performance',
         });
       }
     }),

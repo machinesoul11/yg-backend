@@ -9,6 +9,7 @@ import { projectsRouter } from '@/modules/projects';
 import { ipAssetsRouter } from '@/modules/ip';
 import { ipOwnershipRouter } from '@/modules/ip/routers/ip-ownership.router';
 import { messagesRouter } from '@/modules/messages';
+import { licensesRouter } from '@/modules/licenses';
 
 /**
  * This is the primary router for your server.
@@ -27,9 +28,9 @@ export const appRouter = createTRPCRouter({
   ipAssets: ipAssetsRouter,
   ipOwnership: ipOwnershipRouter,
   messages: messagesRouter,
+  licenses: licensesRouter,
   // Add your routers here
   // Example:
-  // licenses: licensesRouter,
   // royalties: royaltiesRouter,
   // talent: talentRouter,
   // brands: brandsRouter,

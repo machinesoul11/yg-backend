@@ -51,6 +51,21 @@ export const authOptions: NextAuthOptions = {
 
         const email = credentials.email.toLowerCase().trim();
 
+        // RBAC: Only allow internal staff emails (@yesgoddess.agency domain)
+        const emailDomain = email.split('@')[1];
+        if (emailDomain !== 'yesgoddess.agency') {
+          await auditService.log({
+            action: AUDIT_ACTIONS.LOGIN_FAILED,
+            entityType: 'user',
+            entityId: 'unknown',
+            email,
+            ipAddress: req?.headers?.['x-forwarded-for'] as string || 'unknown',
+            userAgent: req?.headers?.['user-agent'] || 'unknown',
+            after: { reason: 'UNAUTHORIZED_DOMAIN' },
+          });
+          return null;
+        }
+
         // Find user by email
         const user = await prisma.user.findUnique({
           where: { email },
@@ -166,10 +181,11 @@ export const authOptions: NextAuthOptions = {
         });
 
         // Update last login timestamp
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
+        // Temporarily disabled due to RLS policy issue
+        // await prisma.user.update({
+        //   where: { id: user.id },
+        //   data: { lastLoginAt: new Date() },
+        // });
 
         // Return user object for session
         return {

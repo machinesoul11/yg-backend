@@ -20,9 +20,16 @@ export default withAuth(
       return NextResponse.redirect(new URL('/auth/verification-required', req.url));
     }
 
-    // Admin routes - require ADMIN role
+    // Admin routes - require ADMIN role AND @yesgoddess.agency email domain
     if (path.startsWith('/admin')) {
       if (token?.role !== 'ADMIN') {
+        return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', req.url));
+      }
+      
+      // Additional security: Only allow @yesgoddess.agency domain for admin access
+      const email = token?.email as string;
+      const emailDomain = email?.split('@')[1];
+      if (emailDomain !== 'yesgoddess.agency') {
         return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', req.url));
       }
     }

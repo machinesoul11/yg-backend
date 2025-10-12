@@ -167,7 +167,7 @@ export class LicenseService {
             subject: 'New License Request for Your IP Asset',
             template: 'welcome', // TODO: Create license-request template
             variables: {
-              creatorName: ownership.creator.displayName || ownership.creator.user.name || 'Creator',
+              creatorName: ownership.creator.stageName || ownership.creator.user.name || 'Creator',
               assetTitle: license.ipAsset.title,
               brandName: license.brand.companyName,
               licenseType: license.licenseType,
@@ -493,7 +493,7 @@ export class LicenseService {
             subject: 'License Renewal Request',
             template: 'welcome', // TODO: Create license-renewal template
             variables: {
-              creatorName: ownership.creator.displayName || ownership.creator.user.name || 'Creator',
+              creatorName: ownership.creator.stageName || ownership.creator.user.name || 'Creator',
               assetTitle: original.ipAsset.title,
               brandName: original.brand.companyName,
               originalEndDate: original.endDate.toLocaleDateString(),
@@ -587,7 +587,7 @@ export class LicenseService {
       if (ownership.creator.user.email) {
         recipients.push({
           email: ownership.creator.user.email,
-          name: ownership.creator.displayName || ownership.creator.user.name || 'Creator',
+          name: ownership.creator.stageName || ownership.creator.user.name || 'Creator',
           role: 'creator',
         });
       }
@@ -1267,6 +1267,227 @@ export class LicenseService {
         validationResult.checks.approvalRequirements.details?.approvalRequired || false,
       approvalReasons:
         validationResult.checks.approvalRequirements.details?.reasons || [],
+    };
+  }
+
+  /**
+   * Get license revenue tracking
+   * Aggregates all financial data for a specific license
+   */
+  async getLicenseRevenue(licenseId: string): Promise<{
+    licenseId: string;
+    initialFeeCents: number;
+    totalRevenueShareCents: number;
+    totalRevenueCents: number;
+    projectedRevenueCents: number;
+    revenueByPeriod: Array<{
+      period: string;
+      startDate: string;
+      endDate: string;
+      revenueCents: number;
+    }>;
+    revenueByCreator: Array<{
+      creatorId: string;
+      creatorName: string;
+      shareBps: number;
+      totalRevenueCents: number;
+      paidCents: number;
+      pendingCents: number;
+    }>;
+    usageMetrics?: {
+      totalImpressions: number;
+      totalClicks: number;
+      averageCostPerImpression: number;
+    };
+    paymentStatus: {
+      totalPaid: number;
+      totalPending: number;
+      nextPaymentDate: string | null;
+    };
+  }> {
+    // Get license with related data
+    const license = await prisma.license.findUnique({
+      where: { id: licenseId },
+      include: {
+        ipAsset: {
+          include: {
+            ownerships: {
+              include: {
+                creator: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        royaltyLines: {
+          include: {
+            royaltyStatement: true,
+          },
+        },
+        events: {
+          where: {
+            eventType: {
+              in: ['impression', 'click', 'view'],
+            },
+          },
+        },
+      },
+    });
+
+    if (!license) {
+      throw new Error('License not found');
+    }
+
+    // Calculate total revenue share from royalty lines
+    const totalRevenueShareCents = license.royaltyLines.reduce(
+      (sum, line) => sum + line.calculatedRoyaltyCents,
+      0
+    );
+
+    // Calculate total revenue (initial fee + revenue share)
+    const totalRevenueCents = license.feeCents + totalRevenueShareCents;
+
+    // Calculate projected revenue based on current license duration
+    const now = new Date();
+    const licenseDurationDays = differenceInDays(license.endDate, license.startDate);
+    const elapsedDays = differenceInDays(
+      now > license.endDate ? license.endDate : now,
+      license.startDate
+    );
+    
+    let projectedRevenueCents = totalRevenueCents;
+    if (elapsedDays > 0 && elapsedDays < licenseDurationDays && totalRevenueShareCents > 0) {
+      const dailyRevenueRate = totalRevenueShareCents / elapsedDays;
+      const remainingDays = licenseDurationDays - elapsedDays;
+      projectedRevenueCents = totalRevenueCents + (dailyRevenueRate * remainingDays);
+    }
+
+    // Group revenue by period (monthly)
+    const revenueByPeriod = license.royaltyLines.reduce((acc: any[], line) => {
+      const periodKey = `${line.periodStart.getFullYear()}-${String(line.periodStart.getMonth() + 1).padStart(2, '0')}`;
+      const existing = acc.find((p) => p.period === periodKey);
+      
+      if (existing) {
+        existing.revenueCents += line.calculatedRoyaltyCents;
+      } else {
+        acc.push({
+          period: periodKey,
+          startDate: line.periodStart.toISOString(),
+          endDate: line.periodEnd.toISOString(),
+          revenueCents: line.calculatedRoyaltyCents,
+        });
+      }
+      
+      return acc;
+    }, []);
+
+    // Sort by period
+    revenueByPeriod.sort((a, b) => a.period.localeCompare(b.period));
+
+    // Calculate revenue by creator based on ownership shares
+    const revenueByCreator = license.ipAsset.ownerships.map((ownership) => {
+      const creatorRevenue = Math.round((totalRevenueCents * ownership.shareBps) / 10000);
+      
+      // Calculate paid vs pending from royalty statements
+      const creatorStatements = license.royaltyLines
+        .filter((line) => line.royaltyStatement.creatorId === ownership.creatorId)
+        .map((line) => line.royaltyStatement);
+      
+      const uniqueStatements = Array.from(
+        new Map(creatorStatements.map((s) => [s.id, s])).values()
+      );
+      
+      const paidCents = uniqueStatements
+        .filter((s) => s.status === 'PAID')
+        .reduce((sum, s) => sum + s.totalEarningsCents, 0);
+      
+      const pendingCents = uniqueStatements
+        .filter((s) => s.status === 'PENDING')
+        .reduce((sum, s) => sum + s.totalEarningsCents, 0);
+
+      return {
+        creatorId: ownership.creatorId,
+        creatorName: ownership.creator.stageName || ownership.creator.user.name || 'Unknown',
+        shareBps: ownership.shareBps,
+        totalRevenueCents: creatorRevenue,
+        paidCents,
+        pendingCents,
+      };
+    });
+
+    // Calculate usage metrics if events exist
+    let usageMetrics: any = undefined;
+    if (license.events.length > 0) {
+      const totalImpressions = license.events.filter((e) => e.eventType === 'impression').length;
+      const totalClicks = license.events.filter((e) => e.eventType === 'click').length;
+      const averageCostPerImpression = totalImpressions > 0 
+        ? totalRevenueCents / totalImpressions 
+        : 0;
+
+      usageMetrics = {
+        totalImpressions,
+        totalClicks,
+        averageCostPerImpression,
+      };
+    }
+
+    // Calculate payment status
+    const allStatements = license.royaltyLines.map((line) => line.royaltyStatement);
+    const uniqueStatements = Array.from(
+      new Map(allStatements.map((s) => [s.id, s])).values()
+    );
+    
+    const totalPaid = uniqueStatements
+      .filter((s) => s.status === 'PAID')
+      .reduce((sum, s) => sum + s.totalEarningsCents, 0);
+    
+    const totalPending = uniqueStatements
+      .filter((s) => s.status === 'PENDING')
+      .reduce((sum, s) => sum + s.totalEarningsCents, 0);
+    
+    // Determine next payment date based on billing frequency
+    let nextPaymentDate: string | null = null;
+    if (license.billingFrequency && license.status === 'ACTIVE') {
+      const lastPayment = uniqueStatements
+        .filter((s) => s.status === 'PAID')
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      
+      if (lastPayment) {
+        const nextDate = new Date(lastPayment.createdAt);
+        switch (license.billingFrequency) {
+          case 'MONTHLY':
+            nextDate.setMonth(nextDate.getMonth() + 1);
+            break;
+          case 'QUARTERLY':
+            nextDate.setMonth(nextDate.getMonth() + 3);
+            break;
+          case 'ANNUALLY':
+            nextDate.setFullYear(nextDate.getFullYear() + 1);
+            break;
+        }
+        if (nextDate <= license.endDate) {
+          nextPaymentDate = nextDate.toISOString();
+        }
+      }
+    }
+
+    return {
+      licenseId,
+      initialFeeCents: license.feeCents,
+      totalRevenueShareCents,
+      totalRevenueCents,
+      projectedRevenueCents: Math.round(projectedRevenueCents),
+      revenueByPeriod,
+      revenueByCreator,
+      usageMetrics,
+      paymentStatus: {
+        totalPaid,
+        totalPending,
+        nextPaymentDate,
+      },
     };
   }
 }

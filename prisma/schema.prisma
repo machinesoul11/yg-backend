@@ -10,21 +10,21 @@ datasource db {
 }
 
 model User {
-  id                   String                @id @default(cuid())
-  email                String                @unique
+  id                   String                     @id @default(cuid())
+  email                String                     @unique
   name                 String?
   avatar               String?
-  role                 UserRole              @default(VIEWER)
+  role                 UserRole                   @default(VIEWER)
   password_hash        String?
   email_verified       DateTime?
   deleted_at           DateTime?
-  isActive             Boolean               @default(true)
+  isActive             Boolean                    @default(true)
   locked_until         DateTime?
-  failed_login_count   Int                   @default(0)
+  failed_login_count   Int                        @default(0)
   last_failed_login    DateTime?
   lastLoginAt          DateTime?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
   accounts             Account[]
   auditEvents          AuditEvent[]
   brand                Brand?
@@ -35,28 +35,28 @@ model User {
   scheduledEmails      ScheduledEmail[]
   emailUnsubscribeLogs EmailUnsubscribeLog[]
   // Email campaigns
-  campaignsCreated     EmailCampaign[]       @relation("CampaignCreatedBy")
+  campaignsCreated     EmailCampaign[]            @relation("CampaignCreatedBy")
   campaignRecipients   CampaignRecipient[]
-  assetsCreated        IpAsset[]             @relation("AssetCreator")
-  assetsUpdated        IpAsset[]             @relation("AssetUpdater")
-  ownershipCreated     IpOwnership[]         @relation("IpOwnershipCreatedBy")
-  ownershipUpdated     IpOwnership[]         @relation("IpOwnershipUpdatedBy")
+  assetsCreated        IpAsset[]                  @relation("AssetCreator")
+  assetsUpdated        IpAsset[]                  @relation("AssetUpdater")
+  ownershipCreated     IpOwnership[]              @relation("IpOwnershipCreatedBy")
+  ownershipUpdated     IpOwnership[]              @relation("IpOwnershipUpdatedBy")
   passwordResetTokens  PasswordResetToken[]
   passwordHistory      PasswordHistory[]
   rememberMeTokens     RememberMeToken[]
-  projectsCreated      Project[]             @relation("ProjectCreatedBy")
-  projectsUpdated      Project[]             @relation("ProjectUpdatedBy")
-  royaltyRunsCreated   RoyaltyRun[]          @relation("RoyaltyRunCreatedBy")
+  projectsCreated      Project[]                  @relation("ProjectCreatedBy")
+  projectsUpdated      Project[]                  @relation("ProjectUpdatedBy")
+  royaltyRunsCreated   RoyaltyRun[]               @relation("RoyaltyRunCreatedBy")
   sessions             Session[]
   talent               Talent?
   verificationTokens   VerificationToken[]
   notifications        Notification[]
-  sentMessages         Message[]             @relation("SentMessages")
-  receivedMessages     Message[]             @relation("ReceivedMessages")
+  sentMessages         Message[]                  @relation("SentMessages")
+  receivedMessages     Message[]                  @relation("ReceivedMessages")
   amendmentApprovals   LicenseAmendmentApproval[]
   statusHistoryEntries LicenseStatusHistory[]
-  extensionsRequested  LicenseExtension[]    @relation("ExtensionRequester")
-  extensionsApproved   LicenseExtension[]    @relation("ExtensionApprover")
+  extensionsRequested  LicenseExtension[]         @relation("ExtensionRequester")
+  extensionsApproved   LicenseExtension[]         @relation("ExtensionApprover")
 
   @@index([email])
   @@index([role])
@@ -450,43 +450,49 @@ model IPFile {
 }
 
 model License {
-  id                String              @id @default(cuid())
-  status            LicenseStatus       @default(DRAFT)
-  autoRenew         Boolean             @default(false) @map("auto_renew")
-  billingFrequency  BillingFrequency?   @map("billing_frequency")
-  brandId           String              @map("brand_id")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  createdBy         String?             @map("created_by")
-  deletedAt         DateTime?           @map("deleted_at")
-  endDate           DateTime            @map("end_date")
-  feeCents          Int                 @default(0) @map("fee_cents")
-  ipAssetId         String              @map("ip_asset_id")
-  licenseType       LicenseType         @map("license_type")
-  metadata          Json?
-  parentLicenseId   String?             @map("parent_license_id")
-  paymentTerms      String?             @map("payment_terms")
-  projectId         String?             @map("project_id")
-  renewalNotifiedAt DateTime?           @map("renewal_notified_at")
-  revShareBps       Int                 @default(0) @map("rev_share_bps")
-  scopeJson         Json                @map("scope_json")
-  signatureProof    String?             @map("signature_proof")
-  signedAt          DateTime?           @map("signed_at")
-  startDate         DateTime            @map("start_date")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
-  updatedBy         String?             @map("updated_by")
-  amendmentCount    Int                 @default(0) @map("amendment_count")
-  extensionCount    Int                 @default(0) @map("extension_count")
-  brand             Brand               @relation(fields: [brandId], references: [id])
-  ipAsset           IpAsset             @relation(fields: [ipAssetId], references: [id])
-  parentLicense     License?            @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
-  renewals          License[]           @relation("LicenseRenewals")
-  project           Project?            @relation(fields: [projectId], references: [id])
-  royaltyLines      RoyaltyLine[]
-  events            Event[]
-  dailyMetrics      DailyMetric[]
-  amendments        LicenseAmendment[]
-  extensions        LicenseExtension[]
-  statusHistory     LicenseStatusHistory[]
+  id                    String                 @id @default(cuid())
+  status                LicenseStatus          @default(DRAFT)
+  autoRenew             Boolean                @default(false) @map("auto_renew")
+  billingFrequency      BillingFrequency?      @map("billing_frequency")
+  brandId               String                 @map("brand_id")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  createdBy             String?                @map("created_by")
+  deletedAt             DateTime?              @map("deleted_at")
+  endDate               DateTime               @map("end_date")
+  feeCents              Int                    @default(0) @map("fee_cents")
+  ipAssetId             String                 @map("ip_asset_id")
+  licenseType           LicenseType            @map("license_type")
+  metadata              Json?
+  parentLicenseId       String?                @map("parent_license_id")
+  paymentTerms          String?                @map("payment_terms")
+  projectId             String?                @map("project_id")
+  renewalNotifiedAt     DateTime?              @map("renewal_notified_at")
+  revShareBps           Int                    @default(0) @map("rev_share_bps")
+  scopeJson             Json                   @map("scope_json")
+  signatureProof        String?                @map("signature_proof")
+  signedAt              DateTime?              @map("signed_at")
+  startDate             DateTime               @map("start_date")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  updatedBy             String?                @map("updated_by")
+  amendmentCount        Int                    @default(0) @map("amendment_count")
+  extensionCount        Int                    @default(0) @map("extension_count")
+  ninetyDayNoticeSentAt DateTime?              @map("ninety_day_notice_sent_at")
+  sixtyDayNoticeSentAt  DateTime?              @map("sixty_day_notice_sent_at")
+  thirtyDayNoticeSentAt DateTime?              @map("thirty_day_notice_sent_at")
+  gracePeriodEndDate    DateTime?              @map("grace_period_end_date")
+  expiredAt             DateTime?              @map("expired_at")
+  gracePeriodDays       Int                    @default(0) @map("grace_period_days")
+  brand                 Brand                  @relation(fields: [brandId], references: [id])
+  ipAsset               IpAsset                @relation(fields: [ipAssetId], references: [id])
+  parentLicense         License?               @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
+  renewals              License[]              @relation("LicenseRenewals")
+  project               Project?               @relation(fields: [projectId], references: [id])
+  royaltyLines          RoyaltyLine[]
+  events                Event[]
+  dailyMetrics          DailyMetric[]
+  amendments            LicenseAmendment[]
+  extensions            LicenseExtension[]
+  statusHistory         LicenseStatusHistory[]
 
   @@index([ipAssetId, status, endDate])
   @@index([brandId, status])
@@ -497,26 +503,26 @@ model License {
 }
 
 model LicenseAmendment {
-  id              String                       @id @default(cuid())
-  licenseId       String                       @map("license_id")
-  amendmentNumber Int                          @map("amendment_number")
-  proposedBy      String                       @map("proposed_by")
-  proposedByRole  String                       @map("proposed_by_role")
-  proposedAt      DateTime                     @default(now()) @map("proposed_at")
-  approvedAt      DateTime?                    @map("approved_at")
-  rejectedAt      DateTime?                    @map("rejected_at")
-  status          LicenseAmendmentStatus       @default(PROPOSED)
-  amendmentType   LicenseAmendmentType         @map("amendment_type")
-  justification   String
-  fieldsChanged   Json                         @default("[]") @map("fields_changed")
-  beforeValues    Json                         @default("{}") @map("before_values")
-  afterValues     Json                         @default("{}") @map("after_values")
-  approvalDeadline DateTime?                   @map("approval_deadline")
-  rejectionReason String?                      @map("rejection_reason")
-  createdAt       DateTime                     @default(now()) @map("created_at")
-  updatedAt       DateTime                     @updatedAt @map("updated_at")
-  license         License                      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  approvals       LicenseAmendmentApproval[]
+  id               String                     @id @default(cuid())
+  licenseId        String                     @map("license_id")
+  amendmentNumber  Int                        @map("amendment_number")
+  proposedBy       String                     @map("proposed_by")
+  proposedByRole   String                     @map("proposed_by_role")
+  proposedAt       DateTime                   @default(now()) @map("proposed_at")
+  approvedAt       DateTime?                  @map("approved_at")
+  rejectedAt       DateTime?                  @map("rejected_at")
+  status           LicenseAmendmentStatus     @default(PROPOSED)
+  amendmentType    LicenseAmendmentType       @map("amendment_type")
+  justification    String
+  fieldsChanged    Json                       @default("[]") @map("fields_changed")
+  beforeValues     Json                       @default("{}") @map("before_values")
+  afterValues      Json                       @default("{}") @map("after_values")
+  approvalDeadline DateTime?                  @map("approval_deadline")
+  rejectionReason  String?                    @map("rejection_reason")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+  updatedAt        DateTime                   @updatedAt @map("updated_at")
+  license          License                    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  approvals        LicenseAmendmentApproval[]
 
   @@unique([licenseId, amendmentNumber])
   @@index([licenseId])
@@ -526,20 +532,20 @@ model LicenseAmendment {
 }
 
 model LicenseAmendmentApproval {
-  id           String              @id @default(cuid())
-  amendmentId  String              @map("amendment_id")
-  approverId   String              @map("approver_id")
-  approverRole String              @map("approver_role")
-  status       ApprovalStatus      @default(PENDING)
-  approvedAt   DateTime?           @map("approved_at")
-  rejectedAt   DateTime?           @map("rejected_at")
+  id           String           @id @default(cuid())
+  amendmentId  String           @map("amendment_id")
+  approverId   String           @map("approver_id")
+  approverRole String           @map("approver_role")
+  status       ApprovalStatus   @default(PENDING)
+  approvedAt   DateTime?        @map("approved_at")
+  rejectedAt   DateTime?        @map("rejected_at")
   comments     String?
-  ipAddress    String?             @map("ip_address")
-  userAgent    String?             @map("user_agent")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
-  amendment    LicenseAmendment    @relation(fields: [amendmentId], references: [id], onDelete: Cascade)
-  approver     User                @relation(fields: [approverId], references: [id], onDelete: Cascade)
+  ipAddress    String?          @map("ip_address")
+  userAgent    String?          @map("user_agent")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  amendment    LicenseAmendment @relation(fields: [amendmentId], references: [id], onDelete: Cascade)
+  approver     User             @relation(fields: [approverId], references: [id], onDelete: Cascade)
 
   @@unique([amendmentId, approverId])
   @@index([amendmentId])
@@ -549,17 +555,17 @@ model LicenseAmendmentApproval {
 }
 
 model LicenseStatusHistory {
-  id             String    @id @default(cuid())
-  licenseId      String    @map("license_id")
-  fromStatus     String    @map("from_status")
-  toStatus       String    @map("to_status")
-  transitionedAt DateTime  @default(now()) @map("transitioned_at")
-  transitionedBy String?   @map("transitioned_by")
+  id             String   @id @default(cuid())
+  licenseId      String   @map("license_id")
+  fromStatus     String   @map("from_status")
+  toStatus       String   @map("to_status")
+  transitionedAt DateTime @default(now()) @map("transitioned_at")
+  transitionedBy String?  @map("transitioned_by")
   reason         String?
   metadata       Json?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  license        License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  user           User?     @relation(fields: [transitionedBy], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now()) @map("created_at")
+  license        License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [transitionedBy], references: [id], onDelete: SetNull)
 
   @@index([licenseId])
   @@index([transitionedAt])
@@ -569,26 +575,26 @@ model LicenseStatusHistory {
 }
 
 model LicenseExtension {
-  id               String     @id @default(cuid())
-  licenseId        String     @map("license_id")
-  requestedBy      String     @map("requested_by")
-  requestedAt      DateTime   @default(now()) @map("requested_at")
-  approvedAt       DateTime?  @map("approved_at")
-  rejectedAt       DateTime?  @map("rejected_at")
-  status           ExtensionStatus @default(PENDING)
-  originalEndDate  DateTime   @map("original_end_date")
-  newEndDate       DateTime   @map("new_end_date")
-  extensionDays    Int        @map("extension_days")
-  additionalFeeCents Int      @default(0) @map("additional_fee_cents")
-  justification    String
-  approvalRequired Boolean    @default(true) @map("approval_required")
-  approvedBy       String?    @map("approved_by")
-  rejectionReason  String?    @map("rejection_reason")
-  createdAt        DateTime   @default(now()) @map("created_at")
-  updatedAt        DateTime   @updatedAt @map("updated_at")
-  license          License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  requester        User       @relation("ExtensionRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
-  approver         User?      @relation("ExtensionApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  id                 String          @id @default(cuid())
+  licenseId          String          @map("license_id")
+  requestedBy        String          @map("requested_by")
+  requestedAt        DateTime        @default(now()) @map("requested_at")
+  approvedAt         DateTime?       @map("approved_at")
+  rejectedAt         DateTime?       @map("rejected_at")
+  status             ExtensionStatus @default(PENDING)
+  originalEndDate    DateTime        @map("original_end_date")
+  newEndDate         DateTime        @map("new_end_date")
+  extensionDays      Int             @map("extension_days")
+  additionalFeeCents Int             @default(0) @map("additional_fee_cents")
+  justification      String
+  approvalRequired   Boolean         @default(true) @map("approval_required")
+  approvedBy         String?         @map("approved_by")
+  rejectionReason    String?         @map("rejection_reason")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  license            License         @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  requester          User            @relation("ExtensionRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
+  approver           User?           @relation("ExtensionApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
 
   @@index([licenseId])
   @@index([status])
