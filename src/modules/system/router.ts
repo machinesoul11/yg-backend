@@ -6,12 +6,14 @@
 
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { NotificationType } from '@prisma/client';
 import { createTRPCRouter, protectedProcedure, adminProcedure } from '@/lib/trpc';
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
 import { IdempotencyService } from './services/idempotency.service';
 import { FeatureFlagService } from './services/feature-flag.service';
 import { NotificationService } from './services/notification.service';
+import { NotificationPreferencesService } from './services/notification-preferences.service';
 import {
   IdempotencyError,
   FeatureFlagError,
@@ -32,6 +34,7 @@ import {
 const idempotencyService = new IdempotencyService(prisma);
 const featureFlagService = new FeatureFlagService(prisma, redis);
 const notificationService = new NotificationService(prisma, redis);
+const notificationPreferencesService = new NotificationPreferencesService(prisma, redis);
 
 // ===========================
 // Helper Functions
@@ -343,6 +346,143 @@ export const systemRouter = createTRPCRouter({
         try {
           const result = await notificationService.create(input);
           return { data: result };
+        } catch (error) {
+          handleNotificationError(error);
+        }
+      }),
+
+    getPreferences: protectedProcedure.query(async ({ ctx }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const preferences = await notificationPreferencesService.getPreferences(userId);
+        return { data: preferences };
+      } catch (error) {
+        handleNotificationError(error);
+      }
+    }),
+
+    updatePreferences: protectedProcedure
+      .input(z.object({
+        enabledTypes: z.array(z.nativeEnum(NotificationType)).optional(),
+        digestFrequency: z.enum(['IMMEDIATE', 'DAILY', 'WEEKLY', 'NEVER']).optional(),
+        emailEnabled: z.boolean().optional(),
+        inAppEnabled: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          const userId = ctx.session.user.id;
+
+          // Validate email enabled only if user has verified email
+          if (input.emailEnabled === true) {
+            const user = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { email_verified: true },
+            });
+
+            if (!user?.email_verified) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'Cannot enable email notifications without verified email address',
+              });
+            }
+          }
+
+          const preferences = await notificationPreferencesService.updatePreferences(userId, input);
+          return { data: preferences };
+        } catch (error) {
+          if (error instanceof TRPCError) {
+            throw error;
+          }
+          handleNotificationError(error);
+        }
+      }),
+
+    poll: protectedProcedure
+      .input(z.object({
+        lastSeen: z.string().datetime().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        try {
+          const userId = ctx.session.user.id;
+
+          // Determine query timestamp
+          let queryAfter: Date;
+
+          if (input.lastSeen) {
+            queryAfter = new Date(input.lastSeen);
+
+            // Validate timestamp is not in future
+            const now = new Date();
+            if (queryAfter > now) {
+              queryAfter = now;
+            }
+
+            // Limit how far back we query (24 hours max)
+            const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            if (queryAfter < oneDayAgo) {
+              queryAfter = oneDayAgo;
+            }
+          } else {
+            // No timestamp provided - return recent notifications (last hour)
+            queryAfter = new Date(Date.now() - 60 * 60 * 1000);
+          }
+
+          // Check cache for "no new notifications"
+          const cacheKey = `notifications:poll:empty:${userId}`;
+          if (input.lastSeen) {
+            const cached = await redis.get(cacheKey);
+            if (cached === 'true') {
+              const unreadCount = await notificationService.getUnreadCount(userId);
+              return {
+                data: {
+                  notifications: [],
+                  newCount: 0,
+                  unreadCount,
+                  lastSeen: new Date().toISOString(),
+                  suggestedPollInterval: 10,
+                },
+              };
+            }
+          }
+
+          // Query for new notifications
+          const notifications = await prisma.notification.findMany({
+            where: {
+              userId,
+              createdAt: { gt: queryAfter },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+          });
+
+          // Get unread count
+          const unreadCount = await notificationService.getUnreadCount(userId);
+
+          // If no new notifications, cache this result
+          if (notifications.length === 0 && input.lastSeen) {
+            await redis.set(cacheKey, 'true', 'EX', 5);
+          }
+
+          return {
+            data: {
+              notifications: notifications.map((n) => ({
+                id: n.id,
+                type: n.type,
+                title: n.title,
+                message: n.message,
+                actionUrl: n.actionUrl,
+                priority: n.priority,
+                read: n.read,
+                readAt: n.readAt?.toISOString() || null,
+                metadata: n.metadata,
+                createdAt: n.createdAt.toISOString(),
+              })),
+              newCount: notifications.length,
+              unreadCount,
+              lastSeen: new Date().toISOString(),
+              suggestedPollInterval: 10, // seconds
+            },
+          };
         } catch (error) {
           handleNotificationError(error);
         }

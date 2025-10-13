@@ -4,6 +4,8 @@
  * TypeScript interfaces for system infrastructure
  */
 
+import { NotificationType as PrismaNotificationType, NotificationPriority as PrismaNotificationPriority } from '@prisma/client';
+
 // ===========================
 // Idempotency Types
 // ===========================
@@ -79,8 +81,8 @@ export interface FeatureFlagResponse {
 // Notification Types
 // ===========================
 
-export type NotificationType = 'LICENSE' | 'PAYOUT' | 'ROYALTY' | 'PROJECT' | 'SYSTEM';
-export type NotificationPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type NotificationType = PrismaNotificationType;
+export type NotificationPriority = PrismaNotificationPriority;
 
 export interface CreateNotificationInput {
   userId?: string;
@@ -130,6 +132,34 @@ export interface NotificationListResponse {
 export interface CreateNotificationResult {
   created: number;
   notificationIds: string[];
+}
+
+export interface NotificationCategoryCounts {
+  LICENSE: number;
+  PAYOUT: number;
+  ROYALTY: number;
+  PROJECT: number;
+  SYSTEM: number;
+  MESSAGE: number;
+}
+
+export interface NotificationBundleConfig {
+  bundleKey: string;
+  bundleWindow?: number; // in minutes
+}
+
+export interface NotificationCleanupResult {
+  deleted: number;
+  archived?: number;
+}
+
+export interface BulkNotificationInput {
+  type: NotificationType;
+  title: string;
+  message: string;
+  priority?: NotificationPriority;
+  actionUrl?: string;
+  metadata?: Record<string, any>;
 }
 
 // ===========================

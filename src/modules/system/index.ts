@@ -11,3 +11,4 @@ export { NotificationService } from './services/notification.service';
 export * from './types';
 export * from './validation';
 export * from './errors';
+export * from './constants/notification.constants';

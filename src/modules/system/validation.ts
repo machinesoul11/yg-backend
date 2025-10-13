@@ -5,6 +5,7 @@
  */
 
 import { z } from 'zod';
+import { NotificationType, NotificationPriority } from '@prisma/client';
 
 // ===========================
 // Idempotency Schemas
@@ -36,7 +37,7 @@ export const CreateFeatureFlagSchema = z.object({
     userRoles: z.array(z.enum(['ADMIN', 'CREATOR', 'BRAND', 'VIEWER'])).optional(),
     brandIds: z.array(z.string().cuid()).optional(),
     creatorIds: z.array(z.string().cuid()).optional(),
-    customConditions: z.record(z.any()).optional()
+    customConditions: z.record(z.string(), z.any()).optional()
   }).optional()
 });
 
@@ -49,7 +50,7 @@ export const UpdateFeatureFlagSchema = z.object({
     userRoles: z.array(z.enum(['ADMIN', 'CREATOR', 'BRAND', 'VIEWER'])).optional(),
     brandIds: z.array(z.string().cuid()).optional(),
     creatorIds: z.array(z.string().cuid()).optional(),
-    customConditions: z.record(z.any()).optional()
+    customConditions: z.record(z.string(), z.any()).optional()
   }).optional()
 });
 
@@ -63,8 +64,8 @@ export const DeleteFeatureFlagSchema = z.object({
 
 export const ListNotificationsSchema = z.object({
   read: z.boolean().optional(),
-  type: z.enum(['LICENSE', 'PAYOUT', 'ROYALTY', 'PROJECT', 'SYSTEM']).optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
+  type: z.nativeEnum(NotificationType).optional(),
+  priority: z.nativeEnum(NotificationPriority).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20)
 });
@@ -73,10 +74,10 @@ export const CreateNotificationSchema = z.object({
   userId: z.string().cuid().optional(),
   userIds: z.array(z.string().cuid()).optional(),
   userRole: z.enum(['ADMIN', 'CREATOR', 'BRAND', 'VIEWER']).optional(),
-  type: z.enum(['LICENSE', 'PAYOUT', 'ROYALTY', 'PROJECT', 'SYSTEM']),
+  type: z.nativeEnum(NotificationType),
   title: z.string().min(1).max(255),
   message: z.string().min(1).max(1000),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
+  priority: z.nativeEnum(NotificationPriority).default('MEDIUM'),
   actionUrl: z.string().url().or(z.string().regex(/^\/[a-z0-9\/-]*$/)).optional(),
   metadata: z.record(z.string(), z.any()).optional()
 }).refine(

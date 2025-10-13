@@ -1,15 +1,24 @@
 /**
  * Notification Cleanup Job
  * 
- * Cleans up old read notifications (older than 90 days)
+ * Cleans up old notifications based on expiry rules:
+ * - Read notifications older than 30 days
+ * - Unread LOW/MEDIUM notifications older than 90 days
+ * - Read SYSTEM notifications older than 7 days
+ * 
  * Run: Daily at 3 AM
  */
 
 import { Queue, Worker } from 'bullmq';
 import { redisConnection } from '@/lib/db/redis';;
 import { prisma } from '@/lib/db';
+import { redis } from '@/lib/redis';
+import { NotificationService } from '@/modules/system/services/notification.service';
 
 const QUEUE_NAME = 'notification-cleanup';
+
+// Initialize notification service
+const notificationService = new NotificationService(prisma, redis);
 
 // Create queue
 export const notificationCleanupQueue = new Queue(QUEUE_NAME, {
@@ -20,20 +29,13 @@ export const notificationCleanupQueue = new Queue(QUEUE_NAME, {
   },
 });
 
-// Job handler
+// Job handler using enhanced cleanup method
 async function cleanupOldNotifications() {
-  const threshold = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days
-
-  const result = await prisma.notification.deleteMany({
-    where: {
-      read: true,
-      readAt: { lt: threshold },
-    },
-  });
-
-  console.log(`[Notification Cleanup] Deleted ${result.count} old notifications`);
-
-  return { deleted: result.count };
+  const result = await notificationService.cleanupExpired();
+  
+  console.log(`[Notification Cleanup] Deleted ${result.deleted} old notifications`);
+  
+  return result;
 }
 
 // Create worker

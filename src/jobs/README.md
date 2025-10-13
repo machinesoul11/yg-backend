@@ -41,6 +41,10 @@ This directory contains all BullMQ background job definitions for the YesGoddess
 ### **License Jobs**
 - `license-expiry-monitor.job.ts` - Monitors licenses nearing expiration
 - `license-auto-expiry.job.ts` - Auto-expires licenses at end date
+- `license-renewal-workflow.job.ts` - Automated renewal eligibility checks and offer generation
+- `license-management.job.ts` - General license management tasks
+- `license-usage-tracking.job.ts` - Tracks and aggregates license usage events
+- `license-performance-metrics.job.ts` - Calculates ROI, utilization, conflict rates, and approval times
 
 ### **Royalty Jobs**
 - `royalty-calculation.job.ts` - Calculates royalties for a royalty run

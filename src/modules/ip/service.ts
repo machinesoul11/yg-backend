@@ -3,6 +3,8 @@ import { IStorageProvider } from '@/lib/storage/types';
 import { Queue } from 'bullmq';
 import { redis } from '@/lib/redis';
 import { uploadAnalyticsService } from '@/lib/services/upload-analytics.service';
+import { NotificationService } from '@/modules/system/services/notification.service';
+import { queueNotificationDelivery } from '@/jobs/notification-delivery.job';
 import type { VirusScanJobData } from '@/jobs/asset-virus-scan.job';
 import {
   IpAssetResponse,
@@ -39,10 +41,14 @@ function generateId(): string {
  * Core business logic for asset lifecycle management
  */
 export class IpAssetService {
+  private notificationService: NotificationService;
+
   constructor(
     private prisma: PrismaClient,
     private storageAdapter: IStorageProvider
-  ) {}
+  ) {
+    this.notificationService = new NotificationService(prisma, redis);
+  }
 
   /**
    * Initiate upload: Generate signed URL and create draft asset record
@@ -477,15 +483,30 @@ export class IpAssetService {
       },
     });
 
-    // TODO: Send notification if approved/rejected
-    // if (newStatus === AssetStatus.APPROVED || newStatus === AssetStatus.REJECTED) {
-    //   await notificationService.sendAssetStatusUpdate({
-    //     userId: existing.createdBy,
-    //     assetId: id,
-    //     status: newStatus,
-    //     notes,
-    //   });
-    // }
+    // Send notification if approved/rejected
+    if (newStatus === AssetStatus.APPROVED || newStatus === AssetStatus.REJECTED) {
+      const isApproved = newStatus === AssetStatus.APPROVED;
+      const notification = await this.notificationService.create({
+        userId: existing.createdBy,
+        type: 'PROJECT' as any,
+        priority: isApproved ? ('MEDIUM' as any) : ('HIGH' as any),
+        title: isApproved ? 'Asset Approved' : 'Asset Rejected',
+        message: isApproved
+          ? `Your asset "${updated.title}" has been approved and is now ready for licensing.`
+          : `Your asset "${updated.title}" was not approved. ${notes || 'Please review the quality guidelines and try again.'}`,
+        actionUrl: `/assets/${id}`,
+        metadata: {
+          assetId: id,
+          status: newStatus,
+          notes,
+        },
+      });
+
+      // Queue for email delivery
+      if (notification.notificationIds.length > 0) {
+        await queueNotificationDelivery(notification.notificationIds[0]);
+      }
+    }
 
     // TODO: Track event and create audit log
     // eventTracker.track({

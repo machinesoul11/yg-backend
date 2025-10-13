@@ -13,9 +13,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireWebhookVerification, markWebhookProcessed } from '@/lib/middleware';
 import { STRIPE_CONFIG } from '@/lib/config';
 import { prisma } from '@/lib/db';
+import { redis } from '@/lib/redis';
 import { AuditService } from '@/lib/services/audit.service';
+import { NotificationService } from '@/modules/system/services/notification.service';
+import { queueNotificationDelivery } from '@/jobs/notification-delivery.job';
 
 const auditService = new AuditService(prisma);
+const notificationService = new NotificationService(prisma, redis);
 
 export async function POST(req: NextRequest) {
   let eventId: string | undefined;
@@ -161,6 +165,27 @@ async function handleTransferEvent(event: any) {
           amount: payout.amountCents,
         },
       });
+
+      // Create notification for successful payout
+      const successNotification = await notificationService.create({
+        userId: payout.creator.userId,
+        type: 'PAYOUT' as any,
+        priority: 'HIGH' as any,
+        title: 'Payout Completed',
+        message: `Your payout of $${(payout.amountCents / 100).toFixed(2)} has been successfully processed and is on its way to your account.`,
+        actionUrl: `/payouts/${payout.id}`,
+        metadata: {
+          payoutId: payout.id,
+          amount: payout.amountCents,
+          stripeTransferId,
+          status: 'COMPLETED',
+        },
+      });
+
+      // Queue for email delivery
+      if (successNotification.notificationIds.length > 0) {
+        await queueNotificationDelivery(successNotification.notificationIds[0]);
+      }
       break;
 
     case 'transfer.failed':
@@ -182,6 +207,28 @@ async function handleTransferEvent(event: any) {
           reason: transfer.failure_message,
         },
       });
+
+      // Create urgent notification for failed payout
+      const failureNotification = await notificationService.create({
+        userId: payout.creator.userId,
+        type: 'PAYOUT' as any,
+        priority: 'URGENT' as any,
+        title: 'Payout Failed',
+        message: `Your payout of $${(payout.amountCents / 100).toFixed(2)} could not be processed. ${transfer.failure_message || 'Please contact support for assistance.'}`,
+        actionUrl: `/payouts/${payout.id}`,
+        metadata: {
+          payoutId: payout.id,
+          amount: payout.amountCents,
+          stripeTransferId,
+          status: 'FAILED',
+          failureReason: transfer.failure_message,
+        },
+      });
+
+      // Queue for immediate email delivery
+      if (failureNotification.notificationIds.length > 0) {
+        await queueNotificationDelivery(failureNotification.notificationIds[0]);
+      }
       break;
   }
 }

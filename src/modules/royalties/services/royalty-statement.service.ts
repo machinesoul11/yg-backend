@@ -7,6 +7,8 @@ import { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { AuditService } from '@/lib/services/audit.service';
 import { EmailService } from '@/lib/services/email/email.service';
+import { NotificationService } from '@/modules/system/services/notification.service';
+import { queueNotificationDelivery } from '@/jobs/notification-delivery.job';
 import {
   RoyaltyStatementNotFoundError,
   RoyaltyStatementDisputeError,
@@ -16,12 +18,16 @@ import {
 } from '../errors/royalty.errors';
 
 export class RoyaltyStatementService {
+  private notificationService: NotificationService;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly redis: Redis,
     private readonly emailService: EmailService,
     private readonly auditService: AuditService
-  ) {}
+  ) {
+    this.notificationService = new NotificationService(prisma, redis);
+  }
 
   /**
    * Send statement notification email
@@ -54,6 +60,28 @@ export class RoyaltyStatementService {
     }
 
     const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/creator/royalties/${statementId}`;
+
+    // Create in-app notification
+    const notification = await this.notificationService.create({
+      userId: statement.creator.userId,
+      type: 'ROYALTY' as any,
+      priority: 'MEDIUM' as any,
+      title: 'Royalty Statement Ready',
+      message: `Your royalty statement for ${statement.royaltyRun.periodStart.toLocaleDateString()} - ${statement.royaltyRun.periodEnd.toLocaleDateString()} is ready. Total earnings: $${(statement.totalEarningsCents / 100).toFixed(2)}`,
+      actionUrl: `/creator/royalties/${statementId}`,
+      metadata: {
+        statementId,
+        runId: statement.royaltyRunId,
+        earningsCents: statement.totalEarningsCents,
+        periodStart: statement.royaltyRun.periodStart.toISOString(),
+        periodEnd: statement.royaltyRun.periodEnd.toISOString(),
+      },
+    });
+
+    // Queue for immediate delivery
+    if (notification.notificationIds.length > 0) {
+      await queueNotificationDelivery(notification.notificationIds[0]);
+    }
 
     await this.emailService.sendTransactional({
       userId: statement.creator.userId,
@@ -111,7 +139,9 @@ export class RoyaltyStatementService {
     await this.auditService.log({
       userId: statement.creatorId,
       action: 'royalty.statement.reviewed',
-      metadata: { statementId },
+      entityType: 'royalty_statement',
+      entityId: statementId,
+      after: { statementId },
     });
   }
 
@@ -189,7 +219,9 @@ export class RoyaltyStatementService {
     await this.auditService.log({
       userId: statement.creator.userId,
       action: 'royalty.statement.disputed',
-      metadata: { statementId, reason },
+      entityType: 'royalty_statement',
+      entityId: statementId,
+      after: { statementId, reason },
     });
   }
 
@@ -279,7 +311,9 @@ export class RoyaltyStatementService {
     await this.auditService.log({
       userId,
       action: 'royalty.statement.dispute_resolved',
-      metadata: { statementId, resolution, adjustmentCents },
+      entityType: 'royalty_statement',
+      entityId: statementId,
+      after: { statementId, resolution, adjustmentCents },
     });
   }
 

@@ -450,55 +450,69 @@ model IPFile {
 }
 
 model License {
-  id                    String                 @id @default(cuid())
-  status                LicenseStatus          @default(DRAFT)
-  autoRenew             Boolean                @default(false) @map("auto_renew")
-  billingFrequency      BillingFrequency?      @map("billing_frequency")
-  brandId               String                 @map("brand_id")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  createdBy             String?                @map("created_by")
-  deletedAt             DateTime?              @map("deleted_at")
-  endDate               DateTime               @map("end_date")
-  feeCents              Int                    @default(0) @map("fee_cents")
-  ipAssetId             String                 @map("ip_asset_id")
-  licenseType           LicenseType            @map("license_type")
+  id                    String            @id @default(cuid())
+  status                LicenseStatus     @default(DRAFT)
+  autoRenew             Boolean           @default(false) @map("auto_renew")
+  billingFrequency      BillingFrequency? @map("billing_frequency")
+  brandId               String            @map("brand_id")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  createdBy             String?           @map("created_by")
+  deletedAt             DateTime?         @map("deleted_at")
+  endDate               DateTime          @map("end_date")
+  feeCents              Int               @default(0) @map("fee_cents")
+  ipAssetId             String            @map("ip_asset_id")
+  licenseType           LicenseType       @map("license_type")
   metadata              Json?
-  parentLicenseId       String?                @map("parent_license_id")
-  paymentTerms          String?                @map("payment_terms")
-  projectId             String?                @map("project_id")
-  renewalNotifiedAt     DateTime?              @map("renewal_notified_at")
-  revShareBps           Int                    @default(0) @map("rev_share_bps")
-  scopeJson             Json                   @map("scope_json")
-  signatureProof        String?                @map("signature_proof")
-  signedAt              DateTime?              @map("signed_at")
-  startDate             DateTime               @map("start_date")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  updatedBy             String?                @map("updated_by")
-  amendmentCount        Int                    @default(0) @map("amendment_count")
-  extensionCount        Int                    @default(0) @map("extension_count")
-  ninetyDayNoticeSentAt DateTime?              @map("ninety_day_notice_sent_at")
-  sixtyDayNoticeSentAt  DateTime?              @map("sixty_day_notice_sent_at")
-  thirtyDayNoticeSentAt DateTime?              @map("thirty_day_notice_sent_at")
-  gracePeriodEndDate    DateTime?              @map("grace_period_end_date")
-  expiredAt             DateTime?              @map("expired_at")
-  gracePeriodDays       Int                    @default(0) @map("grace_period_days")
-  brand                 Brand                  @relation(fields: [brandId], references: [id])
-  ipAsset               IpAsset                @relation(fields: [ipAssetId], references: [id])
-  parentLicense         License?               @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
-  renewals              License[]              @relation("LicenseRenewals")
-  project               Project?               @relation(fields: [projectId], references: [id])
-  royaltyLines          RoyaltyLine[]
-  events                Event[]
-  dailyMetrics          DailyMetric[]
-  amendments            LicenseAmendment[]
-  extensions            LicenseExtension[]
-  statusHistory         LicenseStatusHistory[]
+  parentLicenseId       String?           @map("parent_license_id")
+  paymentTerms          String?           @map("payment_terms")
+  projectId             String?           @map("project_id")
+  renewalNotifiedAt     DateTime?         @map("renewal_notified_at")
+  revShareBps           Int               @default(0) @map("rev_share_bps")
+  scopeJson             Json              @map("scope_json")
+  signatureProof        String?           @map("signature_proof")
+  signedAt              DateTime?         @map("signed_at")
+  startDate             DateTime          @map("start_date")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  updatedBy             String?           @map("updated_by")
+  amendmentCount        Int               @default(0) @map("amendment_count")
+  extensionCount        Int               @default(0) @map("extension_count")
+  ninetyDayNoticeSentAt DateTime?         @map("ninety_day_notice_sent_at")
+  sixtyDayNoticeSentAt  DateTime?         @map("sixty_day_notice_sent_at")
+  thirtyDayNoticeSentAt DateTime?         @map("thirty_day_notice_sent_at")
+  gracePeriodEndDate    DateTime?         @map("grace_period_end_date")
+  expiredAt             DateTime?         @map("expired_at")
+  gracePeriodDays       Int               @default(0) @map("grace_period_days")
+
+  // Usage tracking fields
+  usageTrackingEnabled Boolean   @default(true) @map("usage_tracking_enabled")
+  lastUsageAt          DateTime? @map("last_usage_at")
+  totalUsageEvents     Int       @default(0) @map("total_usage_events")
+
+  brand         Brand                  @relation(fields: [brandId], references: [id])
+  ipAsset       IpAsset                @relation(fields: [ipAssetId], references: [id])
+  parentLicense License?               @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
+  renewals      License[]              @relation("LicenseRenewals")
+  project       Project?               @relation(fields: [projectId], references: [id])
+  royaltyLines  RoyaltyLine[]
+  events        Event[]
+  dailyMetrics  DailyMetric[]
+  amendments    LicenseAmendment[]
+  extensions    LicenseExtension[]
+  statusHistory LicenseStatusHistory[]
+
+  // Usage tracking relations
+  usageEvents     LicenseUsageEvent[]
+  usageAggregates LicenseUsageDailyAggregate[]
+  usageThresholds LicenseUsageThreshold[]
+  usageOverages   LicenseUsageOverage[]
+  usageForecasts  LicenseUsageForecast[]
 
   @@index([ipAssetId, status, endDate])
   @@index([brandId, status])
   @@index([status, endDate])
   @@index([deletedAt])
   @@index([projectId])
+  @@index([usageTrackingEnabled, lastUsageAt])
   @@map("licenses")
 }
 
@@ -1282,6 +1296,77 @@ model StorageMetrics {
   @@map("storage_metrics")
 }
 
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String               @map("user_id")
+  type      NotificationType
+  title     String               @db.VarChar(255)
+  message   String
+  actionUrl String?              @map("action_url")
+  priority  NotificationPriority @default(MEDIUM)
+  read      Boolean              @default(false)
+  readAt    DateTime?            @map("read_at")
+  metadata  Json?
+  createdAt DateTime             @default(now()) @map("created_at")
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt(sort: Desc)])
+  @@index([userId, type])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model MessageThread {
+  id               String    @id @default(cuid())
+  subject          String?   @db.VarChar(255)
+  participantsJson Json      @map("participants_json")
+  lastMessageAt    DateTime  @map("last_message_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  messages         Message[]
+
+  @@index([lastMessageAt(sort: Desc)])
+  @@index([deletedAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id          String              @id @default(cuid())
+  threadId    String              @map("thread_id")
+  senderId    String              @map("sender_id")
+  recipientId String              @map("recipient_id")
+  body        String
+  readAt      DateTime?           @map("read_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  deletedAt   DateTime?           @map("deleted_at")
+  thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Restrict)
+  recipient   User                @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Restrict)
+  attachments MessageAttachment[]
+
+  @@index([threadId, createdAt(sort: Desc)])
+  @@index([recipientId, readAt])
+  @@index([senderId])
+  @@index([deletedAt])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id         String   @id @default(cuid())
+  messageId  String   @map("message_id")
+  storageKey String   @map("storage_key")
+  fileName   String   @map("file_name")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
@@ -1507,146 +1592,6 @@ enum CampaignRecipientStatus {
   COMPLAINED
 }
 
-// ===========================
-// System Tables
-// ===========================
-
-model IdempotencyKey {
-  id  String @id @default(cuid())
-  key String @unique
-
-  // What was the operation
-  entityType String  @map("entity_type")
-  entityId   String? @map("entity_id")
-
-  // Request/Response storage
-  requestHash    String? @map("request_hash")
-  responseStatus Int?    @map("response_status")
-  responseBody   Json?   @map("response_body")
-
-  // Processing state
-  processed    Boolean   @default(false)
-  processingAt DateTime? @map("processing_at")
-
-  // Lifecycle
-  createdAt DateTime @default(now()) @map("created_at")
-  expiresAt DateTime @map("expires_at")
-
-  @@index([key])
-  @@index([expiresAt])
-  @@index([entityType, entityId])
-  @@map("idempotency_keys")
-}
-
-model FeatureFlag {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  enabled     Boolean @default(false)
-  description String?
-
-  // Targeting & Rollout
-  conditions        Json?
-  rolloutPercentage Int   @default(0) @map("rollout_percentage")
-
-  // Metadata
-  createdBy String   @map("created_by")
-  updatedBy String?  @map("updated_by")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([name])
-  @@index([enabled])
-  @@map("feature_flags")
-}
-
-model Notification {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-
-  // Content
-  type    NotificationType
-  title   String           @db.VarChar(255)
-  message String
-
-  // Action
-  actionUrl String? @map("action_url")
-
-  // Priority & Status
-  priority NotificationPriority @default(MEDIUM)
-  read     Boolean              @default(false)
-  readAt   DateTime?            @map("read_at")
-
-  // Metadata
-  metadata  Json?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, read, createdAt])
-  @@index([userId, type])
-  @@index([createdAt])
-  @@map("notifications")
-}
-
-model MessageThread {
-  id               String    @id @default(cuid())
-  subject          String?   @db.VarChar(255)
-  participantsJson Json      @map("participants_json")
-  lastMessageAt    DateTime  @map("last_message_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
-
-  // Relations
-  messages Message[]
-
-  @@index([lastMessageAt])
-  @@index([participantsJson], type: Gin)
-  @@index([deletedAt])
-  @@map("message_threads")
-}
-
-model Message {
-  id          String    @id @default(cuid())
-  threadId    String    @map("thread_id")
-  senderId    String    @map("sender_id")
-  recipientId String    @map("recipient_id")
-  body        String    @db.Text
-  readAt      DateTime? @map("read_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
-
-  // Relations
-  thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender      User                @relation("SentMessages", fields: [senderId], references: [id])
-  recipient   User                @relation("ReceivedMessages", fields: [recipientId], references: [id])
-  attachments MessageAttachment[]
-
-  @@index([threadId, createdAt])
-  @@index([recipientId, readAt])
-  @@index([senderId])
-  @@index([deletedAt])
-  @@map("messages")
-}
-
-model MessageAttachment {
-  id         String   @id @default(cuid())
-  messageId  String   @map("message_id")
-  storageKey String   @map("storage_key")
-  fileName   String   @map("file_name")
-  fileSize   Int      @map("file_size")
-  mimeType   String   @map("mime_type")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  // Relations
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-  @@map("message_attachments")
-}
-
 enum NotificationType {
   LICENSE
   PAYOUT
@@ -1661,4 +1606,140 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// License Usage Tracking Models
+
+model LicenseUsageEvent {
+  id                 String   @id @default(cuid())
+  licenseId          String   @map("license_id")
+  occurredAt         DateTime @default(now()) @map("occurred_at")
+  usageType          String   @db.VarChar(50) // 'view', 'download', 'impression', 'click', 'play', 'stream'
+  quantity           Int      @default(1)
+  geographicLocation String?  @map("geographic_location") @db.VarChar(100)
+  platform           String?  @db.VarChar(50) // 'web', 'mobile', 'tv', 'print', 'social'
+  deviceType         String?  @map("device_type") @db.VarChar(50)
+  referrer           String?
+  revenueCents       Int      @default(0) @map("revenue_cents")
+  metadata           Json     @default("{}")
+  sessionId          String?  @map("session_id")
+  idempotencyKey     String?  @unique @map("idempotency_key")
+  createdAt          DateTime @default(now()) @map("created_at")
+  license            License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, occurredAt(sort: Desc)])
+  @@index([usageType, occurredAt(sort: Desc)])
+  @@index([occurredAt(sort: Desc)])
+  @@index([sessionId])
+  @@map("license_usage_events")
+}
+
+model LicenseUsageDailyAggregate {
+  id                String   @id @default(cuid())
+  licenseId         String   @map("license_id")
+  date              DateTime @db.Date
+  totalViews        Int      @default(0) @map("total_views")
+  totalDownloads    Int      @default(0) @map("total_downloads")
+  totalImpressions  Int      @default(0) @map("total_impressions")
+  totalClicks       Int      @default(0) @map("total_clicks")
+  totalPlays        Int      @default(0) @map("total_plays")
+  totalStreams      Int      @default(0) @map("total_streams")
+  totalQuantity     Int      @default(0) @map("total_quantity")
+  totalRevenueCents Int      @default(0) @map("total_revenue_cents")
+  uniqueSessions    Int      @default(0) @map("unique_sessions")
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  license           License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, date])
+  @@index([licenseId, date(sort: Desc)])
+  @@index([date(sort: Desc)])
+  @@map("license_usage_daily_aggregates")
+}
+
+model LicenseUsageThreshold {
+  id               String                @id @default(cuid())
+  licenseId        String                @map("license_id")
+  usageType        String                @db.VarChar(50)
+  limitQuantity    Int                   @map("limit_quantity")
+  periodType       String                @db.VarChar(20) // 'daily', 'weekly', 'monthly', 'total'
+  gracePercentage  Int                   @default(0) @map("grace_percentage")
+  warningAt50      Boolean               @default(true) @map("warning_at_50")
+  warningAt75      Boolean               @default(true) @map("warning_at_75")
+  warningAt90      Boolean               @default(true) @map("warning_at_90")
+  warningAt100     Boolean               @default(true) @map("warning_at_100")
+  lastWarningLevel Int                   @default(0) @map("last_warning_level")
+  lastWarningAt    DateTime?             @map("last_warning_at")
+  allowOverage     Boolean               @default(false) @map("allow_overage")
+  overageRateCents Int?                  @map("overage_rate_cents")
+  isActive         Boolean               @default(true) @map("is_active")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  license          License               @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  overages         LicenseUsageOverage[]
+
+  @@index([licenseId])
+  @@index([usageType])
+  @@map("license_usage_thresholds")
+}
+
+model LicenseUsageOverage {
+  id                 String                @id @default(cuid())
+  licenseId          String                @map("license_id")
+  thresholdId        String                @map("threshold_id")
+  periodStart        DateTime              @map("period_start")
+  periodEnd          DateTime              @map("period_end")
+  usageType          String                @db.VarChar(50)
+  limitQuantity      Int                   @map("limit_quantity")
+  actualQuantity     Int                   @map("actual_quantity")
+  overageQuantity    Int                   @map("overage_quantity")
+  overageRateCents   Int?                  @map("overage_rate_cents")
+  calculatedFeeCents Int?                  @map("calculated_fee_cents")
+  billedFeeCents     Int?                  @map("billed_fee_cents")
+  status             String                @default("DETECTED") @db.VarChar(20) // 'DETECTED', 'PENDING_APPROVAL', 'APPROVED', 'BILLED', 'DISPUTED'
+  approvalRequired   Boolean               @default(false) @map("approval_required")
+  approvedBy         String?               @map("approved_by")
+  approvedAt         DateTime?             @map("approved_at")
+  stripeInvoiceId    String?               @map("stripe_invoice_id")
+  billedAt           DateTime?             @map("billed_at")
+  notes              String?
+  metadata           Json                  @default("{}")
+  detectedAt         DateTime              @default(now()) @map("detected_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  license            License               @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  threshold          LicenseUsageThreshold @relation(fields: [thresholdId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, detectedAt(sort: Desc)])
+  @@index([status, detectedAt(sort: Desc)])
+  @@index([stripeInvoiceId])
+  @@map("license_usage_overages")
+}
+
+model LicenseUsageForecast {
+  id                  String    @id @default(cuid())
+  licenseId           String    @map("license_id")
+  usageType           String    @db.VarChar(50)
+  forecastDate        DateTime  @map("forecast_date") @db.Date
+  periodStart         DateTime  @map("period_start") @db.Date
+  periodEnd           DateTime  @map("period_end") @db.Date
+  predictedQuantity   Int       @map("predicted_quantity")
+  lowerBound          Int?      @map("lower_bound")
+  upperBound          Int?      @map("upper_bound")
+  confidenceLevel     Decimal   @default(0.95) @map("confidence_level") @db.Decimal(3, 2)
+  predictedBreachDate DateTime? @map("predicted_breach_date") @db.Date
+  breachProbability   Decimal?  @map("breach_probability") @db.Decimal(3, 2)
+  forecastingMethod   String    @map("forecasting_method") @db.VarChar(50)
+  historicalDaysUsed  Int?      @map("historical_days_used")
+  meanAbsoluteError   Decimal?  @map("mean_absolute_error") @db.Decimal(10, 2)
+  accuracyScore       Decimal?  @map("accuracy_score") @db.Decimal(3, 2)
+  metadata            Json      @default("{}")
+  calculatedAt        DateTime  @default(now()) @map("calculated_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  license             License   @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, forecastDate(sort: Desc)])
+  @@index([predictedBreachDate])
+  @@map("license_usage_forecasts")
 }

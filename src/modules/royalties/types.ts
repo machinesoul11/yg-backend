@@ -123,3 +123,76 @@ export interface PaginatedResponse<T> {
   nextCursor?: string;
 }
 
+/**
+ * Adjustment Types
+ */
+export type AdjustmentType = 'CREDIT' | 'DEBIT' | 'BONUS' | 'CORRECTION' | 'REFUND';
+
+/**
+ * Adjustment Request
+ */
+export interface AdjustmentRequest {
+  statementId: string;
+  adjustmentCents: number;
+  adjustmentType: AdjustmentType;
+  reason: string;
+  requiresApproval: boolean;
+}
+
+/**
+ * Calculation Metadata
+ */
+export interface CalculationMetadata {
+  totalLicenses: number;
+  totalCreators: number;
+  totalRevenueCents: number;
+  totalRoyaltiesCents: number;
+  roundingDifferenceCents: number;
+  calculationDurationMs: number;
+  proratedLicenses: number;
+  carryoverStatements: number;
+}
+
+/**
+ * Period Configuration
+ */
+export interface PeriodConfiguration {
+  periodStart: Date;
+  periodEnd: Date;
+  periodType: 'MONTHLY' | 'QUARTERLY' | 'CUSTOM';
+  fiscalYearStart?: number;
+}
+
+/**
+ * Threshold Configuration
+ */
+export interface ThresholdConfiguration {
+  minimumPayoutCents: number;
+  bypassGracePeriodMonths: number;
+  vipMinimumCents: number;
+}
+
+/**
+ * Revenue Breakdown
+ */
+export interface RevenueBreakdown {
+  totalRevenueCents: number;
+  flatFeeCents: number;
+  usageRevenueCents: number;
+  adjustmentsCents: number;
+  prorated: boolean;
+  daysActive: number;
+  totalDays: number;
+}
+
+/**
+ * Ownership Split Result
+ */
+export interface OwnershipSplitResult {
+  creatorId: string;
+  creatorName: string;
+  shareBps: number;
+  sharePercentage: number;
+  calculatedRoyaltyCents: number;
+  roundingAdjustmentCents: number;
+}

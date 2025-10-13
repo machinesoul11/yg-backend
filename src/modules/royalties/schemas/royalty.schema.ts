@@ -33,6 +33,19 @@ export const royaltyStatementStatusSchema = z.enum([
 export type RoyaltyStatementStatus = z.infer<typeof royaltyStatementStatusSchema>;
 
 /**
+ * Adjustment Type Enum
+ */
+export const adjustmentTypeSchema = z.enum([
+  'CREDIT',
+  'DEBIT',
+  'BONUS',
+  'CORRECTION',
+  'REFUND',
+]);
+
+export type AdjustmentType = z.infer<typeof adjustmentTypeSchema>;
+
+/**
  * Create Royalty Run Input Schema
  */
 export const createRoyaltyRunSchema = z
@@ -94,6 +107,21 @@ export const getRunSchema = z.object({
 });
 
 export type GetRunInput = z.infer<typeof getRunSchema>;
+
+/**
+ * Apply Adjustment Input Schema
+ */
+export const applyAdjustmentSchema = z.object({
+  statementId: z.string().cuid(),
+  adjustmentCents: z.number().int(),
+  adjustmentType: adjustmentTypeSchema,
+  reason: z
+    .string()
+    .min(20, 'Adjustment reason must be at least 20 characters')
+    .max(1000, 'Adjustment reason must be at most 1000 characters'),
+});
+
+export type ApplyAdjustmentInput = z.infer<typeof applyAdjustmentSchema>;
 
 /**
  * Resolve Dispute Input Schema
@@ -160,3 +188,18 @@ export const earningsSummarySchema = z.object({
 });
 
 export type EarningsSummaryInput = z.infer<typeof earningsSummarySchema>;
+
+/**
+ * Validate License Scope Input Schema
+ */
+export const validateLicenseScopeSchema = z.object({
+  licenseId: z.string().cuid(),
+  reportedUsage: z.object({
+    mediaTypes: z.array(z.string()).optional(),
+    geographies: z.array(z.string()).optional(),
+    channels: z.array(z.string()).optional(),
+  }),
+});
+
+export type ValidateLicenseScopeInput = z.infer<typeof validateLicenseScopeSchema>;
+

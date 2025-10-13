@@ -5,9 +5,13 @@
  */
 
 import { prisma } from '@/lib/db';
+import { redis } from '@/lib/redis';
 import { EmailService } from '@/lib/services/email/email.service';
+import { NotificationService } from '@/modules/system/services/notification.service';
+import { queueNotificationDelivery } from './notification-delivery.job';
 
 const emailService = new EmailService();
+const notificationService = new NotificationService(prisma, redis);
 
 interface JobData {
   projectId: string;
@@ -71,15 +75,25 @@ export async function projectMatchCreatorsJob(data: JobData) {
     let notificationsSent = 0;
     for (const creator of creators as any[]) {
       try {
-        // TODO: Use notification service when implemented
-        // await notificationService.create({
-        //   userId: creator.userId,
-        //   type: 'project_match',
-        //   title: 'New Project Match',
-        //   message: `${project.brand.companyName} has a new project that matches your specialties: ${project.name}`,
-        //   actionUrl: `/projects/${project.id}`,
-        //   priority: 'medium',
-        // });
+        // Create in-app notification
+        const notification = await notificationService.create({
+          userId: creator.userId,
+          type: 'PROJECT' as any,
+          priority: 'MEDIUM' as any,
+          title: 'New Project Match',
+          message: `${project.brand.companyName} has a new project that matches your specialties: ${project.name}`,
+          actionUrl: `/projects/${project.id}`,
+          metadata: {
+            projectId: project.id,
+            brandId: project.brandId,
+            matchType: 'specialty',
+          },
+        });
+
+        // Queue for delivery
+        if (notification.notificationIds.length > 0) {
+          await queueNotificationDelivery(notification.notificationIds[0]);
+        }
 
         // Send email notification
         await emailService.sendTransactional({

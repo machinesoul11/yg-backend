@@ -884,5 +884,234 @@ export const licensesRouter = createTRPCRouter({
         });
       }
     }),
+
+  /**
+   * GET: Get license performance metrics (ROI, utilization, approval time)
+   */
+  getPerformanceMetrics: protectedProcedure
+    .input(z.object({ licenseId: z.string().cuid() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const license = await licenseService.getLicenseById(input.licenseId, false);
+
+        if (!license) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'License not found',
+          });
+        }
+
+        // Check access permissions
+        if (!canAccessLicense(ctx.session.user, license)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'You do not have permission to view this license',
+          });
+        }
+
+        const { licensePerformanceMetricsService } = await import(
+          './services/license-performance-metrics.service'
+        );
+
+        // Calculate all performance metrics
+        const [roiMetrics, utilizationMetrics, approvalMetrics] = await Promise.all([
+          licensePerformanceMetricsService.calculateLicenseROI(input.licenseId),
+          licensePerformanceMetricsService.calculateLicenseUtilization(input.licenseId),
+          licensePerformanceMetricsService.calculateApprovalTimeMetrics(input.licenseId),
+        ]);
+
+        return {
+          data: {
+            roi: roiMetrics,
+            utilization: utilizationMetrics,
+            approval: approvalMetrics,
+          },
+        };
+      } catch (error: any) {
+        if (error.code) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get performance metrics',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get aggregated performance metrics for a time period (Admin only)
+   */
+  getAggregatedPerformanceMetrics: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().datetime(),
+        endDate: z.string().datetime(),
+        granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const { licensePerformanceMetricsService } = await import(
+          './services/license-performance-metrics.service'
+        );
+
+        const startDate = new Date(input.startDate);
+        const endDate = new Date(input.endDate);
+        const granularity = input.granularity || 'monthly';
+
+        const metrics = await licensePerformanceMetricsService.calculateAggregatedMetrics(
+          startDate,
+          endDate,
+          granularity
+        );
+
+        return { data: metrics };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get aggregated performance metrics',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get conflict rate metrics for a time period (Admin only)
+   */
+  getConflictRateMetrics: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().datetime(),
+        endDate: z.string().datetime(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const { licensePerformanceMetricsService } = await import(
+          './services/license-performance-metrics.service'
+        );
+
+        const startDate = new Date(input.startDate);
+        const endDate = new Date(input.endDate);
+
+        const metrics = await licensePerformanceMetricsService.calculateConflictRateMetrics(
+          startDate,
+          endDate
+        );
+
+        return { data: metrics };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get conflict rate metrics',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get historical performance metrics (Admin only)
+   */
+  getHistoricalPerformanceMetrics: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().datetime(),
+        endDate: z.string().datetime(),
+        granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const { licensePerformanceMetricsService } = await import(
+          './services/license-performance-metrics.service'
+        );
+
+        const startDate = new Date(input.startDate);
+        const endDate = new Date(input.endDate);
+        const granularity = input.granularity || 'daily';
+
+        const metrics = await licensePerformanceMetricsService.getHistoricalMetrics(
+          startDate,
+          endDate,
+          granularity
+        );
+
+        return { data: metrics };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get historical performance metrics',
+        });
+      }
+    }),
+
+  /**
+   * GET: Get performance dashboard summary (Admin only)
+   */
+  getPerformanceDashboard: adminProcedure
+    .input(
+      z.object({
+        period: z.enum(['7d', '30d', '90d', '1y']).default('30d'),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const { licensePerformanceMetricsService } = await import(
+          './services/license-performance-metrics.service'
+        );
+
+        const endDate = new Date();
+        let startDate: Date;
+
+        switch (input.period) {
+          case '7d':
+            startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '30d':
+            startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '90d':
+            startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          case '1y':
+            startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+            break;
+          default:
+            startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        }
+
+        const metrics = await licensePerformanceMetricsService.calculateAggregatedMetrics(
+          startDate,
+          endDate,
+          'daily'
+        );
+
+        // Get conflict rate metrics
+        const conflictMetrics = await licensePerformanceMetricsService.calculateConflictRateMetrics(
+          startDate,
+          endDate
+        );
+
+        return {
+          data: {
+            summary: {
+              period: input.period,
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+            },
+            revenue: metrics.revenue,
+            roi: metrics.roi,
+            utilization: metrics.utilization,
+            conflicts: {
+              ...metrics.conflicts,
+              details: conflictMetrics,
+            },
+            approvals: metrics.approvals,
+            renewals: metrics.renewals,
+          },
+        };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to get performance dashboard',
+        });
+      }
+    }),
 });
 

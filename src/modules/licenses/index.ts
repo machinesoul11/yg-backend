@@ -114,6 +114,18 @@ export type {
 } from './services/renewal-analytics.service';
 
 export {
+  licensePerformanceMetricsService,
+  LicensePerformanceMetricsService,
+} from './services/license-performance-metrics.service';
+export type {
+  LicenseROIMetrics,
+  LicenseUtilizationMetrics,
+  ApprovalTimeMetrics,
+  ConflictRateMetrics,
+  AggregatedPerformanceMetrics,
+} from './services/license-performance-metrics.service';
+
+export {
   enhancedLicenseRenewalService,
   EnhancedLicenseRenewalService,
 } from './services/enhancedLicenseRenewalService';
