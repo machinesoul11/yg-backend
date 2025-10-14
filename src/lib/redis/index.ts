@@ -23,5 +23,14 @@ export type { RedisMetrics, RedisHealthStatus } from './monitoring';
 // Re-import for default export
 import { getRedisClient } from './client';
 
-// Export default redis client for convenience
-export const redis = getRedisClient();
+// Export lazy-loaded redis client for convenience (don't connect until used)
+// This prevents connection errors during module import in serverless environments
+let _redisClient: ReturnType<typeof getRedisClient> | null = null;
+export const redis = new Proxy({} as ReturnType<typeof getRedisClient>, {
+  get(target, prop) {
+    if (!_redisClient) {
+      _redisClient = getRedisClient();
+    }
+    return (_redisClient as any)[prop];
+  }
+});
