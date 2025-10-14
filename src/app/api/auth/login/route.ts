@@ -53,11 +53,24 @@ function checkRateLimit(ipAddress: string): boolean {
   return true;
 }
 
+// Timeout helper to prevent hanging requests in serverless
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
+
 /**
  * POST /api/auth/login
  * Authenticate user and return user data
  */
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
+  console.log('[Login] Request received');
+  
   try {
     // Get client IP for rate limiting and audit
     const ipAddress = req.headers.get('x-forwarded-for') || 
@@ -67,6 +80,7 @@ export async function POST(req: NextRequest) {
 
     // Check rate limit
     if (!checkRateLimit(ipAddress)) {
+      console.log('[Login] Rate limit exceeded for IP:', ipAddress);
       return NextResponse.json(
         { 
           success: false, 
@@ -77,21 +91,31 @@ export async function POST(req: NextRequest) {
     }
 
     // Parse and validate request body
+    console.log('[Login] Parsing request body');
     const body = await req.json();
     const validatedData = loginSchema.parse(body);
+    console.log('[Login] Validated data for email:', validatedData.email);
 
-    // Attempt login
-    const result = await authService.loginUser(
-      {
-        email: validatedData.email,
-        password: validatedData.password,
-        rememberMe: validatedData.rememberMe,
-      },
-      {
-        ipAddress,
-        userAgent,
-      }
+    // Attempt login with 15 second timeout (serverless functions have limited execution time)
+    console.log('[Login] Calling authService.loginUser');
+    const result = await withTimeout(
+      authService.loginUser(
+        {
+          email: validatedData.email,
+          password: validatedData.password,
+          rememberMe: validatedData.rememberMe,
+        },
+        {
+          ipAddress,
+          userAgent,
+        }
+      ),
+      15000,
+      'Login request timed out after 15 seconds'
     );
+
+    const duration = Date.now() - startTime;
+    console.log(`[Login] Success for ${validatedData.email} in ${duration}ms`);
 
     // Return success response
     return NextResponse.json(
@@ -152,7 +176,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Log unexpected errors
-    console.error('Login error:', error);
+    const duration = Date.now() - startTime;
+    console.error(`[Login] Error after ${duration}ms:`, error);
 
     return NextResponse.json(
       {
