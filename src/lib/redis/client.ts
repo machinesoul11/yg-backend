@@ -5,17 +5,23 @@ const redisConfig = {
   maxRetriesPerRequest: 3,
   enableReadyCheck: false, // Upstash doesn't support PING command
   retryStrategy: (times: number) => {
-    const delay = Math.min(times * 50, 2000);
+    // Exponential backoff with max delay of 1 second
+    const delay = Math.min(times * 100, 1000);
     return delay;
   },
   reconnectOnError: (err: Error) => {
-    const targetErrors = ['READONLY', 'ETIMEDOUT', 'ECONNRESET'];
+    const targetErrors = ['READONLY', 'ETIMEDOUT'];
     return targetErrors.some((target) => err.message.includes(target));
   },
-  lazyConnect: true, // Don't connect until first command
-  connectTimeout: 10000,
-  commandTimeout: 5000,
-  keepAlive: 30000,
+  lazyConnect: false, // Connect immediately for serverless
+  connectTimeout: 5000, // Shorter timeout for serverless
+  commandTimeout: 3000,
+  enableOfflineQueue: false, // Don't queue commands when disconnected
+  keepAlive: 0, // Disable keep-alive in serverless
+  family: 6, // Use IPv6 (Upstash supports it)
+  // Disable automatic reconnection in serverless - let each invocation create fresh connections
+  autoResubscribe: false,
+  autoResendUnfulfilledCommands: false,
 };
 
 // Create Redis client instance
@@ -26,29 +32,18 @@ const createRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, redisConfig);
 
-  // Event listeners for monitoring
-  client.on('connect', () => {
-    console.log('[Redis] Connected to Redis');
-  });
-
-  client.on('ready', () => {
-    console.log('[Redis] Redis client ready');
-  });
+  // Event listeners for monitoring (reduced logging for production)
+  if (process.env.NODE_ENV === 'development') {
+    client.on('connect', () => {
+      console.log('[Redis] Connected');
+    });
+  }
 
   client.on('error', (err) => {
-    console.error('[Redis] Redis error:', err);
-  });
-
-  client.on('close', () => {
-    console.warn('[Redis] Redis connection closed');
-  });
-
-  client.on('reconnecting', (delay: number) => {
-    console.warn(`[Redis] Reconnecting to Redis in ${delay}ms`);
-  });
-
-  client.on('end', () => {
-    console.warn('[Redis] Redis connection ended');
+    // Only log non-connection-reset errors in production
+    if (err.message && !err.message.includes('ECONNRESET')) {
+      console.error('[Redis] Error:', err.message);
+    }
   });
 
   return client;
@@ -59,17 +54,21 @@ const bullmqRedisConfig = {
   maxRetriesPerRequest: null, // BullMQ handles retries
   enableReadyCheck: false,
   retryStrategy: (times: number) => {
-    const delay = Math.min(times * 50, 2000);
+    const delay = Math.min(times * 100, 1000);
     return delay;
   },
   reconnectOnError: (err: Error) => {
-    const targetErrors = ['READONLY', 'ETIMEDOUT', 'ECONNRESET'];
+    const targetErrors = ['READONLY', 'ETIMEDOUT'];
     return targetErrors.some((target) => err.message.includes(target));
   },
-  lazyConnect: true,
-  connectTimeout: 10000,
-  commandTimeout: 5000,
-  keepAlive: 30000,
+  lazyConnect: false,
+  connectTimeout: 5000,
+  commandTimeout: 3000,
+  enableOfflineQueue: false,
+  keepAlive: 0,
+  family: 6,
+  autoResubscribe: false,
+  autoResendUnfulfilledCommands: false,
 };
 
 // Create BullMQ Redis client instance
@@ -80,21 +79,18 @@ const createBullMQRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, bullmqRedisConfig);
 
-  // Event listeners for monitoring
-  client.on('connect', () => {
-    console.log('[Redis:BullMQ] Connected to Redis');
-  });
+  // Event listeners for monitoring (reduced logging for production)
+  if (process.env.NODE_ENV === 'development') {
+    client.on('connect', () => {
+      console.log('[Redis:BullMQ] Connected');
+    });
+  }
 
   client.on('error', (err) => {
-    console.error('[Redis:BullMQ] Redis error:', err);
-  });
-
-  client.on('close', () => {
-    console.warn('[Redis:BullMQ] Redis connection closed');
-  });
-
-  client.on('reconnecting', (delay: number) => {
-    console.warn(`[Redis:BullMQ] Reconnecting to Redis in ${delay}ms`);
+    // Only log non-connection-reset errors in production
+    if (err.message && !err.message.includes('ECONNRESET')) {
+      console.error('[Redis:BullMQ] Error:', err.message);
+    }
   });
 
   return client;
