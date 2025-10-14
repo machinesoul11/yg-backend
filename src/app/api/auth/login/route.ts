@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     const duration = Date.now() - startTime;
     console.log(`[Login] Success for ${validatedData.email} in ${duration}ms`);
 
-    // Return success response
+    // Return success response with CORS headers
     return NextResponse.json(
       {
         success: true,
@@ -125,7 +125,13 @@ export async function POST(req: NextRequest) {
           user: result.user,
         },
       },
-      { status: 200 }
+      { 
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
+          'Access-Control-Allow-Credentials': 'true',
+        },
+      }
     );
 
   } catch (error) {
@@ -199,9 +205,10 @@ export async function OPTIONS(req: NextRequest) {
     {
       status: 200,
       headers: {
-        'Access-Control-Allow-Origin': process.env.FRONTEND_URL || '*',
+        'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Max-Age': '86400',
       },
     }
