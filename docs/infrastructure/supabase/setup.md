@@ -2,8 +2,8 @@
 
 ## 🎯 Your Supabase Project Details
 
-- **Project URL**: https://ivndiftujdjwyqaidiea.supabase.co
-- **Project Ref**: `ivndiftujdjwyqaidiea`
+- **Project URL**: https://[YOUR-PROJECT-REF].supabase.co
+- **Project Ref**: `[YOUR-PROJECT-REF]`
 - **Region**: Auto-detected
 
 ## ✅ Configuration Complete
@@ -15,7 +15,7 @@ Your environment files have been configured with:
 
 ## 🔐 Next Steps: Get Your Database Password
 
-1. Go to: https://app.supabase.com/project/ivndiftujdjwyqaidiea/settings/database
+1. Go to: https://app.supabase.com/project/[YOUR-PROJECT-REF]/settings/database
 2. Scroll to **Connection string** section
 3. Click on **URI** tab
 4. Your password is shown in the connection string (or reset it if needed)
@@ -26,11 +26,13 @@ Your environment files have been configured with:
 Replace `[YOUR-PASSWORD]` in both `.env` and `.env.local` with your actual database password:
 
 ```bash
-# Before:
-DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.ivndiftujdjwyqaidiea.supabase.co:5432/postgres"
+```bash
+# Replace [YOUR-PASSWORD] with your actual database password
+DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
 
-# After (example):
-DATABASE_URL="postgresql://postgres:your-actual-password@db.ivndiftujdjwyqaidiea.supabase.co:5432/postgres"
+# Example with actual password (DO NOT commit this):
+DATABASE_URL="postgresql://postgres:your-actual-password@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
+```
 ```
 
 **Files to update:**
@@ -82,10 +84,10 @@ npm run db:health-check
 
 ## 📊 Supabase Dashboard Quick Links
 
-- **Database**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/database/tables
-- **SQL Editor**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/sql
-- **API Docs**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/api
-- **Settings**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/settings/general
+- **Database**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/database/tables
+- **SQL Editor**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/sql
+- **API Docs**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/api
+- **Settings**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/settings/general
 
 ## 🎯 Connection Ports Explained
 
@@ -115,7 +117,7 @@ npm run db:health-check
 
 Or test directly with psql:
 ```bash
-psql "postgresql://postgres:[PASSWORD]@db.ivndiftujdjwyqaidiea.supabase.co:5432/postgres"
+psql "postgresql://postgres:[PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
 ```
 
 ## 📚 Useful Commands

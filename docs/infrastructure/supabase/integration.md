@@ -41,8 +41,8 @@ Your YesGoddess backend is now fully integrated with Supabase:
 
 ## 🔑 Your Credentials
 
-**Project Reference**: `ivndiftujdjwyqaidiea`
-**Project URL**: https://ivndiftujdjwyqaidiea.supabase.co
+**Project Reference**: `[YOUR-PROJECT-REF]`
+**Project URL**: https://[YOUR-PROJECT-REF].supabase.co
 
 **API Keys** (already configured):
 - ✅ Anon Key (client-safe)
@@ -53,7 +53,7 @@ Your YesGoddess backend is now fully integrated with Supabase:
 ## 📋 Next Steps (In Order)
 
 ### Step 1: Get Your Database Password
-1. Visit: https://app.supabase.com/project/ivndiftujdjwyqaidiea/settings/database
+1. Visit: https://app.supabase.com/project/[YOUR-PROJECT-REF]/settings/database
 2. Find the **Connection string** section
 3. Copy or reset your database password
 
@@ -64,8 +64,8 @@ Replace `[YOUR-PASSWORD]` in these files:
 
 In these variables:
 ```bash
-DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.ivndiftujdjwyqaidiea.supabase.co:5432/postgres"
-DATABASE_URL_POOLED="postgresql://postgres:[YOUR-PASSWORD]@db.ivndiftujdjwyqaidiea.supabase.co:6543/postgres?pgbouncer=true&connection_limit=10"
+DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
+DATABASE_URL_POOLED="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:6543/postgres?pgbouncer=true&connection_limit=10"
 ```
 
 ### Step 3: Install Supabase Client (Optional)
@@ -223,10 +223,10 @@ To upgrade: Update `DB_MAX_CONNECTIONS` in `.env.local`
 
 ## 📚 Useful Links
 
-- **Your Project Dashboard**: https://app.supabase.com/project/ivndiftujdjwyqaidiea
-- **Database Settings**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/settings/database
-- **SQL Editor**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/sql
-- **API Docs**: https://app.supabase.com/project/ivndiftujdjwyqaidiea/api
+- **Your Project Dashboard**: https://app.supabase.com/project/[YOUR-PROJECT-REF]
+- **Database Settings**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/settings/database
+- **SQL Editor**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/sql
+- **API Docs**: https://app.supabase.com/project/[YOUR-PROJECT-REF]/api
 
 - [Supabase Docs](https://supabase.com/docs)
 - [Prisma with Supabase](https://supabase.com/docs/guides/integrations/prisma)

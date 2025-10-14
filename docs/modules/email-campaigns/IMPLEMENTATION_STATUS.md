@@ -379,9 +379,9 @@ Message:
 ### 1. Environment Configuration
 Ensure these variables are set in `.env`:
 ```bash
-RESEND_API_KEY=re_C1QK9DBc_8Wb5BhkYjVjEhVMKfQyMkDGg
+RESEND_API_KEY=re_xxxxxxxxxxxxx
 RESEND_SENDER_EMAIL=noreply@updates.yesgoddess.agency
-RESEND_WEBHOOK_SECRET=whsec_gcxmtNXBY1DteDmehlsF9wpUNepJyj15
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 EMAIL_FROM_NAME=YES GODDESS
 ```
 

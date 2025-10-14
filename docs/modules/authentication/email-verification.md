@@ -419,7 +419,7 @@ All required variables already configured in `.env`:
 ```env
 # Email service
 EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_C1QK9DBc_8Wb5BhkYjVjEhVMKfQyMkDGg
+RESEND_API_KEY=re_xxxxxxxxxxxxx
 RESEND_SENDER_EMAIL=noreply@updates.yesgoddess.agency
 EMAIL_FROM_NAME=YES GODDESS
 

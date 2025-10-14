@@ -21,7 +21,7 @@ https://your-domain.com/api/webhooks/resend
 
 ```bash
 # Already configured in .env
-RESEND_WEBHOOK_SECRET=whsec_gcxmtNXBY1DteDmehlsF9wpUNepJyj15
+RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 ```
 
 ### 3. Initialize Jobs

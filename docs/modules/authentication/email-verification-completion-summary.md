@@ -250,7 +250,7 @@ This document confirms the completion of all email verification requirements fro
 
 ### Environment Variables (Already Set)
 ```env
-RESEND_API_KEY=re_C1QK9DBc_8Wb5BhkYjVjEhVMKfQyMkDGg
+RESEND_API_KEY=re_xxxxxxxxxxxxx
 RESEND_SENDER_EMAIL=noreply@updates.yesgoddess.agency
 EMAIL_FROM_NAME=YES GODDESS
 NEXT_PUBLIC_APP_URL=http://localhost:3000

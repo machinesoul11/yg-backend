@@ -545,7 +545,7 @@ The code will execute correctly - this is purely an IDE display issue that resol
 
 ### Database Connection
 Migration applied successfully to Supabase PostgreSQL:
-- Database: `postgres` at `db.ivndiftujdjwyqaidiea.supabase.co:5432`
+- Database: `postgres` at `db.[YOUR-PROJECT-REF].supabase.co:5432`
 - Schema: `public`
 - All indexes created
 - Timezone support enabled via `TIMESTAMPTZ`

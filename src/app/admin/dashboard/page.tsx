@@ -1,4 +1,4 @@
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Container, Logo } from '@/components/ui';
+import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Badge, Container, Logo, LogoutButton } from '@/components/ui';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -24,12 +24,13 @@ export default async function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="!text-brand-white !border-brand-white hover:!bg-brand-white hover:!text-brand-black">
                 Settings
               </Button>
-              <Button variant="primary" size="sm">
+              <Button variant="primary" size="sm" className="!text-brand-white">
                 New Creator
               </Button>
+              <LogoutButton />
             </div>
           </div>
         </Container>

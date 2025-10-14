@@ -11,7 +11,7 @@ Your `.env` and `.env.local` files have been updated with full Supabase integrat
    - Read replica support (optional)
 
 2. **Supabase API Keys**
-   - Project URL: `https://ivndiftujdjwyqaidiea.supabase.co`
+   - Project URL: `https://[YOUR-PROJECT-REF].supabase.co`
    - Anon Key: Added (safe for client-side)
    - Service Role Key: Added (server-side only)
 
@@ -32,21 +32,21 @@ Your `.env` and `.env.local` files have been updated with full Supabase integrat
 
 **You need to complete one final step:**
 
-1. Go to: https://app.supabase.com/project/ivndiftujdjwyqaidiea/settings/database
+1. Go to: https://app.supabase.com/project/[YOUR-PROJECT-REF]/settings/database
 2. Find your database password (or reset it)
 3. Replace `[YOUR-PASSWORD]` in both `.env` and `.env.local`
 
 **Files to update:**
 ```bash
 # In .env and .env.local, change:
-DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db..."
-DATABASE_URL_POOLED="postgresql://postgres:[YOUR-PASSWORD]@db..."
-DATABASE_REPLICA_URL="postgresql://postgres:[YOUR-PASSWORD]@db..."
+DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
+DATABASE_URL_POOLED="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:6543/postgres"
+DATABASE_REPLICA_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
 
 # To:
-DATABASE_URL="postgresql://postgres:your-actual-password@db..."
-DATABASE_URL_POOLED="postgresql://postgres:your-actual-password@db..."
-DATABASE_REPLICA_URL="postgresql://postgres:your-actual-password@db..."
+DATABASE_URL="postgresql://postgres:your-actual-password@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
+DATABASE_URL_POOLED="postgresql://postgres:your-actual-password@db.[YOUR-PROJECT-REF].supabase.co:6543/postgres"
+DATABASE_REPLICA_URL="postgresql://postgres:your-actual-password@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
 ```
 
 ## 🚀 Quick Start Commands
@@ -76,19 +76,19 @@ npm run dev
 ## 📊 Your Supabase Setup
 
 ```
-Project: ivndiftujdjwyqaidiea
-URL:     https://ivndiftujdjwyqaidiea.supabase.co
+Project: [YOUR-PROJECT-REF]
+URL:     https://[YOUR-PROJECT-REF].supabase.co
 Region:  Auto-selected
 
 Database:
-├── Host:     db.ivndiftujdjwyqaidiea.supabase.co
+├── Host:     db.[YOUR-PROJECT-REF].supabase.co
 ├── Port:     5432 (direct) / 6543 (pooled)
 ├── Database: postgres
 └── User:     postgres
 
 API Keys:
-├── Anon:    eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... ✅
-└── Service: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... ✅
+├── Anon:    eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (from Supabase dashboard)
+└── Service: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (from Supabase dashboard)
 ```
 
 ## 🗂️ Updated Files
@@ -136,7 +136,7 @@ API Keys:
 
 ## 📖 Learning Resources
 
-- **Your Dashboard**: https://app.supabase.com/project/ivndiftujdjwyqaidiea
+- **Your Dashboard**: https://app.supabase.com/project/[YOUR-PROJECT-REF]
 - **Supabase Docs**: https://supabase.com/docs
 - **Prisma + Supabase**: https://supabase.com/docs/guides/integrations/prisma
 
