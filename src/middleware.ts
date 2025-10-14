@@ -13,7 +13,7 @@ export default withAuth(
 
     // Check email verification for protected routes (except admin)
     // Admin users may need access even without verified email
-    const requiresVerification = path.startsWith('/creator') || path.startsWith('/brand');
+    const requiresVerification = path.startsWith('/portal/creator') || path.startsWith('/portal/brand');
     
     if (requiresVerification && token && !token.emailVerified) {
       // Redirect to verification pending page
@@ -21,7 +21,7 @@ export default withAuth(
     }
 
     // Admin routes - require ADMIN role AND @yesgoddess.agency email domain
-    if (path.startsWith('/admin')) {
+    if (path.startsWith('/portal/admin')) {
       if (token?.role !== 'ADMIN') {
         return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', req.url));
       }
@@ -35,14 +35,14 @@ export default withAuth(
     }
 
     // Creator routes - require CREATOR role
-    if (path.startsWith('/creator')) {
+    if (path.startsWith('/portal/creator')) {
       if (token?.role !== 'CREATOR') {
         return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', req.url));
       }
     }
 
     // Brand routes - require BRAND role
-    if (path.startsWith('/brand')) {
+    if (path.startsWith('/portal/brand')) {
       if (token?.role !== 'BRAND') {
         return NextResponse.redirect(new URL('/auth/error?error=AccessDenied', req.url));
       }
@@ -66,15 +66,15 @@ export default withAuth(
 export const config = {
   matcher: [
     // Admin routes
-    '/admin/:path*',
+    '/portal/admin/:path*',
     
     // Creator routes
-    '/creator/:path*',
+    '/portal/creator/:path*',
     
     // Brand routes
-    '/brand/:path*',
+    '/portal/brand/:path*',
     
-    // API routes (exclude auth routes)
-    '/api/trpc/:path*',
+    // Note: tRPC API routes handle their own authentication via context
+    // Do not include /api/trpc here as it causes CORS preflight issues
   ],
 };
