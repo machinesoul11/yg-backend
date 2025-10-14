@@ -22,12 +22,9 @@ const DATABASE_CONFIG: Prisma.PrismaClientOptions = {
     ? ['query', 'error', 'warn']
     : ['error'],
   
-  // Connection pool settings
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
+  // Connection pool settings - use pooled connection for serverless
+  // Prisma will use DATABASE_URL_POOLED from schema.prisma by default
+  // Only override if you need a different connection string at runtime
 };
 
 // Read replica configuration
