@@ -20,8 +20,8 @@
  * - Alert generation for critical issues
  */
 
-import { Queue, Worker, type Job } from 'bullmq';
-import { redisConnection } from '@/lib/db/redis';
+import { type Job } from 'bullmq';
+import { createLazyQueue, createWorkerIfNotServerless } from '@/lib/queue/lazy-queue';
 import { prisma } from '@/lib/db';
 import { SuppressionListManager } from '@/lib/adapters/email/suppression-list';
 import { emailDeliverabilityService } from '@/lib/services/email/deliverability.service';
@@ -50,10 +50,9 @@ export interface ProcessingResult {
 const suppressionList = new SuppressionListManager();
 
 /**
- * Queue for email event processing
+ * Queue for email event processing (lazy-loaded)
  */
-export const emailEventsQueue = new Queue<EmailEventJobData>('email-events-processing', {
-  connection: redisConnection,
+export const emailEventsQueue = createLazyQueue<EmailEventJobData>('email-events-processing', {
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -72,117 +71,118 @@ export const emailEventsQueue = new Queue<EmailEventJobData>('email-events-proce
 });
 
 /**
- * Worker for processing email events
+ * Worker for processing email events (skip in serverless)
  */
-export const emailEventsWorker = new Worker<EmailEventJobData, ProcessingResult>(
-  'email-events-processing',
-  async (job: Job<EmailEventJobData>) => {
-    const { eventId, eventType, email, messageId, timestamp, metadata } = job.data;
+async function processEmailEvent(job: Job<EmailEventJobData>): Promise<ProcessingResult> {
+  const { eventId, eventType, email, messageId, timestamp, metadata } = job.data;
 
-    console.log(`[EmailEventsProcessor] Processing ${eventType} event for ${email} (ID: ${eventId})`);
+  console.log(`[EmailEventsProcessor] Processing ${eventType} event for ${email} (ID: ${eventId})`);
 
-    const actions: string[] = [];
-    const warnings: string[] = [];
+  const actions: string[] = [];
+  const warnings: string[] = [];
 
-    try {
-      // Check if event has already been processed (idempotency)
-      const event = await prisma.emailEvent.findUnique({
-        where: { id: eventId },
-        select: { id: true, metadata: true },
-      });
+  try {
+    // Check if event has already been processed (idempotency)
+    const event = await prisma.emailEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, metadata: true },
+    });
 
-      if (!event) {
-        throw new Error(`Event ${eventId} not found in database`);
-      }
+    if (!event) {
+      throw new Error(`Event ${eventId} not found in database`);
+    }
 
-      // Check if already processed
-      const alreadyProcessed = (event.metadata as any)?.processed === true;
-      if (alreadyProcessed) {
-        console.log(`[EmailEventsProcessor] Event ${eventId} already processed, skipping`);
-        return {
-          success: true,
-          eventId,
-          eventType,
-          actionsТaken: ['skipped-already-processed'],
-        };
-      }
-
-      // Route to specific processor based on event type
-      switch (eventType) {
-        case 'BOUNCED':
-          await processBounceEvent(job, event, actions, warnings);
-          break;
-
-        case 'COMPLAINED':
-          await processComplaintEvent(job, event, actions, warnings);
-          break;
-
-        case 'OPENED':
-          await processOpenEvent(job, event, actions);
-          break;
-
-        case 'CLICKED':
-          await processClickEvent(job, event, actions);
-          break;
-
-        case 'DELIVERED':
-          await processDeliveredEvent(job, event, actions);
-          break;
-
-        case 'SENT':
-          // Sent events are logged but don't require special processing
-          actions.push('logged-send-event');
-          break;
-
-        case 'FAILED':
-          await processFailedEvent(job, event, actions, warnings);
-          break;
-
-        default:
-          warnings.push(`Unknown event type: ${eventType}`);
-      }
-
-      // Mark event as processed
-      await prisma.emailEvent.update({
-        where: { id: eventId },
-        data: {
-          metadata: {
-            ...(event.metadata as object || {}),
-            processed: true,
-            processedAt: new Date().toISOString(),
-            processingJobId: job.id,
-          },
-        },
-      });
-
-      actions.push('marked-as-processed');
-
-      console.log(
-        `[EmailEventsProcessor] Successfully processed ${eventType} for ${email}`,
-        { actions, warnings: warnings.length > 0 ? warnings : undefined }
-      );
-
+    // Check if already processed
+    const alreadyProcessed = (event.metadata as any)?.processed === true;
+    if (alreadyProcessed) {
+      console.log(`[EmailEventsProcessor] Event ${eventId} already processed, skipping`);
       return {
         success: true,
         eventId,
         eventType,
-        actionsТaken: actions,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      };
-    } catch (error) {
-      console.error(`[EmailEventsProcessor] Error processing event ${eventId}:`, error);
-
-      return {
-        success: false,
-        eventId,
-        eventType,
-        actionsТaken: actions,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        actionsТaken: ['skipped-already-processed'],
       };
     }
-  },
+
+    // Route to specific processor based on event type
+    switch (eventType) {
+      case 'BOUNCED':
+        await processBounceEvent(job, event, actions, warnings);
+        break;
+
+      case 'COMPLAINED':
+        await processComplaintEvent(job, event, actions, warnings);
+        break;
+
+      case 'OPENED':
+        await processOpenEvent(job, event, actions);
+        break;
+
+      case 'CLICKED':
+        await processClickEvent(job, event, actions);
+        break;
+
+      case 'DELIVERED':
+        await processDeliveredEvent(job, event, actions);
+        break;
+
+      case 'SENT':
+        // Sent events are logged but don't require special processing
+        actions.push('logged-send-event');
+        break;
+
+      case 'FAILED':
+        await processFailedEvent(job, event, actions, warnings);
+        break;
+
+      default:
+        warnings.push(`Unknown event type: ${eventType}`);
+    }
+
+    // Mark event as processed
+    await prisma.emailEvent.update({
+      where: { id: eventId },
+      data: {
+        metadata: {
+          ...(event.metadata as object || {}),
+          processed: true,
+          processedAt: new Date().toISOString(),
+          processingJobId: job.id,
+        },
+      },
+    });
+
+    actions.push('marked-as-processed');
+
+    console.log(
+      `[EmailEventsProcessor] Successfully processed ${eventType} for ${email}`,
+      { actions, warnings: warnings.length > 0 ? warnings : undefined }
+    );
+
+    return {
+      success: true,
+      eventId,
+      eventType,
+      actionsТaken: actions,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  } catch (error) {
+    console.error(`[EmailEventsProcessor] Error processing event ${eventId}:`, error);
+
+    return {
+      success: false,
+      eventId,
+      eventType,
+      actionsТaken: actions,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+export const emailEventsWorker = createWorkerIfNotServerless<EmailEventJobData>(
+  'email-events-processing',
+  processEmailEvent,
   {
-    connection: redisConnection,
     concurrency: 10, // Process up to 10 events concurrently
   }
 );
@@ -503,25 +503,27 @@ export async function enqueueEmailEvent(eventData: EmailEventJobData): Promise<s
   return job.id || eventData.eventId;
 }
 
-// Worker event handlers
-emailEventsWorker.on('completed', (job, result) => {
-  if (result.warnings && result.warnings.length > 0) {
-    console.warn(
-      `[EmailEventsProcessor] Completed job ${job.id} with warnings:`,
-      result.warnings
+// Worker event handlers (only if worker was created)
+if (emailEventsWorker) {
+  emailEventsWorker.on('completed', (job, result) => {
+    if (result.warnings && result.warnings.length > 0) {
+      console.warn(
+        `[EmailEventsProcessor] Completed job ${job.id} with warnings:`,
+        result.warnings
+      );
+    }
+  });
+
+  emailEventsWorker.on('failed', (job, error) => {
+    console.error(
+      `[EmailEventsProcessor] Job ${job?.id} failed after ${job?.attemptsMade} attempts:`,
+      error
     );
-  }
-});
+  });
 
-emailEventsWorker.on('failed', (job, error) => {
-  console.error(
-    `[EmailEventsProcessor] Job ${job?.id} failed after ${job?.attemptsMade} attempts:`,
-    error
-  );
-});
+  emailEventsWorker.on('error', (error) => {
+    console.error('[EmailEventsProcessor] Worker error:', error);
+  });
 
-emailEventsWorker.on('error', (error) => {
-  console.error('[EmailEventsProcessor] Worker error:', error);
-});
-
-console.log('[EmailEventsProcessor] Email events processor worker initialized');
+  console.log('[EmailEventsProcessor] Email events processor worker initialized');
+}

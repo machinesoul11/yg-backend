@@ -5,8 +5,8 @@
  * Queued when a notification is created with immediate delivery required
  */
 
-import { Queue, Worker, Job } from 'bullmq';
-import { redisConnection } from '@/lib/db/redis';
+import { Job } from 'bullmq';
+import { createLazyQueue, createWorkerIfNotServerless } from '@/lib/queue/lazy-queue';
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
 import { NotificationEmailService } from '@/modules/system/services/notification-email.service';
@@ -17,11 +17,10 @@ interface NotificationDeliveryJobData {
 
 const QUEUE_NAME = 'notification-delivery';
 
-// Create queue
-export const notificationDeliveryQueue = new Queue<NotificationDeliveryJobData>(
+// Create lazy-loading queue (only connects when used)
+export const notificationDeliveryQueue = createLazyQueue<NotificationDeliveryJobData>(
   QUEUE_NAME,
   {
-    connection: redisConnection,
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -100,28 +99,29 @@ async function deliverNotification(job: Job<NotificationDeliveryJobData>) {
   }
 }
 
-// Create worker
-export const notificationDeliveryWorker = new Worker<NotificationDeliveryJobData>(
+// Create worker (skip in serverless environments)
+export const notificationDeliveryWorker = createWorkerIfNotServerless<NotificationDeliveryJobData>(
   QUEUE_NAME,
   deliverNotification,
   {
-    connection: redisConnection,
     concurrency: 10, // Process 10 notifications concurrently
   }
 );
 
-// Event listeners
-notificationDeliveryWorker.on('completed', (job, result) => {
-  console.log(`[NotificationDelivery] Job ${job.id} completed:`, result);
-});
+// Event listeners (only if worker was created)
+if (notificationDeliveryWorker) {
+  notificationDeliveryWorker.on('completed', (job, result) => {
+    console.log(`[NotificationDelivery] Job ${job.id} completed:`, result);
+  });
 
-notificationDeliveryWorker.on('failed', (job, error) => {
-  console.error(`[NotificationDelivery] Job ${job?.id} failed:`, error.message);
-});
+  notificationDeliveryWorker.on('failed', (job, error) => {
+    console.error(`[NotificationDelivery] Job ${job?.id} failed:`, error.message);
+  });
 
-notificationDeliveryWorker.on('error', (error) => {
-  console.error('[NotificationDelivery] Worker error:', error);
-});
+  notificationDeliveryWorker.on('error', (error) => {
+    console.error('[NotificationDelivery] Worker error:', error);
+  });
+}
 
 /**
  * Queue a notification for immediate delivery
