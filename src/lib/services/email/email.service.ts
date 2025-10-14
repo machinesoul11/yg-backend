@@ -145,18 +145,22 @@ export class EmailService {
     // For now, we'll simulate with a simple ID
     const jobId = `campaign-${Date.now()}`;
 
-    // Store campaign metadata in Redis for tracking
-    await redis.set(
-      `email-campaign:${jobId}`,
-      JSON.stringify({
-        recipientCount: filteredRecipients.length,
-        template: params.template,
-        status: 'queued',
-        createdAt: new Date().toISOString(),
-      }),
-      'EX',
-      86400 // 24 hours
-    );
+    // Store campaign metadata in Redis for tracking (optional - don't block on failure)
+    try {
+      await redis.set(
+        `email-campaign:${jobId}`,
+        JSON.stringify({
+          recipientCount: filteredRecipients.length,
+          template: params.template,
+          status: 'queued',
+          createdAt: new Date().toISOString(),
+        }),
+        'EX',
+        86400 // 24 hours
+      );
+    } catch (error) {
+      console.warn('[EmailService] Failed to cache campaign metadata');
+    }
 
     return { jobId };
   }
@@ -356,9 +360,13 @@ export class EmailService {
   // --- Private helper methods ---
 
   private async isEmailSuppressed(email: string): Promise<boolean> {
-    // Check cache first
-    const cached = await redis.get(`email-suppressed:${email}`);
-    if (cached) return cached === 'true';
+    // Try cache first, but don't block on Redis failures
+    try {
+      const cached = await redis.get(`email-suppressed:${email}`);
+      if (cached) return cached === 'true';
+    } catch (error) {
+      console.warn('[EmailService] Redis unavailable for suppression check, falling back to DB');
+    }
 
     const suppressed = await prisma.emailSuppression.findUnique({
       where: { email },
@@ -366,21 +374,29 @@ export class EmailService {
 
     const isSuppressed = !!suppressed;
 
-    // Cache result for 24 hours
-    await redis.set(
-      `email-suppressed:${email}`,
-      isSuppressed.toString(),
-      'EX',
-      86400
-    );
+    // Try to cache result, but don't block on failures
+    try {
+      await redis.set(
+        `email-suppressed:${email}`,
+        isSuppressed.toString(),
+        'EX',
+        86400
+      );
+    } catch (error) {
+      // Silently fail - caching is optional
+    }
 
     return isSuppressed;
   }
 
   private async getEmailPreferences(userId: string) {
-    // Check cache first
-    const cached = await redis.get(`email-prefs:${userId}`);
-    if (cached) return JSON.parse(cached);
+    // Try cache first, but don't block on Redis failures
+    try {
+      const cached = await redis.get(`email-prefs:${userId}`);
+      if (cached) return JSON.parse(cached);
+    } catch (error) {
+      console.warn('[EmailService] Redis unavailable for preferences check, falling back to DB');
+    }
 
     let prefs = await prisma.emailPreferences.findUnique({
       where: { userId },
@@ -393,8 +409,12 @@ export class EmailService {
       });
     }
 
-    // Cache for 1 hour
-    await redis.set(`email-prefs:${userId}`, JSON.stringify(prefs), 'EX', 3600);
+    // Try to cache, but don't block on failures
+    try {
+      await redis.set(`email-prefs:${userId}`, JSON.stringify(prefs), 'EX', 3600);
+    } catch (error) {
+      // Silently fail - caching is optional
+    }
 
     return prefs;
   }
@@ -454,8 +474,12 @@ export class EmailService {
       },
     });
 
-    // Invalidate cache
-    await redis.del(`email-suppressed:${params.email}`);
+    // Invalidate cache (optional - don't block on failure)
+    try {
+      await redis.del(`email-suppressed:${params.email}`);
+    } catch (error) {
+      // Silently fail - cache will expire naturally
+    }
   }
 
   private mapEventType(resendEventType: string): string {

@@ -49,12 +49,12 @@ export async function shutdownEmailWorkers(): Promise<void> {
   console.log('[EmailWorkers] Shutting down email workers...');
 
   const shutdownPromises = [
-    scheduledEmailWorker.close(),
-    emailRetryWorker.close(),
-    campaignWorker.close(),
-    deliverabilityMonitoringWorker.close(),
-    emailEventsWorker.close(),
-  ];
+    scheduledEmailWorker?.close(),
+    emailRetryWorker?.close(),
+    campaignWorker?.close(),
+    deliverabilityMonitoringWorker?.close(),
+    emailEventsWorker?.close(),
+  ].filter(Boolean);
 
   await Promise.allSettled(shutdownPromises);
 
@@ -63,35 +63,53 @@ export async function shutdownEmailWorkers(): Promise<void> {
 
 /**
  * Get health status of all email workers
+ * Returns null status for workers in serverless environments
  */
 export async function getEmailWorkersHealth(): Promise<{
   healthy: boolean;
-  workers: Record<string, { running: boolean; isPaused: boolean }>;
+  workers: Record<string, { running: boolean; isPaused: boolean } | null>;
 }> {
+  // Check if we're in serverless - if so, workers don't exist
+  const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+  
+  if (isServerless) {
+    return {
+      healthy: true, // Consider healthy in serverless (workers not needed)
+      workers: {
+        'scheduled-emails': null,
+        'email-retry': null,
+        'email-campaigns': null,
+        'deliverability-monitoring': null,
+        'email-events-processor': null,
+      },
+    };
+  }
+
   const workers = {
-    'scheduled-emails': {
+    'scheduled-emails': scheduledEmailWorker ? {
       running: await scheduledEmailWorker.isRunning(),
       isPaused: await scheduledEmailWorker.isPaused(),
-    },
-    'email-retry': {
+    } : null,
+    'email-retry': emailRetryWorker ? {
       running: await emailRetryWorker.isRunning(),
       isPaused: await emailRetryWorker.isPaused(),
-    },
-    'email-campaigns': {
+    } : null,
+    'email-campaigns': campaignWorker ? {
       running: await campaignWorker.isRunning(),
       isPaused: await campaignWorker.isPaused(),
-    },
-    'deliverability-monitoring': {
+    } : null,
+    'deliverability-monitoring': deliverabilityMonitoringWorker ? {
       running: await deliverabilityMonitoringWorker.isRunning(),
       isPaused: await deliverabilityMonitoringWorker.isPaused(),
-    },
-    'email-events-processor': {
+    } : null,
+    'email-events-processor': emailEventsWorker ? {
       running: await emailEventsWorker.isRunning(),
       isPaused: await emailEventsWorker.isPaused(),
-    },
+    } : null,
   };
 
-  const allRunning = Object.values(workers).every(w => w.running && !w.isPaused);
+  const runningWorkers = Object.values(workers).filter(w => w !== null);
+  const allRunning = runningWorkers.every(w => w && w.running && !w.isPaused);
 
   return {
     healthy: allRunning,
