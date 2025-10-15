@@ -14,6 +14,7 @@ import PasswordChanged from '../../../../emails/templates/PasswordChanged';
 import RoyaltyStatement from '../../../../emails/templates/RoyaltyStatement';
 import LicenseExpiry from '../../../../emails/templates/LicenseExpiry';
 import PayoutConfirmation from '../../../../emails/templates/PayoutConfirmation';
+import PayoutFailed from '../../../../emails/templates/PayoutFailed';
 import BrandVerificationRequest from '../../../../emails/templates/BrandVerificationRequest';
 import BrandWelcome from '../../../../emails/templates/BrandWelcome';
 import BrandVerificationComplete from '../../../../emails/templates/BrandVerificationComplete';
@@ -87,12 +88,21 @@ export interface LicenseExpiryProps {
 }
 
 export interface PayoutConfirmationProps {
-  creatorName: string;
+  userName: string;
+  amount: string;
+  currency: string;
+  period: string;
+  transferId: string;
+  estimatedArrival: string;
+}
+
+export interface PayoutFailedProps {
+  userName: string;
   amount: number;
   currency: string;
-  payoutMethod: string;
-  estimatedArrival: Date;
-  transactionId: string;
+  errorMessage: string;
+  actionSteps: string;
+  supportUrl: string;
 }
 
 export interface BrandVerificationRequestProps {
@@ -328,6 +338,10 @@ export const TEMPLATE_REGISTRY = {
     component: PayoutConfirmation,
     category: 'payouts',
   },
+  'payout-failed': {
+    component: PayoutFailed,
+    category: 'payouts',
+  },
   'brand-verification-request': {
     component: BrandVerificationRequest,
     category: 'system',
@@ -424,6 +438,7 @@ export interface TemplateVariablesMap {
   'royalty-statement': RoyaltyStatementProps;
   'license-expiry': LicenseExpiryProps;
   'payout-confirmation': PayoutConfirmationProps;
+  'payout-failed': PayoutFailedProps;
   'brand-verification-request': BrandVerificationRequestProps;
   'brand-welcome': BrandWelcomeProps;
   'brand-verification-complete': BrandVerificationCompleteProps;
@@ -518,6 +533,7 @@ function getRequiredFields(templateKey: TemplateKey): string[] {
     'royalty-statement': ['creatorName', 'periodStart', 'periodEnd', 'totalRoyalties', 'currency', 'statementUrl'],
     'license-expiry': ['licenseName', 'assetName', 'expiryDate', 'daysUntilExpiry'],
     'payout-confirmation': ['creatorName', 'amount', 'currency', 'payoutMethod', 'estimatedArrival', 'transactionId'],
+    'payout-failed': ['userName', 'amount', 'currency', 'errorMessage', 'actionSteps', 'supportUrl'],
     'brand-verification-request': ['brandName', 'submittedBy', 'submittedAt', 'reviewUrl'],
     'brand-welcome': ['brandName', 'primaryContactName', 'dashboardUrl'],
     'brand-verification-complete': ['brandName', 'verifiedAt', 'dashboardUrl'],

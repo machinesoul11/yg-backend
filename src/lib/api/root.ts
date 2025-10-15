@@ -10,6 +10,12 @@ import { ipAssetsRouter } from '@/modules/ip';
 import { ipOwnershipRouter } from '@/modules/ip/routers/ip-ownership.router';
 import { messagesRouter } from '@/modules/messages';
 import { licensesRouter } from '@/modules/licenses';
+import { payoutsRouter } from '@/modules/payouts';
+import { taxComplianceRouter } from '@/modules/tax-compliance/router';
+import { reportsRouter } from '@/modules/reports/router';
+import { blogRouter, blogSEORouter, contentOptimizationRouter } from '@/modules/blog';
+import { seoManagementRouter } from '@/modules/seo';
+import { postAnalyticsRouter } from '@/modules/analytics/routers/post-analytics.router';
 
 /**
  * This is the primary router for your server.
@@ -29,6 +35,14 @@ export const appRouter = createTRPCRouter({
   ipOwnership: ipOwnershipRouter,
   messages: messagesRouter,
   licenses: licensesRouter,
+  payouts: payoutsRouter,
+  taxCompliance: taxComplianceRouter,
+  reports: reportsRouter,
+  blog: blogRouter,
+  blogSEO: blogSEORouter,
+  contentOptimization: contentOptimizationRouter,
+  seo: seoManagementRouter,
+  postAnalytics: postAnalyticsRouter,
   // Add your routers here
   // Example:
   // royalties: royaltiesRouter,

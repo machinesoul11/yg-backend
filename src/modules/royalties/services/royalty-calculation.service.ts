@@ -786,4 +786,567 @@ export class RoyaltyCalculationService {
     // Invalidate cache
     await this.redis.del(`royalty_run:${runId}`);
   }
+
+  /**
+   * Rollback a royalty run to draft status
+   * Allows recalculation if errors are discovered after locking
+   * 
+   * This is a highly controlled operation that:
+   * - Requires elevated admin permissions
+   * - Cannot be performed if payments have been processed
+   * - Maintains complete audit trail
+   * - Optionally archives original calculation data
+   */
+  async rollbackRun(
+    runId: string,
+    reason: string,
+    userId: string,
+    archiveData: boolean = true
+  ): Promise<void> {
+    // Fetch the run with all related data
+    const run = await this.prisma.royaltyRun.findUnique({
+      where: { id: runId },
+      include: {
+        statements: {
+          include: {
+            lines: true,
+            payouts: true,
+          },
+        },
+      },
+    });
+
+    if (!run) {
+      throw new RoyaltyRunNotFoundError(runId);
+    }
+
+    // Validate rollback is allowed
+    await this.validateRollbackRun(run, userId);
+
+    // Capture original state for audit
+    const originalState = {
+      status: run.status,
+      lockedAt: run.lockedAt,
+      processedAt: run.processedAt,
+      totalRevenueCents: run.totalRevenueCents,
+      totalRoyaltiesCents: run.totalRoyaltiesCents,
+      statementCount: run.statements.length,
+      statements: run.statements.map((s) => ({
+        id: s.id,
+        creatorId: s.creatorId,
+        totalEarningsCents: s.totalEarningsCents,
+        status: s.status,
+        lineCount: s.lines.length,
+      })),
+    };
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Archive original data if requested
+        if (archiveData) {
+          await this.archiveRollbackData(tx, runId, originalState, reason);
+        }
+
+        // Delete all royalty lines for this run
+        await tx.royaltyLine.deleteMany({
+          where: {
+            royaltyStatement: {
+              royaltyRunId: runId,
+            },
+          },
+        });
+
+        // Delete all statements for this run
+        await tx.royaltyStatement.deleteMany({
+          where: {
+            royaltyRunId: runId,
+          },
+        });
+
+        // Reset the run to DRAFT status
+        await tx.royaltyRun.update({
+          where: { id: runId },
+          data: {
+            status: 'DRAFT',
+            lockedAt: null,
+            processedAt: null,
+            totalRevenueCents: 0,
+            totalRoyaltiesCents: 0,
+            notes: run.notes
+              ? `${run.notes}\n\n[ROLLBACK] ${new Date().toISOString()}: ${reason}\nOriginal calculation: ${run.statements.length} statements, $${(run.totalRevenueCents / 100).toFixed(2)} revenue`
+              : `[ROLLBACK] ${new Date().toISOString()}: ${reason}\nOriginal calculation: ${run.statements.length} statements, $${(run.totalRevenueCents / 100).toFixed(2)} revenue`,
+          },
+        });
+      });
+
+      // Log comprehensive audit event
+      await this.auditService.log({
+        userId,
+        action: 'royalty.run.rolled_back',
+        entityType: 'royalty_run',
+        entityId: runId,
+        before: originalState,
+        after: {
+          status: 'DRAFT',
+          reason,
+          rollbackTimestamp: new Date(),
+        },
+      });
+
+      // Invalidate all related caches
+      await this.redis.del(`royalty_run:${runId}`);
+      for (const statement of run.statements) {
+        await this.redis.del(`royalty_statement:${statement.id}`);
+      }
+
+      console.log(`[RoyaltyRollback] Successfully rolled back run ${runId}. Reason: ${reason}`);
+    } catch (error) {
+      const { RoyaltyRunRollbackError } = await import('../errors/royalty.errors');
+      throw new RoyaltyRunRollbackError(
+        error instanceof Error ? error.message : 'Unknown rollback error',
+        { runId, originalState, error }
+      );
+    }
+  }
+
+  /**
+   * Validate that a run can be rolled back
+   */
+  private async validateRollbackRun(run: any, userId: string): Promise<void> {
+    // Import error classes
+    const {
+      RoyaltyRunInvalidStateError,
+      RoyaltyRunAlreadyPaidError,
+      InsufficientRollbackPermissionsError,
+    } = await import('../errors/royalty.errors');
+
+    // Check if run is in a rollback-eligible state
+    if (run.status !== 'LOCKED' && run.status !== 'CALCULATED') {
+      throw new RoyaltyRunInvalidStateError(
+        run.status,
+        'LOCKED or CALCULATED'
+      );
+    }
+
+    // Check if any statements have been paid
+    const paidStatements = run.statements.filter(
+      (s: any) => s.status === 'PAID' || s.paidAt !== null
+    );
+    if (paidStatements.length > 0) {
+      throw new RoyaltyRunAlreadyPaidError(run.id);
+    }
+
+    // Check if any payouts have been processed
+    const hasPayouts = run.statements.some(
+      (s: any) => s.payouts && s.payouts.length > 0
+    );
+    if (hasPayouts) {
+      throw new RoyaltyRunAlreadyPaidError(run.id);
+    }
+
+    // Verify user has rollback permissions (ADMIN only)
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user || user.role !== 'ADMIN') {
+      throw new InsufficientRollbackPermissionsError(userId);
+    }
+  }
+
+  /**
+   * Archive rollback data for audit purposes
+   */
+  private async archiveRollbackData(
+    tx: any,
+    runId: string,
+    originalState: any,
+    reason: string
+  ): Promise<void> {
+    // Store in run notes field as structured data
+    const archiveEntry = {
+      timestamp: new Date().toISOString(),
+      reason,
+      originalState,
+      operation: 'rollback',
+    };
+
+    // You could also create a dedicated archive table if needed
+    // For now, we'll use the metadata/notes approach
+    const run = await tx.royaltyRun.findUnique({
+      where: { id: runId },
+    });
+
+    const existingNotes = run.notes || '';
+    const archiveSection = `\n\n--- ROLLBACK ARCHIVE ---\n${JSON.stringify(archiveEntry, null, 2)}\n--- END ARCHIVE ---`;
+
+    await tx.royaltyRun.update({
+      where: { id: runId },
+      data: {
+        notes: existingNotes + archiveSection,
+      },
+    });
+  }
+
+  /**
+   * Generate comprehensive validation report for a royalty run
+   * Helps administrators review calculations before locking
+   */
+  async getRunValidationReport(runId: string): Promise<{
+    runId: string;
+    status: string;
+    periodStart: Date;
+    periodEnd: Date;
+    isValid: boolean;
+    warnings: string[];
+    errors: string[];
+    summary: {
+      totalRevenueCents: number;
+      totalRoyaltiesCents: number;
+      statementCount: number;
+      licenseCount: number;
+      creatorCount: number;
+      disputedStatements: number;
+    };
+    breakdown: {
+      revenueByAsset: Array<{ assetId: string; assetTitle: string; revenueCents: number }>;
+      earningsByCreator: Array<{ creatorId: string; creatorName: string; earningsCents: number; status: string }>;
+      outliers: Array<{ type: string; message: string; details: any }>;
+    };
+    validationChecks: Array<{
+      check: string;
+      passed: boolean;
+      message?: string;
+    }>;
+  }> {
+    const run = await this.prisma.royaltyRun.findUnique({
+      where: { id: runId },
+      include: {
+        statements: {
+          include: {
+            creator: {
+              include: {
+                user: true,
+              },
+            },
+            lines: {
+              include: {
+                ipAsset: true,
+                license: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!run) {
+      throw new RoyaltyRunNotFoundError(runId);
+    }
+
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    const validationChecks: Array<{ check: string; passed: boolean; message?: string }> = [];
+
+    // Check 1: Mathematical consistency
+    const calculatedTotal = run.statements.reduce(
+      (sum, s) => sum + s.totalEarningsCents,
+      0
+    );
+    const mathematicallyConsistent = calculatedTotal === run.totalRoyaltiesCents;
+    validationChecks.push({
+      check: 'Mathematical Consistency',
+      passed: mathematicallyConsistent,
+      message: mathematicallyConsistent
+        ? 'Total royalties match sum of all statements'
+        : `Mismatch: Run total ${run.totalRoyaltiesCents} vs calculated ${calculatedTotal}`,
+    });
+    if (!mathematicallyConsistent) {
+      errors.push(
+        `Mathematical inconsistency detected: Run total (${run.totalRoyaltiesCents}) does not match sum of statements (${calculatedTotal})`
+      );
+    }
+
+    // Check 2: Ownership integrity
+    const uniqueAssets = new Set(run.statements.flatMap((s) => s.lines.map((l) => l.ipAssetId)));
+    let ownershipIntegrityPassed = true;
+    for (const assetId of uniqueAssets) {
+      if (assetId === 'CARRYOVER' || assetId === 'THRESHOLD_NOTE') continue;
+      
+      const ownerships = await this.prisma.ipOwnership.findMany({
+        where: {
+          ipAssetId: assetId,
+          startDate: { lte: run.periodEnd },
+          OR: [
+            { endDate: null },
+            { endDate: { gte: run.periodStart } },
+          ],
+        },
+      });
+      
+      const totalBps = ownerships.reduce((sum, o) => sum + o.shareBps, 0);
+      if (totalBps !== 10000) {
+        ownershipIntegrityPassed = false;
+        errors.push(
+          `Asset ${assetId} has incomplete ownership: ${totalBps} bps (should be 10000)`
+        );
+      }
+    }
+    validationChecks.push({
+      check: 'Ownership Integrity',
+      passed: ownershipIntegrityPassed,
+      message: ownershipIntegrityPassed
+        ? 'All assets have complete ownership allocation'
+        : 'Some assets have incomplete ownership splits',
+    });
+
+    // Check 3: Period boundary validation
+    const licensesOutsidePeriod = await this.prisma.license.count({
+      where: {
+        royaltyLines: {
+          some: {
+            royaltyStatement: {
+              royaltyRunId: runId,
+            },
+            OR: [
+              { periodStart: { lt: run.periodStart } },
+              { periodEnd: { gt: run.periodEnd } },
+            ],
+          },
+        },
+      },
+    });
+    validationChecks.push({
+      check: 'Period Boundary Validation',
+      passed: licensesOutsidePeriod === 0,
+      message:
+        licensesOutsidePeriod === 0
+          ? 'All line items within period boundaries'
+          : `${licensesOutsidePeriod} line items extend outside run period`,
+    });
+    if (licensesOutsidePeriod > 0) {
+      warnings.push(
+        `${licensesOutsidePeriod} royalty line items have dates extending outside the run period`
+      );
+    }
+
+    // Check 4: Disputed statements
+    const disputedStatements = run.statements.filter((s) => s.status === 'DISPUTED');
+    validationChecks.push({
+      check: 'Dispute Resolution',
+      passed: disputedStatements.length === 0,
+      message:
+        disputedStatements.length === 0
+          ? 'No disputed statements'
+          : `${disputedStatements.length} statements are disputed`,
+    });
+    if (disputedStatements.length > 0) {
+      errors.push(
+        `Cannot lock run: ${disputedStatements.length} statements are still disputed`
+      );
+    }
+
+    // Check 5: Negative amounts
+    const negativeStatements = run.statements.filter((s) => s.totalEarningsCents < 0);
+    validationChecks.push({
+      check: 'Non-negative Amounts',
+      passed: negativeStatements.length === 0,
+      message:
+        negativeStatements.length === 0
+          ? 'All statements have non-negative earnings'
+          : `${negativeStatements.length} statements have negative earnings`,
+    });
+    if (negativeStatements.length > 0) {
+      errors.push(
+        `${negativeStatements.length} statements have negative earnings which may indicate calculation errors`
+      );
+    }
+
+    // Build revenue by asset breakdown
+    const revenueByAsset = new Map<string, { title: string; revenue: number }>();
+    for (const statement of run.statements) {
+      for (const line of statement.lines) {
+        if (line.ipAssetId === 'CARRYOVER' || line.ipAssetId === 'THRESHOLD_NOTE') continue;
+        
+        const existing = revenueByAsset.get(line.ipAssetId);
+        if (existing) {
+          existing.revenue += line.revenueCents;
+        } else {
+          revenueByAsset.set(line.ipAssetId, {
+            title: line.ipAsset.title,
+            revenue: line.revenueCents,
+          });
+        }
+      }
+    }
+
+    // Build earnings by creator breakdown
+    const earningsByCreator = run.statements.map((s) => ({
+      creatorId: s.creatorId,
+      creatorName: s.creator.user.name || s.creator.user.email,
+      earningsCents: s.totalEarningsCents,
+      status: s.status,
+    }));
+
+    // Identify outliers
+    const outliers: Array<{ type: string; message: string; details: any }> = [];
+    
+    // High-earning outliers (statements > 3x median)
+    const medianEarnings = this.calculateMedian(
+      run.statements.map((s) => s.totalEarningsCents)
+    );
+    const highEarners = run.statements.filter(
+      (s) => s.totalEarningsCents > medianEarnings * 3
+    );
+    if (highEarners.length > 0) {
+      outliers.push({
+        type: 'high_earnings',
+        message: `${highEarners.length} creators earning >3x median`,
+        details: highEarners.map((s) => ({
+          creatorId: s.creatorId,
+          earningsCents: s.totalEarningsCents,
+          medianMultiple: (s.totalEarningsCents / medianEarnings).toFixed(2),
+        })),
+      });
+      warnings.push(
+        `${highEarners.length} creators have earnings >3x the median. Review for accuracy.`
+      );
+    }
+
+    // Zero revenue statements
+    const zeroRevenue = run.statements.filter((s) => s.totalEarningsCents === 0);
+    if (zeroRevenue.length > 0) {
+      outliers.push({
+        type: 'zero_revenue',
+        message: `${zeroRevenue.length} creators with zero earnings`,
+        details: zeroRevenue.map((s) => ({ creatorId: s.creatorId })),
+      });
+    }
+
+    // Unique license count
+    const uniqueLicenses = new Set(
+      run.statements.flatMap((s) =>
+        s.lines
+          .filter((l) => l.licenseId !== 'CARRYOVER' && l.licenseId !== 'THRESHOLD_NOTE')
+          .map((l) => l.licenseId)
+      )
+    );
+
+    return {
+      runId: run.id,
+      status: run.status,
+      periodStart: run.periodStart,
+      periodEnd: run.periodEnd,
+      isValid: errors.length === 0,
+      warnings,
+      errors,
+      summary: {
+        totalRevenueCents: run.totalRevenueCents,
+        totalRoyaltiesCents: run.totalRoyaltiesCents,
+        statementCount: run.statements.length,
+        licenseCount: uniqueLicenses.size,
+        creatorCount: run.statements.length,
+        disputedStatements: disputedStatements.length,
+      },
+      breakdown: {
+        revenueByAsset: Array.from(revenueByAsset.entries()).map(([assetId, data]) => ({
+          assetId,
+          assetTitle: data.title,
+          revenueCents: data.revenue,
+        })),
+        earningsByCreator,
+        outliers,
+      },
+      validationChecks,
+    };
+  }
+
+  /**
+   * Review a royalty run before locking
+   * Allows administrators to approve or reject calculations
+   */
+  async reviewRun(
+    runId: string,
+    approve: boolean,
+    reviewNotes: string | undefined,
+    userId: string
+  ): Promise<void> {
+    const run = await this.prisma.royaltyRun.findUnique({
+      where: { id: runId },
+    });
+
+    if (!run) {
+      throw new RoyaltyRunNotFoundError(runId);
+    }
+
+    if (run.status !== 'CALCULATED') {
+      throw new RoyaltyRunInvalidStateError(run.status, 'CALCULATED');
+    }
+
+    // If approved, automatically lock the run
+    if (approve) {
+      await this.lockRun(runId, userId);
+      
+      await this.auditService.log({
+        userId,
+        action: 'royalty.run.reviewed_and_approved',
+        entityType: 'royalty_run',
+        entityId: runId,
+        after: {
+          approved: true,
+          reviewNotes,
+          reviewedAt: new Date(),
+        },
+      });
+
+      // Update notes with review information
+      await this.prisma.royaltyRun.update({
+        where: { id: runId },
+        data: {
+          notes: run.notes
+            ? `${run.notes}\n\n[REVIEWED & APPROVED] ${new Date().toISOString()}\n${reviewNotes || 'No notes provided'}`
+            : `[REVIEWED & APPROVED] ${new Date().toISOString()}\n${reviewNotes || 'No notes provided'}`,
+        },
+      });
+    } else {
+      // If rejected, add review notes but don't change status
+      await this.auditService.log({
+        userId,
+        action: 'royalty.run.reviewed_and_rejected',
+        entityType: 'royalty_run',
+        entityId: runId,
+        after: {
+          approved: false,
+          reviewNotes,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await this.prisma.royaltyRun.update({
+        where: { id: runId },
+        data: {
+          notes: run.notes
+            ? `${run.notes}\n\n[REVIEWED & REJECTED] ${new Date().toISOString()}\n${reviewNotes || 'No notes provided'}\nAction required: Address issues and recalculate`
+            : `[REVIEWED & REJECTED] ${new Date().toISOString()}\n${reviewNotes || 'No notes provided'}\nAction required: Address issues and recalculate`,
+        },
+      });
+    }
+  }
+
+  /**
+   * Calculate median value from an array of numbers
+   */
+  private calculateMedian(values: number[]): number {
+    if (values.length === 0) return 0;
+    
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    
+    if (sorted.length % 2 === 0) {
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      return sorted[mid];
+    }
+  }
 }

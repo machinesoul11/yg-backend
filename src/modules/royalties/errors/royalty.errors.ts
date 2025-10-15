@@ -107,6 +107,45 @@ export class RoyaltyCalculationError extends TRPCError {
 }
 
 /**
+ * Royalty Run Already Paid Error
+ * Prevents rollback of runs that have been paid out
+ */
+export class RoyaltyRunAlreadyPaidError extends TRPCError {
+  constructor(runId: string) {
+    super({
+      code: 'PRECONDITION_FAILED',
+      message: `Cannot rollback run ${runId} because payments have already been processed. Rollback is only allowed before payout.`,
+    });
+  }
+}
+
+/**
+ * Royalty Run Rollback Error
+ * General error for rollback operations
+ */
+export class RoyaltyRunRollbackError extends TRPCError {
+  constructor(message: string, details?: any) {
+    super({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: `Rollback failed: ${message}`,
+      cause: details,
+    });
+  }
+}
+
+/**
+ * Insufficient Rollback Permissions Error
+ */
+export class InsufficientRollbackPermissionsError extends TRPCError {
+  constructor(userId: string) {
+    super({
+      code: 'FORBIDDEN',
+      message: `User ${userId} does not have permission to rollback royalty runs. This operation requires ADMIN role.`,
+    });
+  }
+}
+
+/**
  * Unresolved Disputes Error
  */
 export class UnresolvedDisputesError extends TRPCError {

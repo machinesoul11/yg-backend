@@ -1,0 +1,818 @@
+/**
+ * Excel Export Service
+ * 
+ * Generates professionally formatted Excel files with multiple worksheets,
+ * styling, formulas, and charts for financial data analysis.
+ */
+
+import { PrismaClient } from '@prisma/client';
+import * as XLSX from 'xlsx';
+import { format } from 'date-fns';
+
+export interface ExcelExportConfig {
+  reportType: 'royalty_statements' | 'transaction_ledger' | 'creator_earnings' | 'platform_revenue' | 'payout_summary';
+  dateRange: {
+    startDate: Date;
+    endDate: Date;
+  };
+  filters?: {
+    creatorIds?: string[];
+    brandIds?: string[];
+    assetTypes?: string[];
+    licenseTypes?: string[];
+    statuses?: string[];
+  };
+  includeCharts?: boolean;
+  includeSummary?: boolean;
+}
+
+export interface ExcelWorksheet {
+  name: string;
+  data: any[][];
+  styling?: {
+    headerStyle?: XLSX.CellStyle;
+    dataStyle?: XLSX.CellStyle;
+    currencyColumns?: number[];
+    percentageColumns?: number[];
+    dateColumns?: number[];
+  };
+}
+
+export class ExcelExportService {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  /**
+   * Generate Excel workbook for the specified data type
+   */
+  async generateExcel(config: ExcelExportConfig): Promise<Buffer> {
+    const workbook = XLSX.utils.book_new();
+    
+    // Generate main data worksheet
+    const mainWorksheet = await this.generateMainWorksheet(config);
+    XLSX.utils.book_append_sheet(workbook, mainWorksheet.sheet, mainWorksheet.name);
+
+    // Generate summary worksheet if requested
+    if (config.includeSummary) {
+      const summaryWorksheet = await this.generateSummaryWorksheet(config);
+      XLSX.utils.book_append_sheet(workbook, summaryWorksheet.sheet, summaryWorksheet.name);
+    }
+
+    // Generate metadata worksheet
+    const metadataWorksheet = this.generateMetadataWorksheet(config);
+    XLSX.utils.book_append_sheet(workbook, metadataWorksheet, 'Metadata');
+
+    // Convert to buffer
+    const buffer = XLSX.write(workbook, { 
+      type: 'buffer', 
+      bookType: 'xlsx',
+      cellStyles: true
+    });
+
+    return buffer;
+  }
+
+  /**
+   * Generate main data worksheet
+   */
+  private async generateMainWorksheet(config: ExcelExportConfig): Promise<{ sheet: XLSX.WorkSheet; name: string }> {
+    let data: any[][];
+    let worksheetName: string;
+
+    switch (config.reportType) {
+      case 'royalty_statements':
+        data = await this.generateRoyaltyStatementsData(config);
+        worksheetName = 'Royalty Statements';
+        break;
+      case 'transaction_ledger':
+        data = await this.generateTransactionLedgerData(config);
+        worksheetName = 'Transaction Ledger';
+        break;
+      case 'creator_earnings':
+        data = await this.generateCreatorEarningsData(config);
+        worksheetName = 'Creator Earnings';
+        break;
+      case 'platform_revenue':
+        data = await this.generatePlatformRevenueData(config);
+        worksheetName = 'Platform Revenue';
+        break;
+      case 'payout_summary':
+        data = await this.generatePayoutSummaryData(config);
+        worksheetName = 'Payout Summary';
+        break;
+      default:
+        throw new Error(`Unsupported report type: ${config.reportType}`);
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    
+    // Apply styling
+    this.applyWorksheetStyling(worksheet, config.reportType);
+    
+    // Set column widths
+    this.setColumnWidths(worksheet, data[0]?.length || 0);
+    
+    // Add filters to header row
+    if (data.length > 1) {
+      worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({
+        s: { c: 0, r: 0 },
+        e: { c: data[0].length - 1, r: data.length - 1 }
+      })};
+    }
+
+    return { sheet: worksheet, name: worksheetName };
+  }
+
+  /**
+   * Generate summary worksheet
+   */
+  private async generateSummaryWorksheet(config: ExcelExportConfig): Promise<{ sheet: XLSX.WorkSheet; name: string }> {
+    const summaryData = await this.generateSummaryData(config);
+    const worksheet = XLSX.utils.aoa_to_sheet(summaryData);
+    
+    // Apply summary styling
+    this.applySummaryWorksheetStyling(worksheet);
+    this.setColumnWidths(worksheet, summaryData[0]?.length || 0);
+
+    return { sheet: worksheet, name: 'Summary' };
+  }
+
+  /**
+   * Generate metadata worksheet
+   */
+  private generateMetadataWorksheet(config: ExcelExportConfig): XLSX.WorkSheet {
+    const metadata = [
+      ['Report Metadata'],
+      [''],
+      ['Report Type', config.reportType.replace('_', ' ').toUpperCase()],
+      ['Generated At', format(new Date(), 'yyyy-MM-dd HH:mm:ss')],
+      ['Date Range', `${format(config.dateRange.startDate, 'yyyy-MM-dd')} to ${format(config.dateRange.endDate, 'yyyy-MM-dd')}`],
+      ['Filters Applied', config.filters ? JSON.stringify(config.filters) : 'None'],
+      [''],
+      ['Notes'],
+      ['- All monetary amounts are in USD'],
+      ['- Dates are in YYYY-MM-DD format'],
+      ['- This report was generated by YesGoddess Platform'],
+      ['- For questions, contact support@yesgoddess.com']
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(metadata);
+    this.setColumnWidths(worksheet, 2);
+    
+    return worksheet;
+  }
+
+  /**
+   * Generate royalty statements data
+   */
+  private async generateRoyaltyStatementsData(config: ExcelExportConfig): Promise<any[][]> {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    if (config.filters?.creatorIds?.length) {
+      whereClause.creatorId = { in: config.filters.creatorIds };
+    }
+    if (config.filters?.statuses?.length) {
+      whereClause.status = { in: config.filters.statuses };
+    }
+
+    const statements = await this.prisma.royaltyStatement.findMany({
+      where: whereClause,
+      include: {
+        creator: {
+          include: {
+            user: true
+          }
+        },
+        royaltyRun: true,
+        royaltyLines: {
+          include: {
+            ipAsset: true,
+            license: {
+              include: {
+                brand: {
+                  include: {
+                    user: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { royaltyRun: { periodStart: 'desc' } },
+        { creator: { user: { name: 'asc' } } }
+      ]
+    });
+
+    const headers = [
+      'Statement ID',
+      'Creator Name',
+      'Creator Email',
+      'Period Start',
+      'Period End',
+      'Asset Title',
+      'Asset Type',
+      'Brand Name',
+      'License Type',
+      'Revenue (USD)',
+      'Ownership Share (%)',
+      'Calculated Royalty (USD)',
+      'Statement Status',
+      'Statement Total (USD)',
+      'Created At',
+      'Reviewed At',
+      'Paid At'
+    ];
+
+    const data = [headers];
+    
+    for (const statement of statements) {
+      for (const line of statement.royaltyLines) {
+        data.push([
+          statement.id,
+          statement.creator.stageName || statement.creator.user.name || 'Unknown',
+          statement.creator.user.email,
+          format(statement.royaltyRun.periodStart, 'yyyy-MM-dd'),
+          format(statement.royaltyRun.periodEnd, 'yyyy-MM-dd'),
+          line.ipAsset.title,
+          line.ipAsset.type,
+          line.license.brand.displayName || line.license.brand.user.name || 'Unknown',
+          line.license.licenseType,
+          line.revenueCents / 100,
+          line.shareBps / 100,
+          line.calculatedRoyaltyCents / 100,
+          statement.status,
+          statement.totalEarningsCents / 100,
+          format(statement.createdAt, 'yyyy-MM-dd HH:mm:ss'),
+          statement.reviewedAt ? format(statement.reviewedAt, 'yyyy-MM-dd HH:mm:ss') : '',
+          statement.paidAt ? format(statement.paidAt, 'yyyy-MM-dd HH:mm:ss') : ''
+        ]);
+      }
+    }
+
+    return data;
+  }
+
+  /**
+   * Generate transaction ledger data
+   */
+  private async generateTransactionLedgerData(config: ExcelExportConfig): Promise<any[][]> {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    if (config.filters?.brandIds?.length) {
+      whereClause.brandId = { in: config.filters.brandIds };
+    }
+    if (config.filters?.licenseTypes?.length) {
+      whereClause.licenseType = { in: config.filters.licenseTypes };
+    }
+
+    const licenses = await this.prisma.license.findMany({
+      where: whereClause,
+      include: {
+        brand: {
+          include: {
+            user: true
+          }
+        },
+        ipAsset: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const headers = [
+      'Transaction ID',
+      'Transaction Date',
+      'Transaction Type',
+      'Brand Name',
+      'Brand Email',
+      'Asset Title',
+      'Asset Type',
+      'License Type',
+      'License Fee (USD)',
+      'License Status',
+      'License Start',
+      'License End',
+      'Usage Rights',
+      'Geographic Scope'
+    ];
+
+    const data = [headers];
+    
+    licenses.forEach(license => {
+      data.push([
+        license.id,
+        format(license.createdAt, 'yyyy-MM-dd'),
+        'License Fee',
+        license.brand.displayName || license.brand.user.name || 'Unknown',
+        license.brand.user.email,
+        license.ipAsset.title,
+        license.ipAsset.type,
+        license.licenseType,
+        license.feeCents / 100,
+        license.status,
+        format(license.startDate, 'yyyy-MM-dd'),
+        format(license.endDate, 'yyyy-MM-dd'),
+        license.usageRights,
+        license.geographicScope
+      ]);
+    });
+
+    return data;
+  }
+
+  /**
+   * Generate creator earnings data
+   */
+  private async generateCreatorEarningsData(config: ExcelExportConfig): Promise<any[][]> {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    if (config.filters?.creatorIds?.length) {
+      whereClause.creatorId = { in: config.filters.creatorIds };
+    }
+
+    const statements = await this.prisma.royaltyStatement.findMany({
+      where: whereClause,
+      include: {
+        creator: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
+    // Group by creator
+    const creatorEarnings = new Map<string, {
+      creator: any;
+      totalEarnings: number;
+      paidEarnings: number;
+      pendingEarnings: number;
+      statementCount: number;
+      firstPayment: Date | null;
+      lastPayment: Date | null;
+    }>();
+
+    statements.forEach(statement => {
+      const key = statement.creatorId;
+      const existing = creatorEarnings.get(key);
+      
+      if (existing) {
+        existing.totalEarnings += statement.totalEarningsCents;
+        existing.statementCount += 1;
+        
+        if (statement.status === 'PAID') {
+          existing.paidEarnings += statement.totalEarningsCents;
+          if (statement.paidAt) {
+            if (!existing.firstPayment || statement.paidAt < existing.firstPayment) {
+              existing.firstPayment = statement.paidAt;
+            }
+            if (!existing.lastPayment || statement.paidAt > existing.lastPayment) {
+              existing.lastPayment = statement.paidAt;
+            }
+          }
+        } else {
+          existing.pendingEarnings += statement.totalEarningsCents;
+        }
+      } else {
+        creatorEarnings.set(key, {
+          creator: statement.creator,
+          totalEarnings: statement.totalEarningsCents,
+          paidEarnings: statement.status === 'PAID' ? statement.totalEarningsCents : 0,
+          pendingEarnings: statement.status !== 'PAID' ? statement.totalEarningsCents : 0,
+          statementCount: 1,
+          firstPayment: statement.status === 'PAID' ? statement.paidAt : null,
+          lastPayment: statement.status === 'PAID' ? statement.paidAt : null
+        });
+      }
+    });
+
+    const headers = [
+      'Creator Name',
+      'Creator Email',
+      'Total Earnings (USD)',
+      'Paid Earnings (USD)',
+      'Pending Earnings (USD)',
+      'Statement Count',
+      'First Payment Date',
+      'Last Payment Date',
+      'Average Per Statement (USD)'
+    ];
+
+    const data = [headers];
+    
+    Array.from(creatorEarnings.values()).forEach(earning => {
+      data.push([
+        earning.creator.stageName || earning.creator.user.name || 'Unknown',
+        earning.creator.user.email,
+        earning.totalEarnings / 100,
+        earning.paidEarnings / 100,
+        earning.pendingEarnings / 100,
+        earning.statementCount,
+        earning.firstPayment ? format(earning.firstPayment, 'yyyy-MM-dd') : '',
+        earning.lastPayment ? format(earning.lastPayment, 'yyyy-MM-dd') : '',
+        (earning.totalEarnings / earning.statementCount) / 100
+      ]);
+    });
+
+    return data;
+  }
+
+  /**
+   * Generate platform revenue data
+   */
+  private async generatePlatformRevenueData(config: ExcelExportConfig): Promise<any[][]> {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    if (config.filters?.licenseTypes?.length) {
+      whereClause.licenseType = { in: config.filters.licenseTypes };
+    }
+
+    const licenses = await this.prisma.license.findMany({
+      where: whereClause,
+      include: {
+        ipAsset: true,
+        brand: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Group by month and asset type
+    const monthlyRevenue = new Map<string, Map<string, {
+      revenue: number;
+      licenseCount: number;
+      brandCount: Set<string>;
+    }>>();
+
+    licenses.forEach(license => {
+      const monthKey = format(license.createdAt, 'yyyy-MM');
+      const assetType = license.ipAsset.type;
+      
+      if (!monthlyRevenue.has(monthKey)) {
+        monthlyRevenue.set(monthKey, new Map());
+      }
+      
+      const monthData = monthlyRevenue.get(monthKey)!;
+      
+      if (!monthData.has(assetType)) {
+        monthData.set(assetType, {
+          revenue: 0,
+          licenseCount: 0,
+          brandCount: new Set()
+        });
+      }
+      
+      const typeData = monthData.get(assetType)!;
+      typeData.revenue += license.feeCents;
+      typeData.licenseCount += 1;
+      typeData.brandCount.add(license.brandId);
+    });
+
+    const headers = [
+      'Month',
+      'Asset Type',
+      'Revenue (USD)',
+      'License Count',
+      'Unique Brands',
+      'Average License Value (USD)'
+    ];
+
+    const data = [headers];
+    
+    // Sort months
+    const sortedMonths = Array.from(monthlyRevenue.keys()).sort();
+    
+    sortedMonths.forEach(month => {
+      const monthData = monthlyRevenue.get(month)!;
+      const sortedAssetTypes = Array.from(monthData.keys()).sort();
+      
+      sortedAssetTypes.forEach(assetType => {
+        const typeData = monthData.get(assetType)!;
+        data.push([
+          month,
+          assetType,
+          typeData.revenue / 100,
+          typeData.licenseCount,
+          typeData.brandCount.size,
+          (typeData.revenue / typeData.licenseCount) / 100
+        ]);
+      });
+    });
+
+    return data;
+  }
+
+  /**
+   * Generate payout summary data
+   */
+  private async generatePayoutSummaryData(config: ExcelExportConfig): Promise<any[][]> {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    if (config.filters?.creatorIds?.length) {
+      whereClause.creatorId = { in: config.filters.creatorIds };
+    }
+    if (config.filters?.statuses?.length) {
+      whereClause.status = { in: config.filters.statuses };
+    }
+
+    const payouts = await this.prisma.payout.findMany({
+      where: whereClause,
+      include: {
+        creator: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const headers = [
+      'Payout ID',
+      'Creator Name',
+      'Creator Email',
+      'Amount (USD)',
+      'Currency',
+      'Status',
+      'Method',
+      'Transaction Reference',
+      'Created At',
+      'Processed At',
+      'Failed At',
+      'Failure Reason'
+    ];
+
+    const data = [headers];
+    
+    payouts.forEach(payout => {
+      data.push([
+        payout.id,
+        payout.creator.stageName || payout.creator.user.name || 'Unknown',
+        payout.creator.user.email,
+        payout.amountCents / 100,
+        payout.currency,
+        payout.status,
+        payout.method,
+        payout.transactionReference || '',
+        format(payout.createdAt, 'yyyy-MM-dd HH:mm:ss'),
+        payout.processedAt ? format(payout.processedAt, 'yyyy-MM-dd HH:mm:ss') : '',
+        payout.failedAt ? format(payout.failedAt, 'yyyy-MM-dd HH:mm:ss') : '',
+        payout.failureReason || ''
+      ]);
+    });
+
+    return data;
+  }
+
+  /**
+   * Generate summary data for summary worksheet
+   */
+  private async generateSummaryData(config: ExcelExportConfig): Promise<any[][]> {
+    const periodLabel = `${format(config.dateRange.startDate, 'MMM dd, yyyy')} - ${format(config.dateRange.endDate, 'MMM dd, yyyy')}`;
+    
+    const summaryData = [
+      ['Financial Report Summary'],
+      [''],
+      ['Report Period', periodLabel],
+      ['Report Type', config.reportType.replace('_', ' ').toUpperCase()],
+      ['Generated At', format(new Date(), 'MMM dd, yyyy HH:mm')],
+      [''],
+      ['Key Metrics', '']
+    ];
+
+    // Add specific metrics based on report type
+    switch (config.reportType) {
+      case 'royalty_statements':
+        const statementMetrics = await this.getRoyaltyStatementMetrics(config);
+        summaryData.push(
+          ['Total Statements', statementMetrics.totalStatements],
+          ['Total Earnings (USD)', statementMetrics.totalEarnings],
+          ['Paid Statements', statementMetrics.paidStatements],
+          ['Pending Statements', statementMetrics.pendingStatements],
+          ['Unique Creators', statementMetrics.uniqueCreators]
+        );
+        break;
+      
+      case 'platform_revenue':
+        const revenueMetrics = await this.getPlatformRevenueMetrics(config);
+        summaryData.push(
+          ['Total Revenue (USD)', revenueMetrics.totalRevenue],
+          ['Total Licenses', revenueMetrics.totalLicenses],
+          ['Unique Brands', revenueMetrics.uniqueBrands],
+          ['Average License Value (USD)', revenueMetrics.averageLicenseValue]
+        );
+        break;
+    }
+
+    return summaryData;
+  }
+
+  /**
+   * Get royalty statement metrics for summary
+   */
+  private async getRoyaltyStatementMetrics(config: ExcelExportConfig) {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    const statements = await this.prisma.royaltyStatement.findMany({
+      where: whereClause,
+      select: {
+        totalEarningsCents: true,
+        status: true,
+        creatorId: true
+      }
+    });
+
+    const totalStatements = statements.length;
+    const totalEarnings = statements.reduce((sum, s) => sum + s.totalEarningsCents, 0) / 100;
+    const paidStatements = statements.filter(s => s.status === 'PAID').length;
+    const pendingStatements = statements.filter(s => s.status !== 'PAID').length;
+    const uniqueCreators = new Set(statements.map(s => s.creatorId)).size;
+
+    return {
+      totalStatements,
+      totalEarnings,
+      paidStatements,
+      pendingStatements,
+      uniqueCreators
+    };
+  }
+
+  /**
+   * Get platform revenue metrics for summary
+   */
+  private async getPlatformRevenueMetrics(config: ExcelExportConfig) {
+    const whereClause: any = {
+      createdAt: {
+        gte: config.dateRange.startDate,
+        lte: config.dateRange.endDate
+      }
+    };
+
+    const licenses = await this.prisma.license.findMany({
+      where: whereClause,
+      select: {
+        feeCents: true,
+        brandId: true
+      }
+    });
+
+    const totalLicenses = licenses.length;
+    const totalRevenue = licenses.reduce((sum, l) => sum + l.feeCents, 0) / 100;
+    const uniqueBrands = new Set(licenses.map(l => l.brandId)).size;
+    const averageLicenseValue = totalRevenue / totalLicenses;
+
+    return {
+      totalRevenue,
+      totalLicenses,
+      uniqueBrands,
+      averageLicenseValue
+    };
+  }
+
+  /**
+   * Apply styling to worksheet
+   */
+  private applyWorksheetStyling(worksheet: XLSX.WorkSheet, reportType: string) {
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    
+    // Style header row
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+      if (!worksheet[cellAddress]) continue;
+      
+      worksheet[cellAddress].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "0A0A0A" } }, // VOID color
+        alignment: { horizontal: "center", vertical: "center" },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        }
+      };
+    }
+
+    // Style currency columns
+    const currencyColumns = this.getCurrencyColumns(reportType);
+    currencyColumns.forEach(col => {
+      for (let row = 1; row <= range.e.r; row++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!worksheet[cellAddress]) continue;
+        
+        worksheet[cellAddress].z = '$#,##0.00';
+      }
+    });
+
+    // Add alternating row colors
+    for (let row = 1; row <= range.e.r; row++) {
+      const fillColor = row % 2 === 0 ? "F5F5F5" : "FFFFFF";
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!worksheet[cellAddress]) continue;
+        
+        if (!worksheet[cellAddress].s) worksheet[cellAddress].s = {};
+        worksheet[cellAddress].s.fill = { fgColor: { rgb: fillColor } };
+      }
+    }
+  }
+
+  /**
+   * Apply styling to summary worksheet
+   */
+  private applySummaryWorksheetStyling(worksheet: XLSX.WorkSheet) {
+    // Style title
+    if (worksheet['A1']) {
+      worksheet['A1'].s = {
+        font: { bold: true, size: 16, color: { rgb: "0A0A0A" } },
+        alignment: { horizontal: "center" }
+      };
+    }
+
+    // Style section headers
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    for (let row = 0; row <= range.e.r; row++) {
+      const cellA = worksheet[XLSX.utils.encode_cell({ r: row, c: 0 })];
+      if (cellA && typeof cellA.v === 'string' && cellA.v.includes('Metrics')) {
+        cellA.s = {
+          font: { bold: true, color: { rgb: "0A0A0A" } },
+          fill: { fgColor: { rgb: "B8A888" } } // ALTAR color
+        };
+      }
+    }
+  }
+
+  /**
+   * Get currency column indices for a report type
+   */
+  private getCurrencyColumns(reportType: string): number[] {
+    switch (reportType) {
+      case 'royalty_statements':
+        return [9, 11, 13]; // Revenue, Calculated Royalty, Statement Total
+      case 'transaction_ledger':
+        return [8]; // License Fee
+      case 'creator_earnings':
+        return [2, 3, 4, 8]; // Total, Paid, Pending, Average
+      case 'platform_revenue':
+        return [2, 5]; // Revenue, Average License Value
+      case 'payout_summary':
+        return [3]; // Amount
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * Set column widths based on content
+   */
+  private setColumnWidths(worksheet: XLSX.WorkSheet, columnCount: number) {
+    const columnWidths = [];
+    
+    for (let i = 0; i < columnCount; i++) {
+      // Default width, adjust based on typical content
+      let width = 15;
+      
+      // Specific adjustments for common column types
+      if (i === 0) width = 20; // ID columns
+      else if (i === 1 || i === 2) width = 25; // Name/email columns
+      else if (i >= columnCount - 3) width = 20; // Date columns typically at end
+      
+      columnWidths.push({ width });
+    }
+    
+    worksheet['!cols'] = columnWidths;
+  }
+}

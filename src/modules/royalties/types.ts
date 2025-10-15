@@ -196,3 +196,72 @@ export interface OwnershipSplitResult {
   calculatedRoyaltyCents: number;
   roundingAdjustmentCents: number;
 }
+
+/**
+ * Royalty Run Validation Report
+ */
+export interface RoyaltyRunValidationReport {
+  runId: string;
+  status: string;
+  periodStart: Date;
+  periodEnd: Date;
+  isValid: boolean;
+  warnings: string[];
+  errors: string[];
+  summary: {
+    totalRevenueCents: number;
+    totalRoyaltiesCents: number;
+    statementCount: number;
+    licenseCount: number;
+    creatorCount: number;
+    disputedStatements: number;
+  };
+  breakdown: {
+    revenueByAsset: Array<{
+      assetId: string;
+      assetTitle: string;
+      revenueCents: number;
+    }>;
+    earningsByCreator: Array<{
+      creatorId: string;
+      creatorName: string;
+      earningsCents: number;
+      status: string;
+    }>;
+    outliers: Array<{
+      type: string;
+      message: string;
+      details: any;
+    }>;
+  };
+  validationChecks: Array<{
+    check: string;
+    passed: boolean;
+    message?: string;
+  }>;
+}
+
+/**
+ * Rollback Audit Entry
+ */
+export interface RollbackAuditEntry {
+  timestamp: string;
+  reason: string;
+  originalState: {
+    status: string;
+    lockedAt: Date | null;
+    processedAt: Date | null;
+    totalRevenueCents: number;
+    totalRoyaltiesCents: number;
+    statementCount: number;
+    statements: Array<{
+      id: string;
+      creatorId: string;
+      totalEarningsCents: number;
+      status: string;
+      lineCount: number;
+    }>;
+  };
+  operation: 'rollback';
+  performedBy: string;
+}

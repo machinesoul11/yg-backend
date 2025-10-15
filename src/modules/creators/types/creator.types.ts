@@ -197,12 +197,56 @@ export interface StripeAccountStatusResponse {
 }
 
 /**
- * Storage Upload URL Response
+ * Stripe Account Capability Response
  */
-export interface StorageUploadUrlResponse {
-  uploadUrl: string;
-  key: string;
-  expiresAt: number;
+export interface StripeCapabilityResponse {
+  capability: string;
+  enabled: boolean;
+}
+
+/**
+ * Stripe Account Requirement
+ */
+export interface StripeAccountRequirement {
+  fieldName: string;
+  requirementType: 'currently_due' | 'eventually_due' | 'past_due' | 'pending_verification';
+  deadline: Date | null;
+  errorCode: string | null;
+  errorReason: string | null;
+  description: string;
+}
+
+/**
+ * Categorized Stripe Account Requirements
+ */
+export interface CategorizedRequirements {
+  hasRequirements: boolean;
+  requirements: StripeAccountRequirement[];
+  categorized: {
+    currentlyDue: StripeAccountRequirement[];
+    eventuallyDue: StripeAccountRequirement[];
+    pastDue: StripeAccountRequirement[];
+    pendingVerification: StripeAccountRequirement[];
+  };
+}
+
+/**
+ * Stripe Onboarding Session
+ */
+export interface StripeOnboardingSession {
+  id: string;
+  accountLinkUrl: string;
+  expiresAt: Date;
+  completedAt: Date | null;
+  createdAt: Date;
+}
+
+/**
+ * Stripe Account Update Response
+ */
+export interface StripeAccountUpdateResponse {
+  success: boolean;
+  message: string;
 }
 
 /**

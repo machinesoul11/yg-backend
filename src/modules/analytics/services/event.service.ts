@@ -236,6 +236,8 @@ export class EventService {
       [ENTITY_TYPES.PROJECT]: { projectId: entityId },
       [ENTITY_TYPES.ASSET]: { ipAssetId: entityId },
       [ENTITY_TYPES.LICENSE]: { licenseId: entityId },
+      [ENTITY_TYPES.POST]: { postId: entityId },
+      [ENTITY_TYPES.CATEGORY]: { postId: entityId }, // Categories tracked via posts
     };
 
     return mapping[entityType] || {};

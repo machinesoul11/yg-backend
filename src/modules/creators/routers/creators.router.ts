@@ -175,6 +175,69 @@ export const creatorsRouter = createTRPCRouter({
     return await stripeConnectService.getAccountStatus(creator.id);
   }),
 
+  /**
+   * Check specific Stripe capability
+   */
+  checkStripeCapability: protectedProcedure
+    .input(z.object({ capability: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session?.user?.id;
+      if (!userId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' });
+      }
+
+      const creator = await creatorService.getProfileByUserId(userId);
+      const enabled = await stripeConnectService.checkCapability(
+        creator.id,
+        input.capability
+      );
+
+      return { capability: input.capability, enabled };
+    }),
+
+  /**
+   * Get current account requirements
+   */
+  getStripeAccountRequirements: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session?.user?.id;
+    if (!userId) {
+      throw new TRPCError({ code: 'UNAUTHORIZED' });
+    }
+
+    const creator = await creatorService.getProfileByUserId(userId);
+    const requirements = await stripeConnectService.getAccountRequirements(creator.id);
+
+    return {
+      hasRequirements: requirements.length > 0,
+      requirements,
+      categorized: {
+        currentlyDue: requirements.filter(r => r.requirementType === 'currently_due'),
+        eventuallyDue: requirements.filter(r => r.requirementType === 'eventually_due'),
+        pastDue: requirements.filter(r => r.requirementType === 'past_due'),
+        pendingVerification: requirements.filter(r => r.requirementType === 'pending_verification'),
+      },
+    };
+  }),
+
+  /**
+   * Update Stripe account information
+   */
+  updateStripeAccount: protectedProcedure
+    .input(z.object({
+      updateData: z.record(z.string(), z.any()),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session?.user?.id;
+      if (!userId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' });
+      }
+
+      const creator = await creatorService.getProfileByUserId(userId);
+      await stripeConnectService.updateAccountInfo(creator.id, input.updateData);
+
+      return { success: true, message: 'Account information updated successfully' };
+    }),
+
   // ==================== Public Endpoints ====================
 
   /**

@@ -10,53 +10,77 @@ datasource db {
 }
 
 model User {
-  id                   String                     @id @default(cuid())
-  email                String                     @unique
-  name                 String?
-  avatar               String?
-  role                 UserRole                   @default(VIEWER)
-  password_hash        String?
-  email_verified       DateTime?
-  deleted_at           DateTime?
-  isActive             Boolean                    @default(true)
-  locked_until         DateTime?
-  failed_login_count   Int                        @default(0)
-  last_failed_login    DateTime?
-  lastLoginAt          DateTime?
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
-  accounts             Account[]
-  auditEvents          AuditEvent[]
-  brand                Brand?
-  creator              Creator?
-  emailEvents          EmailEvent[]
-  emailPreferences     EmailPreferences?
-  emailTestAssignments EmailTestAssignment[]
-  scheduledEmails      ScheduledEmail[]
-  emailUnsubscribeLogs EmailUnsubscribeLog[]
+  id                        String                     @id @default(cuid())
+  email                     String                     @unique
+  name                      String?
+  avatar                    String?
+  role                      UserRole                   @default(VIEWER)
+  password_hash             String?
+  email_verified            DateTime?
+  deleted_at                DateTime?
+  isActive                  Boolean                    @default(true)
+  locked_until              DateTime?
+  failed_login_count        Int                        @default(0)
+  last_failed_login         DateTime?
+  lastLoginAt               DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  accounts                  Account[]
+  auditEvents               AuditEvent[]
+  brand                     Brand?
+  creator                   Creator?
+  emailEvents               EmailEvent[]
+  emailPreferences          EmailPreferences?
+  emailTestAssignments      EmailTestAssignment[]
+  scheduledEmails           ScheduledEmail[]
+  emailUnsubscribeLogs      EmailUnsubscribeLog[]
   // Email campaigns
-  campaignsCreated     EmailCampaign[]            @relation("CampaignCreatedBy")
-  campaignRecipients   CampaignRecipient[]
-  assetsCreated        IpAsset[]                  @relation("AssetCreator")
-  assetsUpdated        IpAsset[]                  @relation("AssetUpdater")
-  ownershipCreated     IpOwnership[]              @relation("IpOwnershipCreatedBy")
-  ownershipUpdated     IpOwnership[]              @relation("IpOwnershipUpdatedBy")
-  passwordResetTokens  PasswordResetToken[]
-  passwordHistory      PasswordHistory[]
-  rememberMeTokens     RememberMeToken[]
-  projectsCreated      Project[]                  @relation("ProjectCreatedBy")
-  projectsUpdated      Project[]                  @relation("ProjectUpdatedBy")
-  royaltyRunsCreated   RoyaltyRun[]               @relation("RoyaltyRunCreatedBy")
-  sessions             Session[]
-  talent               Talent?
-  verificationTokens   VerificationToken[]
-  notifications        Notification[]
-  sentMessages         Message[]                  @relation("SentMessages")
-  receivedMessages     Message[]                  @relation("ReceivedMessages")
-  amendmentApprovals   LicenseAmendmentApproval[]
-  statusHistoryEntries LicenseStatusHistory[]
-  extensionsRequested  LicenseExtension[]         @relation("ExtensionRequester")
-  extensionsApproved   LicenseExtension[]         @relation("ExtensionApprover")
+  campaignsCreated          EmailCampaign[]            @relation("CampaignCreatedBy")
+  campaignRecipients        CampaignRecipient[]
+  assetsCreated             IpAsset[]                  @relation("AssetCreator")
+  assetsUpdated             IpAsset[]                  @relation("AssetUpdater")
+  ownershipCreated          IpOwnership[]              @relation("IpOwnershipCreatedBy")
+  ownershipUpdated          IpOwnership[]              @relation("IpOwnershipUpdatedBy")
+  passwordResetTokens       PasswordResetToken[]
+  passwordHistory           PasswordHistory[]
+  rememberMeTokens          RememberMeToken[]
+  projectsCreated           Project[]                  @relation("ProjectCreatedBy")
+  projectsUpdated           Project[]                  @relation("ProjectUpdatedBy")
+  royaltyRunsCreated        RoyaltyRun[]               @relation("RoyaltyRunCreatedBy")
+  sessions                  Session[]
+  talent                    Talent?
+  verificationTokens        VerificationToken[]
+  notifications             Notification[]
+  sentMessages              Message[]                  @relation("SentMessages")
+  receivedMessages          Message[]                  @relation("ReceivedMessages")
+  amendmentApprovals        LicenseAmendmentApproval[]
+  statusHistoryEntries      LicenseStatusHistory[]
+  extensionsRequested       LicenseExtension[]         @relation("ExtensionRequester")
+  extensionsApproved        LicenseExtension[]         @relation("ExtensionApprover")
+  // Tax & Compliance Relations
+  taxWithholdingsCreated    TaxWithholding[]
+  taxFormJobsCreated        TaxFormJob[]
+  // Financial Reports Relations
+  financialReportsGenerated FinancialReport[]          @relation("FinancialReportsGenerated")
+  scheduledReportsCreated   ScheduledReport[]          @relation("ScheduledReportsCreated")
+  reportDownloads           ReportDownload[]           @relation("ReportDownloads")
+  // Blog Relations
+  postsAuthored             Post[]                     @relation("PostsAuthor")
+  postsAssigned             Post[]                     @relation("PostsAssignedTo")
+  postRevisionsCreated      PostRevision[]             @relation("PostRevisionsAuthor")
+  blogRedirectsCreated      BlogRedirect[]             @relation("BlogRedirectsCreatedBy")
+  robotsConfigCreated       RobotsConfig[]             @relation("RobotsConfigCreatedBy")
+  workflowHistoryCreated    PostWorkflowHistory[]      @relation("WorkflowHistoryCreatedBy")
+  // Post Analytics Relations
+  postExperimentsCreated    PostExperiment[]           @relation("PostExperimentsCreatedBy")
+  postExperimentAssignments PostExperimentAssignment[] @relation("PostExperimentAssignments")
+  // Media Management Relations
+  uploadedMediaItems        MediaItem[]                @relation("MediaItemsUploaded")
+  createdMediaCollections   MediaCollection[]          @relation("MediaCollectionsCreated")
+  updatedMediaCollections   MediaCollection[]          @relation("MediaCollectionsUpdated")
+  addedCollectionItems      MediaCollectionItem[]      @relation("MediaCollectionItemsAdded")
+  mediaUsageTracking        MediaUsageTracking[]       @relation("MediaUsageTracking")
+  createdBulkOperations     MediaBulkOperation[]       @relation("MediaBulkOperationsCreated")
 
   @@index([email])
   @@index([role])
@@ -185,34 +209,107 @@ model AuditEvent {
 }
 
 model Creator {
-  id                 String             @id @default(cuid())
-  userId             String             @unique
-  stageName          String
-  bio                String?
-  specialties        Json
-  socialLinks        Json?
-  stripeAccountId    String?            @unique
-  onboardingStatus   String             @default("pending")
-  portfolioUrl       String?
-  website            String?
-  availability       Json?
-  preferences        Json?
-  verificationStatus String             @default("pending")
-  verifiedAt         DateTime?
-  performanceMetrics Json?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  deletedAt          DateTime?
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ipOwnerships       IpOwnership[]
-  royaltyStatements  RoyaltyStatement[]
-  payouts            Payout[]
+  id                        String                     @id @default(cuid())
+  userId                    String                     @unique
+  stageName                 String
+  bio                       String?
+  specialties               Json
+  socialLinks               Json?
+  stripeAccountId           String?                    @unique
+  onboardingStatus          String                     @default("pending")
+  portfolioUrl              String?
+  website                   String?
+  availability              Json?
+  preferences               Json?
+  verificationStatus        String                     @default("pending")
+  verifiedAt                DateTime?
+  performanceMetrics        Json?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  deletedAt                 DateTime?
+  user                      User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipOwnerships              IpOwnership[]
+  royaltyStatements         RoyaltyStatement[]
+  payouts                   Payout[]
+  stripeOnboardingSessions  StripeOnboardingSession[]
+  stripeAccountCapabilities StripeAccountCapability[]
+  stripeAccountRequirements StripeAccountRequirement[]
+  // Tax & Compliance Relations
+  taxDocuments              TaxDocument[]
+  paymentThresholds         PaymentThreshold[]
+  taxWithholdings           TaxWithholding[]
+  taxJurisdictions          TaxJurisdiction[]
+  annualTaxSummaries        AnnualTaxSummary[]
+  // Financial Reports Relations
+  payables                  AccountsPayableEntry[]     @relation("CreatorPayables")
 
   @@index([verificationStatus])
   @@index([onboardingStatus])
   @@index([userId])
   @@index([deletedAt])
   @@map("creators")
+}
+
+model StripeOnboardingSession {
+  id              String    @id @default(cuid())
+  creatorId       String    @map("creator_id")
+  stripeAccountId String    @map("stripe_account_id")
+  accountLinkUrl  String    @map("account_link_url")
+  returnUrl       String    @map("return_url")
+  refreshUrl      String    @map("refresh_url")
+  expiresAt       DateTime  @map("expires_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  creator         Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([stripeAccountId])
+  @@index([expiresAt])
+  @@index([completedAt])
+  @@map("stripe_onboarding_sessions")
+}
+
+model StripeAccountCapability {
+  id              String    @id @default(cuid())
+  creatorId       String    @map("creator_id")
+  stripeAccountId String    @map("stripe_account_id")
+  capability      String // 'card_payments', 'transfers', etc.
+  status          String // 'active', 'inactive', 'pending'
+  requestedAt     DateTime? @map("requested_at")
+  enabledAt       DateTime? @map("enabled_at")
+  disabledAt      DateTime? @map("disabled_at")
+  restrictions    Json? // Any restrictions on the capability
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  creator         Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([stripeAccountId, capability])
+  @@index([creatorId])
+  @@index([stripeAccountId])
+  @@index([status])
+  @@map("stripe_account_capabilities")
+}
+
+model StripeAccountRequirement {
+  id              String    @id @default(cuid())
+  creatorId       String    @map("creator_id")
+  stripeAccountId String    @map("stripe_account_id")
+  requirementType String    @map("requirement_type") // 'currently_due', 'eventually_due', 'past_due', 'pending_verification'
+  fieldName       String    @map("field_name") // e.g., 'individual.id_number', 'business_profile.url'
+  deadline        DateTime? // For eventually_due requirements
+  resolvedAt      DateTime? @map("resolved_at")
+  errorCode       String?   @map("error_code")
+  errorReason     String?   @map("error_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  creator         Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([stripeAccountId, fieldName])
+  @@index([creatorId])
+  @@index([stripeAccountId])
+  @@index([requirementType])
+  @@index([resolvedAt])
+  @@map("stripe_account_requirements")
 }
 
 model Talent {
@@ -235,17 +332,17 @@ model Talent {
 }
 
 model Brand {
-  id                 String    @id @default(cuid())
-  userId             String    @unique
-  companyName        String    @db.VarChar(255)
-  industry           String?   @db.VarChar(100)
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique
+  companyName        String                    @db.VarChar(255)
+  industry           String?                   @db.VarChar(100)
   website            String?
   description        String?
   logo               String?
-  isVerified         Boolean   @default(false)
-  totalSpent         Decimal   @default(0) @db.Decimal(10, 2)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  isVerified         Boolean                   @default(false)
+  totalSpent         Decimal                   @default(0) @db.Decimal(10, 2)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
   billingInfo        Json?
   brandGuidelinesUrl String?
   companySize        Json?
@@ -254,12 +351,14 @@ model Brand {
   targetAudience     Json?
   teamMembers        Json?
   verificationNotes  String?
-  verificationStatus String    @default("pending")
+  verificationStatus String                    @default("pending")
   verifiedAt         DateTime?
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   licenses           License[]
   payments           Payment[]
   projects           Project[]
+  // Financial Reports Relations
+  receivables        AccountsReceivableAging[] @relation("BrandReceivables")
 
   @@index([companyName])
   @@index([industry])
@@ -318,6 +417,7 @@ model Event {
   projectId String? @map("project_id")
   ipAssetId String? @map("ip_asset_id")
   licenseId String? @map("license_id")
+  postId    String? @map("post_id")
 
   // Legacy fields for backward compatibility
   userId    String?
@@ -336,6 +436,7 @@ model Event {
   project     Project?     @relation(fields: [projectId], references: [id])
   ipAsset     IpAsset?     @relation(fields: [ipAssetId], references: [id])
   license     License?     @relation(fields: [licenseId], references: [id])
+  post        Post?        @relation(fields: [postId], references: [id])
   attribution Attribution?
 
   @@index([occurredAt])
@@ -344,6 +445,7 @@ model Event {
   @@index([projectId, occurredAt])
   @@index([ipAssetId, occurredAt])
   @@index([licenseId, occurredAt])
+  @@index([postId, occurredAt])
   @@index([sessionId])
   @@index([createdAt])
   @@map("events")
@@ -506,6 +608,8 @@ model License {
   usageThresholds LicenseUsageThreshold[]
   usageOverages   LicenseUsageOverage[]
   usageForecasts  LicenseUsageForecast[]
+  // Financial Reports Relations
+  commissions     CommissionTracking[]         @relation("LicenseCommissions")
 
   @@index([ipAssetId, status, endDate])
   @@index([brandId, status])
@@ -635,10 +739,10 @@ model Royalty {
 }
 
 model Payment {
-  id                    String        @id @default(cuid())
-  amount                Decimal       @db.Decimal(10, 2)
-  currency              String        @default("USD")
-  status                PaymentStatus @default(PENDING)
+  id                    String               @id @default(cuid())
+  amount                Decimal              @db.Decimal(10, 2)
+  currency              String               @default("USD")
+  status                PaymentStatus        @default(PENDING)
   paymentMethod         String
   stripePaymentIntentId String?
   metadata              Json?
@@ -646,9 +750,11 @@ model Payment {
   brandId               String
   paidAt                DateTime?
   refundedAt            DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  brand                 Brand         @relation(fields: [brandId], references: [id])
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @default(now()) @map("updated_at")
+  brand                 Brand                @relation(fields: [brandId], references: [id])
+  // Financial Reports Relations
+  commissions           CommissionTracking[] @relation("PaymentCommissions")
 
   @@map("payments")
 }
@@ -842,7 +948,7 @@ model ScheduledEmail {
   nextSendTime        DateTime?            @map("next_send_time")
   parentScheduleId    String?              @map("parent_schedule_id")
   createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
+  updatedAt           DateTime             @default(now()) @map("updated_at")
   recipientUser       User?                @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
 
   @@index([status])
@@ -894,7 +1000,7 @@ model EmailCampaignAnalytics {
   geographicBreakdown Json?     @map("geographic_breakdown")
   sentAt              DateTime? @map("sent_at")
   createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedAt           DateTime  @default(now()) @map("updated_at")
 
   @@index([campaignId])
   @@index([sentAt])
@@ -1196,7 +1302,7 @@ model RoyaltyRun {
   createdBy           String             @map("created_by")
   notes               String?
   createdAt           DateTime           @default(now()) @map("created_at")
-  updatedAt           DateTime           @updatedAt @map("updated_at")
+  updatedAt           DateTime           @default(now()) @map("updated_at")
   statements          RoyaltyStatement[]
   creator             User               @relation("RoyaltyRunCreatedBy", fields: [createdBy], references: [id])
 
@@ -1211,22 +1317,30 @@ model RoyaltyStatement {
   royaltyRunId       String                 @map("royalty_run_id")
   creatorId          String                 @map("creator_id")
   totalEarningsCents Int                    @default(0) @map("total_earnings_cents")
+  platformFeeCents   Int                    @default(0) @map("platform_fee_cents")
+  netPayableCents    Int                    @default(0) @map("net_payable_cents")
   status             RoyaltyStatementStatus @default(PENDING)
   reviewedAt         DateTime?              @map("reviewed_at")
   disputedAt         DateTime?              @map("disputed_at")
   disputeReason      String?                @map("dispute_reason")
   paidAt             DateTime?              @map("paid_at")
   paymentReference   String?                @map("payment_reference")
+  pdfStorageKey      String?                @map("pdf_storage_key")
+  pdfGeneratedAt     DateTime?              @map("pdf_generated_at")
+  metadata           Json?                  @default("{}")
   createdAt          DateTime               @default(now()) @map("created_at")
   updatedAt          DateTime               @updatedAt @map("updated_at")
   royaltyRun         RoyaltyRun             @relation(fields: [royaltyRunId], references: [id])
   creator            Creator                @relation(fields: [creatorId], references: [id])
   lines              RoyaltyLine[]
   payouts            Payout[]
+  // Financial Reports Relations
+  payables           AccountsPayableEntry[] @relation("StatementPayables")
 
   @@unique([royaltyRunId, creatorId])
   @@index([creatorId, createdAt])
   @@index([status])
+  @@index([pdfStorageKey])
   @@map("royalty_statements")
 }
 
@@ -1253,20 +1367,22 @@ model RoyaltyLine {
 }
 
 model Payout {
-  id                 String            @id @default(cuid())
-  creatorId          String            @map("creator_id")
-  royaltyStatementId String?           @map("royalty_statement_id")
-  amountCents        Int               @map("amount_cents")
-  stripeTransferId   String?           @unique @map("stripe_transfer_id")
-  status             PayoutStatus      @default(PENDING)
-  processedAt        DateTime?         @map("processed_at")
-  failedReason       String?           @map("failed_reason")
-  retryCount         Int               @default(0) @map("retry_count")
-  lastRetryAt        DateTime?         @map("last_retry_at")
-  createdAt          DateTime          @default(now()) @map("created_at")
-  updatedAt          DateTime          @updatedAt @map("updated_at")
-  creator            Creator           @relation(fields: [creatorId], references: [id])
-  royaltyStatement   RoyaltyStatement? @relation(fields: [royaltyStatementId], references: [id])
+  id                 String                 @id @default(cuid())
+  creatorId          String                 @map("creator_id")
+  royaltyStatementId String?                @map("royalty_statement_id")
+  amountCents        Int                    @map("amount_cents")
+  stripeTransferId   String?                @unique @map("stripe_transfer_id")
+  status             PayoutStatus           @default(PENDING)
+  processedAt        DateTime?              @map("processed_at")
+  failedReason       String?                @map("failed_reason")
+  retryCount         Int                    @default(0) @map("retry_count")
+  lastRetryAt        DateTime?              @map("last_retry_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @default(now()) @map("updated_at")
+  creator            Creator                @relation(fields: [creatorId], references: [id])
+  royaltyStatement   RoyaltyStatement?      @relation(fields: [royaltyStatementId], references: [id])
+  // Financial Reports Relations
+  payables           AccountsPayableEntry[] @relation("PayoutPayables")
 
   @@index([creatorId, status])
   @@index([status, createdAt])
@@ -1322,7 +1438,7 @@ model MessageThread {
   participantsJson Json      @map("participants_json")
   lastMessageAt    DateTime  @map("last_message_at")
   createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  updatedAt        DateTime  @default(now()) @map("updated_at")
   deletedAt        DateTime? @map("deleted_at")
   messages         Message[]
 
@@ -1339,7 +1455,7 @@ model Message {
   body        String
   readAt      DateTime?           @map("read_at")
   createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
+  updatedAt   DateTime            @default(now()) @map("updated_at")
   deletedAt   DateTime?           @map("deleted_at")
   thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
   sender      User                @relation("SentMessages", fields: [senderId], references: [id], onDelete: Restrict)
@@ -1599,6 +1715,9 @@ enum NotificationType {
   PROJECT
   SYSTEM
   MESSAGE
+  POST_ASSIGNED
+  POST_STATUS_CHANGED
+  BLOG
 }
 
 enum NotificationPriority {
@@ -1606,6 +1725,33 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum TaxDocumentType {
+  FORM_1099_NEC
+  FORM_1099_MISC
+  W8_BEN
+  W8_BEN_E
+  W9
+  FORM_1042_S
+  VAT_SUMMARY
+  GST_SUMMARY
+}
+
+enum TaxFilingStatus {
+  PENDING
+  GENERATED
+  DELIVERED
+  FILED
+  CORRECTED
+  VOIDED
+}
+
+enum TaxWithholdingType {
+  BACKUP_WITHHOLDING
+  INTERNATIONAL_TREATY
+  STATE_TAX
+  LOCAL_TAX
 }
 
 // License Usage Tracking Models
@@ -1675,7 +1821,7 @@ model LicenseUsageThreshold {
   overageRateCents Int?                  @map("overage_rate_cents")
   isActive         Boolean               @default(true) @map("is_active")
   createdAt        DateTime              @default(now()) @map("created_at")
-  updatedAt        DateTime              @updatedAt @map("updated_at")
+  updatedAt        DateTime              @default(now()) @map("updated_at")
   license          License               @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   overages         LicenseUsageOverage[]
 
@@ -1707,7 +1853,7 @@ model LicenseUsageOverage {
   metadata           Json                  @default("{}")
   detectedAt         DateTime              @default(now()) @map("detected_at")
   createdAt          DateTime              @default(now()) @map("created_at")
-  updatedAt          DateTime              @updatedAt @map("updated_at")
+  updatedAt          DateTime              @default(now()) @map("updated_at")
   license            License               @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   threshold          LicenseUsageThreshold @relation(fields: [thresholdId], references: [id], onDelete: Cascade)
 
@@ -1742,4 +1888,1014 @@ model LicenseUsageForecast {
   @@index([licenseId, forecastDate(sort: Desc)])
   @@index([predictedBreachDate])
   @@map("license_usage_forecasts")
+}
+
+// ============================================================================
+// TAX & COMPLIANCE MODELS
+// ============================================================================
+
+model TaxDocument {
+  id               String          @id @default(cuid())
+  creatorId        String          @map("creator_id")
+  taxYear          Int             @map("tax_year")
+  documentType     TaxDocumentType @map("document_type")
+  totalAmountCents Int             @default(0) @map("total_amount_cents")
+  withholdingCents Int             @default(0) @map("withholding_cents")
+  filingStatus     TaxFilingStatus @default(PENDING) @map("filing_status")
+  pdfStorageKey    String?         @map("pdf_storage_key")
+  pdfGeneratedAt   DateTime?       @map("pdf_generated_at")
+  filedAt          DateTime?       @map("filed_at")
+  correctionOf     String?         @map("correction_of")
+  metadata         Json            @default("{}")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @default(now()) @map("updated_at")
+  creator          Creator         @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  originalDocument TaxDocument?    @relation("TaxDocumentCorrection", fields: [correctionOf], references: [id])
+  corrections      TaxDocument[]   @relation("TaxDocumentCorrection")
+
+  @@unique([creatorId, taxYear, documentType])
+  @@index([creatorId, taxYear])
+  @@index([documentType, taxYear])
+  @@index([filingStatus])
+  @@index([pdfStorageKey])
+  @@map("tax_documents")
+}
+
+model PaymentThreshold {
+  id                   String    @id @default(cuid())
+  creatorId            String    @map("creator_id")
+  taxYear              Int       @map("tax_year")
+  jurisdiction         String    @default("US") @db.VarChar(10)
+  totalPaymentsCents   Int       @default(0) @map("total_payments_cents")
+  thresholdAmountCents Int       @map("threshold_amount_cents")
+  thresholdMet         Boolean   @default(false) @map("threshold_met")
+  thresholdMetAt       DateTime? @map("threshold_met_at")
+  lastUpdated          DateTime  @default(now()) @map("last_updated")
+  metadata             Json      @default("{}")
+  creator              Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, taxYear, jurisdiction])
+  @@index([creatorId, taxYear])
+  @@index([jurisdiction, taxYear])
+  @@index([thresholdMet, lastUpdated])
+  @@map("payment_thresholds")
+}
+
+model TaxWithholding {
+  id                    String             @id @default(cuid())
+  creatorId             String             @map("creator_id")
+  withholdingType       TaxWithholdingType @map("withholding_type")
+  percentageRate        Decimal            @db.Decimal(5, 4) // e.g., 0.2400 for 24%
+  effectiveStartDate    DateTime           @map("effective_start_date") @db.Date
+  effectiveEndDate      DateTime?          @map("effective_end_date") @db.Date
+  supportingDocumentKey String?            @map("supporting_document_key")
+  status                String             @default("ACTIVE") @db.VarChar(20) // 'ACTIVE', 'INACTIVE', 'EXPIRED'
+  createdBy             String             @map("created_by")
+  metadata              Json               @default("{}")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @default(now()) @map("updated_at")
+  creator               Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  createdByUser         User               @relation(fields: [createdBy], references: [id])
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([effectiveStartDate, effectiveEndDate])
+  @@map("tax_withholdings")
+}
+
+model TaxJurisdiction {
+  id                    String    @id @default(cuid())
+  creatorId             String    @map("creator_id")
+  countryCode           String    @db.VarChar(2) // ISO 3166-1 alpha-2
+  stateProvince         String?   @map("state_province") @db.VarChar(10)
+  taxTreatyStatus       String?   @map("tax_treaty_status") @db.VarChar(50) // 'NO_TREATY', 'REDUCED_RATE', 'EXEMPT'
+  applicableRate        Decimal?  @map("applicable_rate") @db.Decimal(5, 4)
+  reportingRequirements Json      @default("{}") @map("reporting_requirements")
+  documentationType     String?   @map("documentation_type") @db.VarChar(50) // 'W9', 'W8BEN', 'W8BEN-E', etc.
+  documentationExpiry   DateTime? @map("documentation_expiry") @db.Date
+  isPrimary             Boolean   @default(true) @map("is_primary")
+  effectiveDate         DateTime  @default(now()) @map("effective_date") @db.Date
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @default(now()) @map("updated_at")
+  creator               Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+  @@index([countryCode])
+  @@index([creatorId, isPrimary])
+  @@index([documentationExpiry])
+  @@map("tax_jurisdictions")
+}
+
+model AnnualTaxSummary {
+  id                      String    @id @default(cuid())
+  creatorId               String    @map("creator_id")
+  taxYear                 Int       @map("tax_year")
+  totalGrossPaymentsCents Int       @default(0) @map("total_gross_payments_cents")
+  totalWithheldCents      Int       @default(0) @map("total_withheld_cents")
+  paymentCount            Int       @default(0) @map("payment_count")
+  formsRequired           Json      @default("[]") @map("forms_required") // Array of form types needed
+  formsGenerated          Json      @default("[]") @map("forms_generated") // Array of generated forms
+  summaryPdfKey           String?   @map("summary_pdf_key")
+  generatedAt             DateTime? @map("generated_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @default(now()) @map("updated_at")
+  creator                 Creator   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorId, taxYear])
+  @@index([creatorId, taxYear])
+  @@index([taxYear])
+  @@index([generatedAt])
+  @@map("annual_tax_summaries")
+}
+
+model TaxFormJob {
+  id                String    @id @default(cuid())
+  taxYear           Int       @map("tax_year")
+  jobType           String    @db.VarChar(50) // 'YEAR_END_GENERATION', 'THRESHOLD_CHECK', 'RENEWAL_REMINDER'
+  status            String    @default("PENDING") @db.VarChar(20) // 'PENDING', 'RUNNING', 'COMPLETED', 'FAILED'
+  totalCreators     Int       @default(0) @map("total_creators")
+  processedCreators Int       @default(0) @map("processed_creators")
+  failedCreators    Int       @default(0) @map("failed_creators")
+  errorDetails      Json      @default("[]") @map("error_details")
+  startedAt         DateTime? @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  createdBy         String?   @map("created_by")
+  metadata          Json      @default("{}")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @map("updated_at")
+  createdByUser     User?     @relation(fields: [createdBy], references: [id])
+
+  @@index([taxYear, jobType])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tax_form_jobs")
+}
+
+// ============================================================================
+// FINANCIAL ANALYTICS REPORTS MODELS
+// ============================================================================
+
+model FinancialReport {
+  id                String              @id @default(cuid())
+  reportType        FinancialReportType
+  period            Json // Contains startDate, endDate, frequency
+  generatedAt       DateTime            @default(now()) @map("generated_at")
+  generatedBy       String              @map("generated_by")
+  status            ReportStatus        @default(GENERATING)
+  storageKey        String?             @map("storage_key")
+  metadata          Json                @default("{}")
+  scheduledReportId String?             @map("scheduled_report_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @default(now()) @map("updated_at")
+
+  generatedByUser User             @relation("FinancialReportsGenerated", fields: [generatedBy], references: [id])
+  scheduledReport ScheduledReport? @relation(fields: [scheduledReportId], references: [id])
+  downloads       ReportDownload[]
+
+  @@index([reportType, generatedAt])
+  @@index([generatedBy])
+  @@index([status])
+  @@map("financial_reports")
+}
+
+model ScheduledReport {
+  id              String              @id @default(cuid())
+  name            String              @db.VarChar(255)
+  reportType      FinancialReportType
+  frequency       ReportFrequency
+  cronExpression  String              @map("cron_expression")
+  recipients      Json // Array of email addresses
+  isActive        Boolean             @default(true) @map("is_active")
+  lastGeneratedAt DateTime?           @map("last_generated_at")
+  nextScheduledAt DateTime?           @map("next_scheduled_at")
+  parameters      Json                @default("{}") // Report-specific parameters
+  createdBy       String              @map("created_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @default(now()) @map("updated_at")
+
+  createdByUser User              @relation("ScheduledReportsCreated", fields: [createdBy], references: [id])
+  reports       FinancialReport[]
+
+  @@index([isActive, nextScheduledAt])
+  @@index([reportType])
+  @@map("scheduled_reports")
+}
+
+model ReportDownload {
+  id           String    @id @default(cuid())
+  reportId     String    @map("report_id")
+  userId       String    @map("user_id")
+  downloadUrl  String    @map("download_url")
+  expiresAt    DateTime  @map("expires_at")
+  downloadedAt DateTime? @map("downloaded_at")
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  report FinancialReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user   User            @relation("ReportDownloads", fields: [userId], references: [id])
+
+  @@index([reportId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("report_downloads")
+}
+
+model CashFlowProjection {
+  id                    String   @id @default(cuid())
+  projectionDate        DateTime @map("projection_date") @db.Date
+  projectedInflowCents  Int      @map("projected_inflow_cents")
+  projectedOutflowCents Int      @map("projected_outflow_cents")
+  netCashFlowCents      Int      @map("net_cash_flow_cents")
+  confidenceLevel       Decimal  @map("confidence_level") @db.Decimal(3, 2)
+  basedOnDays           Int      @map("based_on_days")
+  methodology           String   @db.VarChar(50)
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@unique([projectionDate])
+  @@index([projectionDate])
+  @@map("cash_flow_projections")
+}
+
+model AccountsReceivableAging {
+  id                     String      @id @default(cuid())
+  snapshotDate           DateTime    @map("snapshot_date") @db.Date
+  entityType             String      @map("entity_type") @db.VarChar(50) // 'license', 'payment', 'invoice'
+  entityId               String      @map("entity_id")
+  brandId                String?     @map("brand_id")
+  originalAmountCents    Int         @map("original_amount_cents")
+  outstandingAmountCents Int         @map("outstanding_amount_cents")
+  daysOutstanding        Int         @map("days_outstanding")
+  agingBucket            AgingBucket @map("aging_bucket")
+  riskLevel              RiskLevel
+  invoiceDate            DateTime    @map("invoice_date") @db.Date
+  dueDate                DateTime    @map("due_date") @db.Date
+  metadata               Json        @default("{}")
+  createdAt              DateTime    @default(now()) @map("created_at")
+
+  brand Brand? @relation("BrandReceivables", fields: [brandId], references: [id])
+
+  @@index([snapshotDate, agingBucket])
+  @@index([brandId])
+  @@index([daysOutstanding])
+  @@map("accounts_receivable_aging")
+}
+
+model AccountsPayableEntry {
+  id                 String          @id @default(cuid())
+  creatorId          String          @map("creator_id")
+  royaltyStatementId String?         @map("royalty_statement_id")
+  payoutId           String?         @map("payout_id")
+  amountOwedCents    Int             @map("amount_owed_cents")
+  dueDate            DateTime        @map("due_date") @db.Date
+  status             PayableStatus   @default(PENDING)
+  paymentTerms       String?         @map("payment_terms")
+  priority           PayablePriority @default(NORMAL)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  paidAt             DateTime?       @map("paid_at")
+
+  creator          Creator           @relation("CreatorPayables", fields: [creatorId], references: [id])
+  royaltyStatement RoyaltyStatement? @relation("StatementPayables", fields: [royaltyStatementId], references: [id])
+  payout           Payout?           @relation("PayoutPayables", fields: [payoutId], references: [id])
+
+  @@index([creatorId, status])
+  @@index([dueDate, status])
+  @@index([priority])
+  @@map("accounts_payable_entries")
+}
+
+model CommissionTracking {
+  id                    String                    @id @default(cuid())
+  transactionId         String                    @map("transaction_id")
+  transactionType       CommissionTransactionType @map("transaction_type")
+  licenseId             String?                   @map("license_id")
+  paymentId             String?                   @map("payment_id")
+  grossAmountCents      Int                       @map("gross_amount_cents")
+  commissionRateBps     Int                       @map("commission_rate_bps")
+  commissionAmountCents Int                       @map("commission_amount_cents")
+  netAmountCents        Int                       @map("net_amount_cents")
+  commissionCategory    CommissionCategory
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  recognizedAt          DateTime?                 @map("recognized_at")
+
+  license License? @relation("LicenseCommissions", fields: [licenseId], references: [id])
+  payment Payment? @relation("PaymentCommissions", fields: [paymentId], references: [id])
+
+  @@index([transactionType, createdAt])
+  @@index([commissionCategory])
+  @@index([licenseId])
+  @@map("commission_tracking")
+}
+
+// Enum additions for Financial Reports
+enum FinancialReportType {
+  MONTHLY_REVENUE
+  QUARTERLY_SUMMARY
+  ANNUAL_STATEMENT
+  CASH_FLOW_ANALYSIS
+  ACCOUNTS_RECEIVABLE_AGING
+  ACCOUNTS_PAYABLE
+  COMMISSION_TRACKING
+  CUSTOM
+}
+
+enum ReportStatus {
+  GENERATING
+  COMPLETED
+  FAILED
+  ARCHIVED
+}
+
+enum ReportFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum AgingBucket {
+  CURRENT // 0-30 days
+  DAYS_31_60 // 31-60 days
+  DAYS_61_90 // 61-90 days
+  OVER_90 // 90+ days
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PayableStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  OVERDUE
+  DISPUTED
+}
+
+enum PayablePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum CommissionTransactionType {
+  LICENSE_FEE
+  REVENUE_SHARE
+  PLATFORM_FEE
+  TRANSACTION_FEE
+  LATE_FEE
+  OTHER
+}
+
+enum CommissionCategory {
+  PLATFORM_COMMISSION
+  PAYMENT_PROCESSING
+  CURRENCY_CONVERSION
+  DISPUTE_FEE
+  SERVICE_FEE
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  SCHEDULED
+  ARCHIVED
+}
+
+// Blog System Models
+
+model Category {
+  id               String   @id @default(cuid())
+  name             String   @db.VarChar(100)
+  slug             String   @unique @db.VarChar(150)
+  description      String?
+  parentCategoryId String?  @map("parent_category_id")
+  displayOrder     Int      @default(0) @map("display_order")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  parentCategory  Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
+  childCategories Category[] @relation("CategoryHierarchy")
+  posts           Post[]
+
+  @@index([slug])
+  @@index([parentCategoryId])
+  @@index([isActive])
+  @@index([displayOrder])
+  @@map("categories")
+}
+
+model Post {
+  id               String     @id @default(cuid())
+  title            String     @db.VarChar(500)
+  slug             String     @unique @db.VarChar(600)
+  content          String
+  excerpt          String?    @db.VarChar(1000)
+  authorId         String     @map("author_id")
+  assignedToId     String?    @map("assigned_to_id")
+  categoryId       String?    @map("category_id")
+  featuredImageUrl String?    @map("featured_image_url")
+  status           PostStatus @default(DRAFT)
+  publishedAt      DateTime?  @map("published_at")
+  scheduledFor     DateTime?  @map("scheduled_for")
+  readTimeMinutes  Int        @default(0) @map("read_time_minutes")
+  viewCount        Int        @default(0) @map("view_count")
+  isFeatured       Boolean    @default(false) @map("is_featured")
+  tags             Json       @default("[]")
+  seoTitle         String?    @map("seo_title") @db.VarChar(70)
+  seoDescription   String?    @map("seo_description") @db.VarChar(160)
+  seoKeywords      String?    @map("seo_keywords")
+  
+  // Performance Metrics Fields
+  avgReadTimeSeconds     Float   @default(0) @map("avg_read_time_seconds")
+  bounceRate            Float   @default(0) @map("bounce_rate")
+  socialSharesCount     Int     @default(0) @map("social_shares_count")
+  emailCaptureCount     Int     @default(0) @map("email_capture_count")
+  emailCaptureRate      Float   @default(0) @map("email_capture_rate")
+  uniqueVisitors        Int     @default(0) @map("unique_visitors")
+  
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  deletedAt        DateTime?  @map("deleted_at")
+
+  // Relations
+  author       User           @relation("PostsAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  assignedTo   User?          @relation("PostsAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  category     Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  revisions    PostRevision[]
+  workflowHistory PostWorkflowHistory[]
+  // Analytics Relations
+  events            Event[]
+  dailyMetrics      PostDailyMetrics[]
+  experimentTargets PostExperimentTarget[]
+  socialShares      PostSocialShare[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt(sort: Desc)])
+  @@index([authorId])
+  @@index([assignedToId])
+  @@index([categoryId])
+  @@index([scheduledFor])
+  @@index([deletedAt])
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([authorId, status])
+  @@index([assignedToId, status])
+  @@index([categoryId, status])
+  @@index([isFeatured, status, publishedAt(sort: Desc)])
+  @@index([bounceRate])
+  @@index([socialSharesCount(sort: Desc)])
+  @@index([emailCaptureRate(sort: Desc)])
+  @@index([avgReadTimeSeconds(sort: Desc)])
+  @@map("posts")
+}
+
+model PostRevision {
+  id           String   @id @default(cuid())
+  postId       String   @map("post_id")
+  content      String
+  authorId     String   @map("author_id")
+  revisionNote String?  @map("revision_note")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation("PostRevisionsAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([postId])
+  @@index([createdAt(sort: Desc)])
+  @@index([authorId])
+  @@map("post_revisions")
+}
+
+model PostWorkflowHistory {
+  id          String     @id @default(cuid())
+  postId      String     @map("post_id")
+  fromStatus  PostStatus @map("from_status")
+  toStatus    PostStatus @map("to_status")
+  userId      String     @map("user_id")
+  comments    String?
+  reason      String?
+  metadata    Json?      @default("{}")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("WorkflowHistoryCreatedBy", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([postId])
+  @@index([createdAt(sort: Desc)])
+  @@index([userId])
+  @@index([fromStatus, toStatus])
+  @@map("post_workflow_history")
+}
+
+model BlogRedirect {
+  id              String    @id @default(cuid())
+  sourcePath      String    @unique @map("source_path") @db.VarChar(600)
+  destinationPath String    @map("destination_path") @db.VarChar(600)
+  redirectType    Int       @default(301) @map("redirect_type") @db.SmallInt
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  expiresAt       DateTime? @map("expires_at")
+  isActive        Boolean   @default(true) @map("is_active")
+  hitCount        Int       @default(0) @map("hit_count")
+  lastAccessedAt  DateTime? @map("last_accessed_at")
+
+  // Relations
+  creator User @relation("BlogRedirectsCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([sourcePath])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("blog_redirects")
+}
+
+model RobotsConfig {
+  id            String   @id @default(cuid())
+  userAgent     String   @default("*") @map("user_agent") @db.VarChar(100)
+  directiveType String   @map("directive_type") @db.VarChar(20)
+  path          String?  @db.VarChar(500)
+  value         String?  @db.VarChar(500)
+  priority      Int      @default(0)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator User @relation("RobotsConfigCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([isActive])
+  @@index([priority, userAgent])
+  @@index([userAgent])
+  @@map("robots_config")
+}
+
+// ========================================
+// POST ANALYTICS & A/B TESTING TABLES
+// ========================================
+
+model PostExperiment {
+  id                 String                    @id @default(cuid())
+  name               String                    @db.VarChar(255)
+  description        String?                   @db.VarChar(1000)
+  status             PostExperimentStatus      @default(DRAFT)
+  startDate          DateTime                  @map("start_date")
+  endDate            DateTime                  @map("end_date")
+  trafficAllocation  Int                       @default(50) @map("traffic_allocation") // Percentage 0-100
+  successMetrics     Json                      @map("success_metrics") // Array of metrics to track
+  winningVariantId   String?                   @map("winning_variant_id")
+  statisticalSignificance Boolean              @default(false) @map("statistical_significance")
+  confidenceLevel    Float                     @default(0.95) @map("confidence_level")
+  createdBy          String                    @map("created_by")
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+
+  // Relations
+  creator        User                        @relation("PostExperimentsCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  variants       PostExperimentVariant[]
+  assignments    PostExperimentAssignment[]
+  postTargets    PostExperimentTarget[]
+
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdBy])
+  @@index([winningVariantId])
+  @@map("post_experiments")
+}
+
+model PostExperimentVariant {
+  id                String            @id @default(cuid())
+  experimentId      String            @map("experiment_id")
+  name              String            @db.VarChar(100)
+  description       String?           @db.VarChar(500)
+  trafficAllocation Int               @map("traffic_allocation") // Percentage 0-100
+  content           Json              // Variant-specific content (headline, image, etc.)
+  isControl         Boolean           @default(false) @map("is_control")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  // Relations
+  experiment  PostExperiment             @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  assignments PostExperimentAssignment[]
+
+  @@index([experimentId])
+  @@index([isControl])
+  @@map("post_experiment_variants")
+}
+
+model PostExperimentTarget {
+  id           String @id @default(cuid())
+  experimentId String @map("experiment_id")
+  postId       String @map("post_id")
+
+  // Relations
+  experiment PostExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  post       Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, postId])
+  @@index([experimentId])
+  @@index([postId])
+  @@map("post_experiment_targets")
+}
+
+model PostExperimentAssignment {
+  id           String   @id @default(cuid())
+  experimentId String   @map("experiment_id")
+  variantId    String   @map("variant_id")
+  sessionId    String   @map("session_id")
+  userId       String?  @map("user_id")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  // Relations
+  experiment PostExperiment        @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variant    PostExperimentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  user       User?                 @relation("PostExperimentAssignments", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([experimentId, sessionId])
+  @@index([experimentId])
+  @@index([variantId])
+  @@index([sessionId])
+  @@index([userId])
+  @@map("post_experiment_assignments")
+}
+
+model PostDailyMetrics {
+  id                String   @id @default(cuid())
+  date              DateTime @db.Date
+  postId            String   @map("post_id")
+  views             Int      @default(0)
+  uniqueVisitors    Int      @default(0) @map("unique_visitors")
+  totalEngagementTimeSeconds Int @default(0) @map("total_engagement_time_seconds")
+  avgEngagementTimeSeconds   Float @default(0) @map("avg_engagement_time_seconds")
+  avgScrollDepthPercentage   Float @default(0) @map("avg_scroll_depth_percentage")
+  ctaClicks         Int      @default(0) @map("cta_clicks")
+  shares            Int      @default(0)
+  bounceRate        Float    @default(0) @map("bounce_rate")
+  conversionRate    Float    @default(0) @map("conversion_rate")
+  emailCaptures     Int      @default(0) @map("email_captures")
+  emailCaptureRate  Float    @default(0) @map("email_capture_rate")
+  topReferrers      Json     @default("[]") @map("top_referrers")
+  topCtaTypes       Json     @default("[]") @map("top_cta_types")
+  deviceBreakdown   Json     @default("{}") @map("device_breakdown")
+  sourceBreakdown   Json     @default("{}") @map("source_breakdown")
+  socialShareBreakdown Json  @default("{}") @map("social_share_breakdown")
+  experimentData    Json?    @map("experiment_data") // A/B test metrics
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([date, postId])
+  @@index([date])
+  @@index([postId, date])
+  @@index([views])
+  @@index([uniqueVisitors])
+  @@index([emailCaptures])
+  @@index([emailCaptureRate])
+  @@map("post_daily_metrics")
+}
+
+model PostSocialShare {
+  id        String   @id @default(cuid())
+  postId    String   @map("post_id")
+  platform  String   @db.VarChar(50) // 'twitter', 'facebook', 'linkedin', 'pinterest', etc.
+  shareCount Int     @default(0) @map("share_count")
+  lastSharedAt DateTime? @map("last_shared_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, platform])
+  @@index([postId])
+  @@index([platform])
+  @@index([shareCount(sort: Desc)])
+  @@map("post_social_shares")
+}
+
+// ========================================
+// MEDIA MANAGEMENT SYSTEM
+// ========================================
+
+model MediaItem {
+  id                  String           @id @default(cuid())
+  filename            String           @db.VarChar(255)
+  originalName        String           @map("original_name") @db.VarChar(255)
+  storageKey          String           @unique @map("storage_key")
+  mimeType            String           @map("mime_type") @db.VarChar(100)
+  fileSize            BigInt           @map("file_size")
+  width               Int?
+  height              Int?
+  type                MediaType
+  status              MediaStatus      @default(PROCESSING)
+  uploadedBy          String           @map("uploaded_by")
+  title               String?          @db.VarChar(500)
+  altText             String?          @map("alt_text") @db.VarChar(500)
+  description         String?          @db.Text
+  tags                Json             @default("[]")
+  metadata            Json             @default("{}")
+  cdnUrl              String?          @map("cdn_url") @db.Text
+  thumbnailUrl        String?          @map("thumbnail_url") @db.Text
+  previewUrl          String?          @map("preview_url") @db.Text
+  exifData            Json?            @map("exif_data")
+  colorPalette        Json?            @map("color_palette")
+  averageColor        String?          @map("average_color") @db.VarChar(7)
+  dominantColor       String?          @map("dominant_color") @db.VarChar(7)
+  isPublic            Boolean          @default(false) @map("is_public")
+  accessLevel         MediaAccessLevel @default(ADMIN_ONLY) @map("access_level")
+  usageRights         String?          @map("usage_rights") @db.Text
+  licenseInfo         String?          @map("license_info") @db.Text
+  copyrightInfo       String?          @map("copyright_info") @db.Text
+  lastAccessedAt      DateTime?        @map("last_accessed_at")
+  accessCount         Int              @default(0) @map("access_count")
+  downloadCount       Int              @default(0) @map("download_count")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+  deletedAt           DateTime?        @map("deleted_at")
+
+  // Relations
+  uploader             User                       @relation("MediaItemsUploaded", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  collections          MediaCollectionItem[]
+  variants             MediaVariant[]
+  bulkOperationTargets MediaBulkOperationTarget[]
+  usageTracking        MediaUsageTracking[]
+
+  @@index([uploadedBy])
+  @@index([type])
+  @@index([status])
+  @@index([accessLevel])
+  @@index([isPublic])
+  @@index([createdAt(sort: Desc)])
+  @@index([lastAccessedAt(sort: Desc)])
+  @@index([downloadCount(sort: Desc)])
+  @@index([accessCount(sort: Desc)])
+  @@index([deletedAt])
+  @@index([storageKey])
+  @@index([filename])
+  @@index([mimeType])
+  @@index([fileSize])
+  @@map("media_items")
+}
+
+model MediaCollection {
+  id          String                @id @default(cuid())
+  name        String                @db.VarChar(255)
+  slug        String                @unique @db.VarChar(300)
+  description String?               @db.Text
+  type        MediaCollectionType   @default(MANUAL)
+  visibility  MediaVisibility       @default(PRIVATE)
+  rules       Json?                 // For smart collections
+  coverImageId String?              @map("cover_image_id")
+  isSystem    Boolean               @default(false) @map("is_system")
+  sortOrder   Int                   @default(0) @map("sort_order")
+  itemCount   Int                   @default(0) @map("item_count")
+  totalSize   BigInt                @default(0) @map("total_size")
+  createdBy   String                @map("created_by")
+  updatedBy   String?               @map("updated_by")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+  deletedAt   DateTime?             @map("deleted_at")
+
+  // Relations
+  creator    User                  @relation("MediaCollectionsCreated", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater    User?                 @relation("MediaCollectionsUpdated", fields: [updatedBy], references: [id], onDelete: SetNull)
+  items      MediaCollectionItem[]
+
+  @@index([createdBy])
+  @@index([type])
+  @@index([visibility])
+  @@index([isSystem])
+  @@index([sortOrder])
+  @@index([createdAt(sort: Desc)])
+  @@index([slug])
+  @@index([deletedAt])
+  @@map("media_collections")
+}
+
+model MediaCollectionItem {
+  id           String          @id @default(cuid())
+  collectionId String          @map("collection_id")
+  mediaItemId  String          @map("media_item_id")
+  sortOrder    Int             @default(0) @map("sort_order")
+  addedBy      String          @map("added_by")
+  addedAt      DateTime        @default(now()) @map("added_at")
+
+  // Relations
+  collection MediaCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  mediaItem  MediaItem       @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  addedByUser User           @relation("MediaCollectionItemsAdded", fields: [addedBy], references: [id], onDelete: Restrict)
+
+  @@unique([collectionId, mediaItemId])
+  @@index([collectionId, sortOrder])
+  @@index([mediaItemId])
+  @@index([addedBy])
+  @@index([addedAt])
+  @@map("media_collection_items")
+}
+
+model MediaVariant {
+  id                String        @id @default(cuid())
+  originalMediaId   String        @map("original_media_id")
+  variantType       MediaVariantType
+  filename          String        @db.VarChar(255)
+  storageKey        String        @unique @map("storage_key")
+  mimeType          String        @map("mime_type") @db.VarChar(100)
+  fileSize          BigInt        @map("file_size")
+  width             Int?
+  height            Int?
+  quality           Int?          // For images, compression quality
+  format            String?       @db.VarChar(20) // webp, avif, etc.
+  optimizations     Json          @default("[]") // Applied optimizations
+  cdnUrl            String?       @map("cdn_url") @db.Text
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  originalMedia MediaItem @relation(fields: [originalMediaId], references: [id], onDelete: Cascade)
+
+  @@index([originalMediaId])
+  @@index([variantType])
+  @@index([storageKey])
+  @@index([createdAt])
+  @@map("media_variants")
+}
+
+model MediaUsageTracking {
+  id          String    @id @default(cuid())
+  mediaItemId String    @map("media_item_id")
+  usageType   MediaUsageType
+  contextType String    @map("context_type") @db.VarChar(50) // 'post', 'email', 'page', etc.
+  contextId   String?   @map("context_id")
+  usedBy      String    @map("used_by")
+  usedAt      DateTime  @default(now()) @map("used_at")
+  sessionId   String?   @map("session_id")
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent")
+  referrer    String?
+  metadata    Json      @default("{}")
+
+  // Relations
+  mediaItem MediaItem @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+  user      User      @relation("MediaUsageTracking", fields: [usedBy], references: [id], onDelete: Restrict)
+
+  @@index([mediaItemId, usedAt(sort: Desc)])
+  @@index([usageType])
+  @@index([contextType, contextId])
+  @@index([usedBy])
+  @@index([usedAt(sort: Desc)])
+  @@map("media_usage_tracking")
+}
+
+model MediaBulkOperation {
+  id               String                     @id @default(cuid())
+  name             String                     @db.VarChar(255)
+  operationType    MediaBulkOperationType
+  status           MediaBulkOperationStatus   @default(PENDING)
+  parameters       Json                       @default("{}")
+  totalItems       Int                        @default(0) @map("total_items")
+  processedItems   Int                        @default(0) @map("processed_items")
+  successfulItems  Int                        @default(0) @map("successful_items")
+  failedItems      Int                        @default(0) @map("failed_items")
+  errorLog         Json                       @default("[]") @map("error_log")
+  startedAt        DateTime?                  @map("started_at")
+  completedAt      DateTime?                  @map("completed_at")
+  estimatedFinishAt DateTime?                @map("estimated_finish_at")
+  createdBy        String                     @map("created_by")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+  updatedAt        DateTime                   @updatedAt @map("updated_at")
+
+  // Relations
+  creator User                       @relation("MediaBulkOperationsCreated", fields: [createdBy], references: [id], onDelete: Restrict)
+  targets MediaBulkOperationTarget[]
+
+  @@index([createdBy])
+  @@index([status])
+  @@index([operationType])
+  @@index([createdAt(sort: Desc)])
+  @@index([startedAt])
+  @@index([completedAt])
+  @@map("media_bulk_operations")
+}
+
+model MediaBulkOperationTarget {
+  id          String              @id @default(cuid())
+  operationId String              @map("operation_id")
+  mediaItemId String              @map("media_item_id")
+  status      MediaOperationStatus @default(PENDING)
+  errorMessage String?             @map("error_message")
+  processedAt DateTime?           @map("processed_at")
+
+  // Relations
+  operation MediaBulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  mediaItem MediaItem          @relation(fields: [mediaItemId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, mediaItemId])
+  @@index([operationId])
+  @@index([mediaItemId])
+  @@index([status])
+  @@map("media_bulk_operation_targets")
+}
+
+// Enums for Media Management
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  ARCHIVE
+  OTHER
+}
+
+enum MediaStatus {
+  UPLOADING
+  PROCESSING
+  AVAILABLE
+  ERROR
+  ARCHIVED
+}
+
+enum MediaAccessLevel {
+  PUBLIC
+  INTERNAL
+  ADMIN_ONLY
+  RESTRICTED
+}
+
+enum MediaVariantType {
+  THUMBNAIL
+  SMALL
+  MEDIUM
+  LARGE
+  OPTIMIZED
+  WEBP
+  AVIF
+  COMPRESSED
+}
+
+enum MediaUsageType {
+  VIEW
+  DOWNLOAD
+  PREVIEW
+  COPY_URL
+  EMBED
+}
+
+enum MediaCollectionType {
+  MANUAL
+  SMART
+  SYSTEM
+}
+
+enum MediaVisibility {
+  PRIVATE
+  SHARED
+  PUBLIC
+}
+
+enum MediaBulkOperationType {
+  DELETE
+  MOVE_TO_COLLECTION
+  REMOVE_FROM_COLLECTION
+  UPDATE_METADATA
+  REGENERATE_VARIANTS
+  UPDATE_ACCESS_LEVEL
+  ARCHIVE
+  RESTORE
+}
+
+enum MediaBulkOperationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MediaOperationStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum PostExperimentStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
 }

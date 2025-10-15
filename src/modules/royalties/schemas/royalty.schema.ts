@@ -80,6 +80,31 @@ export const lockRunSchema = z.object({
 export type LockRunInput = z.infer<typeof lockRunSchema>;
 
 /**
+ * Rollback Run Input Schema
+ */
+export const rollbackRunSchema = z.object({
+  runId: z.string().cuid(),
+  reason: z
+    .string()
+    .min(20, 'Rollback reason must be at least 20 characters')
+    .max(1000, 'Rollback reason must be at most 1000 characters'),
+  archiveData: z.boolean().default(true).optional(),
+});
+
+export type RollbackRunInput = z.infer<typeof rollbackRunSchema>;
+
+/**
+ * Review Run Input Schema
+ */
+export const reviewRunSchema = z.object({
+  runId: z.string().cuid(),
+  approve: z.boolean(),
+  reviewNotes: z.string().max(1000).optional(),
+});
+
+export type ReviewRunInput = z.infer<typeof reviewRunSchema>;
+
+/**
  * Initiate Payouts Input Schema
  */
 export const initiatePayoutsSchema = z.object({
@@ -202,4 +227,13 @@ export const validateLicenseScopeSchema = z.object({
 });
 
 export type ValidateLicenseScopeInput = z.infer<typeof validateLicenseScopeSchema>;
+
+/**
+ * Get Run Validation Report Input Schema
+ */
+export const getRunValidationReportSchema = z.object({
+  runId: z.string().cuid(),
+});
+
+export type GetRunValidationReportInput = z.infer<typeof getRunValidationReportSchema>;
 

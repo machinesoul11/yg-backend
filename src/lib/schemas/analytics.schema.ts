@@ -36,6 +36,8 @@ export const entityTypeEnum = z.enum([
   ENTITY_TYPES.USER,
   ENTITY_TYPES.ROYALTY,
   ENTITY_TYPES.PAYOUT,
+  ENTITY_TYPES.POST,
+  ENTITY_TYPES.CATEGORY,
 ]);
 
 /**
@@ -151,3 +153,199 @@ export const ANALYTICS_PERIODS = {
   ONE_YEAR: '1y',
   ALL_TIME: 'all',
 } as const;
+
+// ========================================
+// POST ANALYTICS SCHEMAS
+// ========================================
+
+/**
+ * Post View Event Schema
+ */
+export const trackPostViewSchema = z.object({
+  postId: z.string().cuid(),
+  sessionId: z.string().uuid(),
+  userId: z.string().cuid().optional(),
+  experimentId: z.string().cuid().optional(),
+  variantId: z.string().cuid().optional(),
+  attribution: attributionSchema.optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type TrackPostViewInput = z.infer<typeof trackPostViewSchema>;
+
+/**
+ * Post Engagement Time Event Schema
+ */
+export const trackEngagementTimeSchema = z.object({
+  postId: z.string().cuid(),
+  sessionId: z.string().uuid(),
+  userId: z.string().cuid().optional(),
+  engagementTimeSeconds: z.number().min(0).max(86400), // Max 24 hours
+  cumulativeTime: z.number().min(0),
+  isActiveTime: z.boolean().default(true),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type TrackEngagementTimeInput = z.infer<typeof trackEngagementTimeSchema>;
+
+/**
+ * Post Scroll Depth Event Schema
+ */
+export const trackScrollDepthSchema = z.object({
+  postId: z.string().cuid(),
+  sessionId: z.string().uuid(),
+  userId: z.string().cuid().optional(),
+  scrollDepthPercentage: z.number().min(0).max(100),
+  maxScrollDepth: z.number().min(0).max(100),
+  milestone: z.enum(['25', '50', '75', '100']).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type TrackScrollDepthInput = z.infer<typeof trackScrollDepthSchema>;
+
+/**
+ * Post CTA Click Event Schema
+ */
+export const trackCtaClickSchema = z.object({
+  postId: z.string().cuid(),
+  sessionId: z.string().uuid(),
+  userId: z.string().cuid().optional(),
+  ctaId: z.string(),
+  ctaType: z.enum(['button', 'link', 'form', 'download', 'subscribe', 'share', 'comment']),
+  ctaText: z.string().max(255),
+  ctaPosition: z.string().optional(), // e.g., "header", "sidebar", "inline", "footer"
+  destinationUrl: z.string().url().optional(),
+  conversionValue: z.number().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type TrackCtaClickInput = z.infer<typeof trackCtaClickSchema>;
+
+/**
+ * Post Analytics Overview Schema
+ */
+export const getPostAnalyticsSchema = z.object({
+  postId: z.string().cuid(),
+  dateRange: dateRangeSchema.optional(),
+  granularity: z.enum(['hour', 'day', 'week', 'month']).default('day'),
+  includeExperiments: z.boolean().default(false),
+});
+
+export type GetPostAnalyticsInput = z.infer<typeof getPostAnalyticsSchema>;
+
+/**
+ * Post Time Series Metrics Schema
+ */
+export const getPostTimeSeriesSchema = z.object({
+  postId: z.string().cuid(),
+  dateRange: dateRangeSchema.optional(),
+  granularity: z.enum(['hour', 'day', 'week']).default('day'),
+  metrics: z.array(z.enum([
+    'views', 
+    'unique_visitors', 
+    'engagement_time', 
+    'scroll_depth', 
+    'cta_clicks',
+    'bounce_rate',
+    'conversion_rate'
+  ])).default(['views', 'unique_visitors']),
+});
+
+export type GetPostTimeSeriesInput = z.infer<typeof getPostTimeSeriesSchema>;
+
+/**
+ * Post Referrers Analysis Schema
+ */
+export const getPostReferrersSchema = z.object({
+  postId: z.string().cuid(),
+  dateRange: dateRangeSchema.optional(),
+  limit: z.number().min(1).max(100).default(20),
+  groupBy: z.enum(['domain', 'source', 'campaign', 'medium']).default('domain'),
+});
+
+export type GetPostReferrersInput = z.infer<typeof getPostReferrersSchema>;
+
+/**
+ * Compare Posts Schema
+ */
+export const comparePostsSchema = z.object({
+  postIds: z.array(z.string().cuid()).min(2).max(10),
+  dateRange: dateRangeSchema.optional(),
+  metrics: z.array(z.enum([
+    'views', 
+    'unique_visitors', 
+    'avg_engagement_time', 
+    'avg_scroll_depth', 
+    'cta_clicks',
+    'bounce_rate',
+    'conversion_rate'
+  ])).default(['views', 'unique_visitors', 'avg_engagement_time']),
+});
+
+export type ComparePostsInput = z.infer<typeof comparePostsSchema>;
+
+// ========================================
+// A/B TESTING SCHEMAS
+// ========================================
+
+/**
+ * Create Experiment Schema
+ */
+export const createExperimentSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  postIds: z.array(z.string().cuid()).min(1),
+  variants: z.array(z.object({
+    id: z.string().cuid(),
+    name: z.string().min(1).max(100),
+    description: z.string().max(500).optional(),
+    trafficAllocation: z.number().min(0).max(100),
+    content: z.record(z.string(), z.any()), // headline, image, etc.
+  })).min(2).max(5),
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  successMetrics: z.array(z.enum([
+    'views', 
+    'engagement_time', 
+    'scroll_depth', 
+    'cta_clicks',
+    'conversion_rate'
+  ])).min(1),
+  trafficAllocation: z.number().min(10).max(100).default(50),
+  status: z.enum(['draft', 'active', 'paused', 'completed']).default('draft'),
+});
+
+export type CreateExperimentInput = z.infer<typeof createExperimentSchema>;
+
+/**
+ * Update Experiment Schema
+ */
+export const updateExperimentSchema = createExperimentSchema.partial().extend({
+  id: z.string().cuid(),
+});
+
+export type UpdateExperimentInput = z.infer<typeof updateExperimentSchema>;
+
+/**
+ * Get Experiment Results Schema
+ */
+export const getExperimentResultsSchema = z.object({
+  experimentId: z.string().cuid(),
+  includeStatistics: z.boolean().default(true),
+  confidenceLevel: z.number().min(0.8).max(0.99).default(0.95),
+});
+
+export type GetExperimentResultsInput = z.infer<typeof getExperimentResultsSchema>;
+
+/**
+ * Experiment Assignment Schema
+ */
+export const experimentAssignmentSchema = z.object({
+  experimentId: z.string().cuid(),
+  sessionId: z.string().uuid(),
+  userId: z.string().cuid().optional(),
+  variantId: z.string().cuid(),
+  assignedAt: z.string().datetime(),
+});
+
+export type ExperimentAssignmentInput = z.infer<typeof experimentAssignmentSchema>;

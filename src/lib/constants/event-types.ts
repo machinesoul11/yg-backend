@@ -84,6 +84,28 @@ export const EVENT_TYPES = {
   OWNERSHIP_CREATED: 'ownership_created',
   OWNERSHIP_TRANSFERRED: 'ownership_transferred',
   OWNERSHIP_VERIFIED: 'ownership_verified',
+
+  // Blog/Post Analytics Events
+  POST_VIEWED: 'post_viewed',
+  POST_SCROLL_DEPTH: 'post_scroll_depth',
+  POST_ENGAGEMENT_TIME: 'post_engagement_time',
+  POST_CTA_CLICKED: 'post_cta_clicked',
+  POST_SHARED: 'post_shared',
+  POST_COMMENT_CLICKED: 'post_comment_clicked',
+  POST_LIKE_CLICKED: 'post_like_clicked',
+  POST_DOWNLOAD_CLICKED: 'post_download_clicked',
+  POST_SUBSCRIBED: 'post_subscribed',
+  POST_EXPERIMENT_VIEWED: 'post_experiment_viewed',
+  
+  // Performance Metrics Events
+  POST_SESSION_START: 'post_session_start',
+  POST_SESSION_END: 'post_session_end',
+  POST_PAGE_EXIT: 'post_page_exit',
+  POST_EMAIL_CAPTURE: 'post_email_capture',
+  POST_SOCIAL_SHARE_CLICKED: 'post_social_share_clicked',
+  POST_BOUNCE: 'post_bounce',
+  POST_READ_COMPLETE: 'post_read_complete',
+  POST_ENGAGEMENT_MILESTONE: 'post_engagement_milestone',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -128,6 +150,8 @@ export const ENTITY_TYPES = {
   USER: 'user',
   ROYALTY: 'royalty',
   PAYOUT: 'payout',
+  POST: 'post',
+  CATEGORY: 'category',
 } as const;
 
 export type EntityType = typeof ENTITY_TYPES[keyof typeof ENTITY_TYPES];

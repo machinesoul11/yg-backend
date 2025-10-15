@@ -112,6 +112,18 @@ export class StripeConnectService {
         data: { onboardingStatus: 'in_progress' },
       });
 
+      // Store onboarding session for tracking
+      await this.prisma.stripeOnboardingSession.create({
+        data: {
+          creatorId,
+          stripeAccountId,
+          accountLinkUrl: accountLink.url,
+          returnUrl,
+          refreshUrl,
+          expiresAt: new Date(accountLink.expires_at * 1000),
+        },
+      });
+
       return {
         url: accountLink.url,
         expiresAt: accountLink.expires_at,
@@ -211,6 +223,25 @@ export class StripeConnectService {
           data: { onboardingStatus: newStatus },
         });
       }
+
+      // Sync capabilities
+      await this.syncAccountCapabilities(creator.id, stripeAccountId, account);
+
+      // Sync requirements
+      await this.syncAccountRequirements(creator.id, stripeAccountId, account);
+
+      // Mark completed onboarding sessions
+      if (account.details_submitted) {
+        await this.prisma.stripeOnboardingSession.updateMany({
+          where: {
+            creatorId: creator.id,
+            completedAt: null,
+          },
+          data: {
+            completedAt: new Date(),
+          },
+        });
+      }
     } catch (error) {
       console.error(`Failed to sync Stripe account ${stripeAccountId}:`, error);
       
@@ -274,6 +305,223 @@ export class StripeConnectService {
     } catch (error) {
       console.error(`Failed to delete Stripe account ${creator.stripeAccountId}:`, error);
       // Don't throw error - continue with local deletion
+    }
+  }
+
+  /**
+   * Sync account capabilities from Stripe
+   */
+  private async syncAccountCapabilities(
+    creatorId: string,
+    stripeAccountId: string,
+    account: any
+  ): Promise<void> {
+    if (!account.capabilities) return;
+
+    for (const [capability, capabilityStatus] of Object.entries(account.capabilities)) {
+      const status = (capabilityStatus as any)?.status || 'inactive';
+
+      await this.prisma.stripeAccountCapability.upsert({
+        where: {
+          stripeAccountId_capability: {
+            stripeAccountId,
+            capability,
+          },
+        },
+        create: {
+          creatorId,
+          stripeAccountId,
+          capability,
+          status,
+          requestedAt: status !== 'inactive' ? new Date() : null,
+          enabledAt: status === 'active' ? new Date() : null,
+        },
+        update: {
+          status,
+          enabledAt: status === 'active' && !account.enabledAt ? new Date() : undefined,
+          disabledAt: status === 'inactive' ? new Date() : null,
+          updatedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  /**
+   * Sync account requirements from Stripe
+   */
+  private async syncAccountRequirements(
+    creatorId: string,
+    stripeAccountId: string,
+    account: any
+  ): Promise<void> {
+    if (!account.requirements) return;
+
+    const requirements = account.requirements;
+    const allRequirements: Array<{ type: string; fields: string[] }> = [
+      { type: 'currently_due', fields: requirements.currently_due || [] },
+      { type: 'eventually_due', fields: requirements.eventually_due || [] },
+      { type: 'past_due', fields: requirements.past_due || [] },
+      { type: 'pending_verification', fields: requirements.pending_verification || [] },
+    ];
+
+    // Mark all existing requirements as resolved if they're no longer in Stripe's response
+    const allCurrentFields = allRequirements.flatMap(r => r.fields);
+    await this.prisma.stripeAccountRequirement.updateMany({
+      where: {
+        stripeAccountId,
+        fieldName: { notIn: allCurrentFields },
+        resolvedAt: null,
+      },
+      data: {
+        resolvedAt: new Date(),
+      },
+    });
+
+    // Create or update current requirements
+    for (const { type, fields } of allRequirements) {
+      for (const fieldName of fields) {
+        const deadline = type === 'eventually_due' && requirements.current_deadline
+          ? new Date(requirements.current_deadline * 1000)
+          : null;
+
+        const errorInfo = requirements.errors?.find((e: any) => 
+          e.requirement === fieldName
+        );
+
+        await this.prisma.stripeAccountRequirement.upsert({
+          where: {
+            stripeAccountId_fieldName: {
+              stripeAccountId,
+              fieldName,
+            },
+          },
+          create: {
+            creatorId,
+            stripeAccountId,
+            requirementType: type,
+            fieldName,
+            deadline,
+            errorCode: errorInfo?.code,
+            errorReason: errorInfo?.reason,
+          },
+          update: {
+            requirementType: type,
+            deadline,
+            errorCode: errorInfo?.code,
+            errorReason: errorInfo?.reason,
+            resolvedAt: null, // Mark as unresolved if it reappears
+            updatedAt: new Date(),
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Check if account has specific capability enabled
+   */
+  async checkCapability(creatorId: string, capability: string): Promise<boolean> {
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: creatorId, deletedAt: null },
+    });
+
+    if (!creator?.stripeAccountId) {
+      return false;
+    }
+
+    const capabilityRecord = await this.prisma.stripeAccountCapability.findUnique({
+      where: {
+        stripeAccountId_capability: {
+          stripeAccountId: creator.stripeAccountId,
+          capability,
+        },
+      },
+    });
+
+    return capabilityRecord?.status === 'active';
+  }
+
+  /**
+   * Get all current requirements for an account
+   */
+  async getAccountRequirements(creatorId: string): Promise<any[]> {
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: creatorId, deletedAt: null },
+    });
+
+    if (!creator?.stripeAccountId) {
+      return [];
+    }
+
+    const requirements = await this.prisma.stripeAccountRequirement.findMany({
+      where: {
+        stripeAccountId: creator.stripeAccountId,
+        resolvedAt: null,
+      },
+      orderBy: [
+        { requirementType: 'asc' }, // Show currently_due first
+        { fieldName: 'asc' },
+      ],
+    });
+
+    return requirements.map(req => ({
+      fieldName: req.fieldName,
+      requirementType: req.requirementType,
+      deadline: req.deadline,
+      errorCode: req.errorCode,
+      errorReason: req.errorReason,
+      description: this.getRequirementDescription(req.fieldName),
+    }));
+  }
+
+  /**
+   * Get human-readable description for requirement field
+   */
+  private getRequirementDescription(fieldName: string): string {
+    const descriptions: Record<string, string> = {
+      'individual.id_number': 'Government-issued ID number (SSN or EIN)',
+      'individual.dob.day': 'Date of birth - day',
+      'individual.dob.month': 'Date of birth - month',
+      'individual.dob.year': 'Date of birth - year',
+      'individual.first_name': 'Legal first name',
+      'individual.last_name': 'Legal last name',
+      'individual.address.line1': 'Street address',
+      'individual.address.city': 'City',
+      'individual.address.state': 'State or province',
+      'individual.address.postal_code': 'Postal code',
+      'individual.verification.document': 'Government-issued ID (photo)',
+      'individual.verification.additional_document': 'Additional verification document',
+      'business_profile.url': 'Business website URL',
+      'business_profile.mcc': 'Business category code',
+      'tos_acceptance.date': 'Terms of service acceptance date',
+      'tos_acceptance.ip': 'IP address when accepting terms',
+      'external_account': 'Bank account information for payouts',
+    };
+
+    return descriptions[fieldName] || fieldName.replace(/_/g, ' ').replace(/\./g, ' - ');
+  }
+
+  /**
+   * Update account information (for verification updates)
+   */
+  async updateAccountInfo(creatorId: string, updateData: any): Promise<void> {
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: creatorId, deletedAt: null },
+    });
+
+    if (!creator?.stripeAccountId) {
+      throw new CreatorNotFoundError(creatorId);
+    }
+
+    try {
+      await stripe.accounts.update(creator.stripeAccountId, updateData);
+      
+      // Trigger a sync to update our database
+      await this.syncAccountStatus(creator.stripeAccountId);
+    } catch (error) {
+      throw new StripeAccountCreationFailedError(
+        error instanceof Error ? error.message : 'Failed to update account'
+      );
     }
   }
 }
