@@ -15,7 +15,8 @@ import { AuditService } from '@/lib/services/audit.service';
 import Stripe from 'stripe';
 import { z } from 'zod';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Initialize Stripe with fallback for build time
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
   apiVersion: '2025-09-30.clover',
 });
 

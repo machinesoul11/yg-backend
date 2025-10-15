@@ -32,7 +32,7 @@ export class RefundChargebackReportsService {
     private readonly auditService: AuditService,
     stripeSecretKey?: string
   ) {
-    this.stripe = new Stripe(stripeSecretKey || process.env.STRIPE_SECRET_KEY!, {
+    this.stripe = new Stripe(stripeSecretKey || process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
       apiVersion: '2025-09-30.clover'
     });
   }

@@ -35,7 +35,7 @@ import Stripe from 'stripe';
  */
 
 // Initialize services
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-09-30.clover' });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', { apiVersion: '2025-09-30.clover' });
 
 // Input schemas
 const dateRangeSchema = z.object({

@@ -10,7 +10,7 @@ import { PayoutEligibilityService } from './payout-eligibility.service';
 import { PayoutBalanceService } from './payout-balance.service';
 import { auditService } from '@/lib/services/audit.service';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
   apiVersion: '2025-09-30.clover',
 });
 

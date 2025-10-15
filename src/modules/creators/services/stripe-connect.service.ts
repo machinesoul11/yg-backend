@@ -15,12 +15,14 @@ import {
   StripeOnboardingIncompleteError,
 } from '../errors/creator.errors';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-09-30.clover',
-});
-
 export class StripeConnectService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private stripe: Stripe;
+
+  constructor(private readonly prisma: PrismaClient) {
+    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
+      apiVersion: '2025-09-30.clover',
+    });
+  }
 
   /**
    * Create Stripe Connect Express account for creator
@@ -42,7 +44,7 @@ export class StripeConnectService {
 
     try {
       // Create Stripe Express account
-      const account = await stripe.accounts.create({
+      const account = await this.stripe.accounts.create({
         type: 'express',
         country: 'US', // TODO: Make this configurable based on creator location
         email: creator.user.email,
@@ -99,7 +101,7 @@ export class StripeConnectService {
 
     try {
       // Create account link
-      const accountLink = await stripe.accountLinks.create({
+      const accountLink = await this.stripe.accountLinks.create({
         account: stripeAccountId,
         refresh_url: refreshUrl,
         return_url: returnUrl,
@@ -171,7 +173,7 @@ export class StripeConnectService {
     }
 
     try {
-      const account = await stripe.accounts.retrieve(creator.stripeAccountId);
+      const account = await this.stripe.accounts.retrieve(creator.stripeAccountId);
 
       const status: StripeAccountStatusResponse = {
         hasAccount: true,
@@ -213,7 +215,7 @@ export class StripeConnectService {
     }
 
     try {
-      const account = await stripe.accounts.retrieve(stripeAccountId);
+      const account = await this.stripe.accounts.retrieve(stripeAccountId);
 
       const newStatus = account.details_submitted ? 'completed' : 'in_progress';
 
@@ -274,7 +276,7 @@ export class StripeConnectService {
     }
 
     try {
-      const account = await stripe.accounts.retrieve(creator.stripeAccountId);
+      const account = await this.stripe.accounts.retrieve(creator.stripeAccountId);
       return account.payouts_enabled || false;
     } catch {
       return false;
@@ -301,7 +303,7 @@ export class StripeConnectService {
     }
 
     try {
-      await stripe.accounts.del(creator.stripeAccountId);
+      await this.stripe.accounts.del(creator.stripeAccountId);
     } catch (error) {
       console.error(`Failed to delete Stripe account ${creator.stripeAccountId}:`, error);
       // Don't throw error - continue with local deletion
@@ -514,7 +516,7 @@ export class StripeConnectService {
     }
 
     try {
-      await stripe.accounts.update(creator.stripeAccountId, updateData);
+      await this.stripe.accounts.update(creator.stripeAccountId, updateData);
       
       // Trigger a sync to update our database
       await this.syncAccountStatus(creator.stripeAccountId);

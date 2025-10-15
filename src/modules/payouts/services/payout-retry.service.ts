@@ -173,7 +173,7 @@ export class PayoutRetryService {
   ): Promise<{ succeeded: boolean; status?: string }> {
     try {
       const Stripe = require('stripe');
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
         apiVersion: '2025-09-30.clover',
       });
 
