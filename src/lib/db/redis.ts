@@ -28,7 +28,7 @@ export const redis = new Redis(redisUrl, {
 
 // Create separate Redis connection for BullMQ with fallback handling
 export const redisConnection = new Redis(redisUrl, {
-  maxRetriesPerRequest: 10, // Increase for BullMQ stability
+  maxRetriesPerRequest: null, // BullMQ requires this to be null
   retryStrategy(times) {
     if (times > 10) return null; // Stop retrying after 10 attempts
     const delay = Math.min(times * 200, 3000);
