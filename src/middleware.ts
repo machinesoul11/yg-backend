@@ -1,11 +1,12 @@
 /**
  * Next.js Middleware
  * Handles authentication, authorization, and blog redirects
+ * Optimized for Edge Runtime to stay under 1MB limit
  */
 
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
-import { handleBlogRedirects } from '@/middleware/blog-redirect.middleware';
+import { handleBlogRedirects } from '@/middleware/blog-redirect-edge';
 
 export default withAuth(
   async function middleware(req) {
