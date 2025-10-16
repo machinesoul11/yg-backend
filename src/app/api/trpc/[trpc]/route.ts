@@ -27,7 +27,10 @@ const handleOptions = (req: NextRequest) => {
     process.env.NEXT_PUBLIC_APP_URL || 'https://ops.yesgoddess.agency',
   ];
 
-  const isAllowedOrigin = allowedOrigins.includes(origin);
+  // Normalize origins by removing trailing slashes for comparison
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ''));
+  const isAllowedOrigin = normalizedAllowedOrigins.includes(normalizedOrigin);
 
   return new NextResponse(null, {
     status: 204,
