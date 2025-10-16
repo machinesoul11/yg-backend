@@ -85,7 +85,7 @@ The Blog module provides a comprehensive content management system with hierarch
 
 ### Search & Analytics
 - `GET /posts/search` - Full-text search across posts
-- `GET /posts/:id/analytics` - Get post performance metrics
+- `GET /admin/blog/posts/:id/analytics` - Get post performance metrics
 - `GET /categories/:id/analytics` - Get category statistics
 
 ## Status Workflow

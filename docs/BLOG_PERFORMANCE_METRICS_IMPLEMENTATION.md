@@ -63,7 +63,7 @@ Returns paginated performance metrics for all posts with filtering and sorting o
 
 ### Individual Post Analytics
 ```
-GET /api/blog/posts/[id]/analytics
+GET /api/admin/blog/posts/[id]/analytics
 ```
 Returns detailed analytics for a specific post including:
 - Complete performance metrics

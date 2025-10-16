@@ -1,6 +1,6 @@
 /**
  * Individual Post Analytics API Route
- * GET /api/blog/posts/[id]/analytics
+ * GET /api/admin/blog/posts/[id]/analytics
  */
 
 import { NextRequest, NextResponse } from 'next/server';
