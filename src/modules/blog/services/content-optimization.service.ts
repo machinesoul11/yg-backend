@@ -100,9 +100,10 @@ interface ReadabilityMetrics {
 interface ReadabilityResult {
   metrics: ReadabilityMetrics;
   score: number; // 0-100 (higher = more readable)
-  gradeLevel: string;
+  grade: string; // Fixed: changed from gradeLevel to grade for frontend compatibility
   interpretation: string;
   classification: 'very-easy' | 'easy' | 'fairly-easy' | 'standard' | 'fairly-difficult' | 'difficult' | 'very-difficult';
+  issues: string[]; // Added: issues field for frontend compatibility
   recommendations: string[];
 }
 
@@ -117,6 +118,7 @@ interface ImageValidationIssue {
 interface ImageValidationResult {
   totalImages: number;
   validImages: number;
+  invalidImages: number; // Added: calculated field for frontend compatibility
   issues: ImageValidationIssue[];
   complianceScore: number; // 0-100
   recommendations: string[];
@@ -449,12 +451,27 @@ export class ContentOptimizationService {
     const score = Math.max(0, Math.min(100, fleschReadingEase));
     const gradeLevel = `Grade ${Math.round(fleschKincaidGradeLevel)}`;
 
+    // Generate readability issues based on analysis
+    const issues: string[] = [];
+    if (score < 30) {
+      issues.push('Content is very difficult to read');
+    } else if (score < 50) {
+      issues.push('Content readability could be improved');
+    }
+    if (averageWordsPerSentence > 20) {
+      issues.push('Sentences are too long - consider breaking them up');
+    }
+    if (passiveVoicePercentage > 25) {
+      issues.push('High passive voice usage detected');
+    }
+
     return {
       metrics,
       score,
-      gradeLevel,
+      grade: gradeLevel, // Fixed: changed from gradeLevel to grade for frontend compatibility
       interpretation,
       classification,
+      issues, // Populated based on readability analysis
       recommendations
     };
   }
@@ -546,6 +563,7 @@ export class ContentOptimizationService {
     return {
       totalImages,
       validImages,
+      invalidImages: totalImages - validImages, // Added: calculated field for frontend compatibility
       issues,
       complianceScore,
       recommendations
@@ -951,3 +969,22 @@ export class ContentOptimizationService {
     };
   }
 }
+
+// ============================================================================
+// Export Types for Frontend Integration
+// ============================================================================
+
+export type {
+  ContentOptimizationConfig,
+  KeywordDensityResult,
+  KeywordAnalysis,
+  HeadingStructureIssue,
+  HeadingStructureResult,
+  ReadabilityMetrics,
+  ReadabilityResult,
+  ImageValidationIssue,
+  ImageValidationResult,
+  ContentLengthAnalysis,
+  InternalLinkingAnalysis,
+  ContentOptimizationResult,
+};
