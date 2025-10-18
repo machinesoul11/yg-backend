@@ -108,6 +108,78 @@ const TerminateLicenseSchema = z.object({
   effectiveDate: z.string().datetime().optional(),
 });
 
+const SearchLicensesSchema = z.object({
+  // Search query
+  query: z.string()
+    .min(2, 'Search query must be at least 2 characters')
+    .max(200, 'Search query must be at most 200 characters')
+    .trim()
+    .optional(),
+  
+  // Filters
+  status: z.array(z.enum([
+    'DRAFT', 'PENDING_APPROVAL', 'PENDING_SIGNATURE', 'ACTIVE', 
+    'EXPIRING_SOON', 'EXPIRED', 'RENEWED', 'TERMINATED', 'DISPUTED', 
+    'CANCELED', 'SUSPENDED'
+  ])).optional(),
+  licenseType: z.array(z.enum(['EXCLUSIVE', 'NON_EXCLUSIVE', 'EXCLUSIVE_TERRITORY'])).optional(),
+  brandId: z.string().cuid().optional(),
+  creatorId: z.string().cuid().optional(), // Search by creator via IP asset ownership
+  ipAssetId: z.string().cuid().optional(),
+  projectId: z.string().cuid().optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  startDateFrom: z.string().datetime().optional(), // Filter by license start date
+  startDateTo: z.string().datetime().optional(),
+  endDateFrom: z.string().datetime().optional(), // Filter by license end date
+  endDateTo: z.string().datetime().optional(),
+  expiringWithinDays: z.number().int().min(0).max(365).optional(), // Find licenses expiring soon
+  
+  // Pagination
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(20),
+  
+  // Sorting
+  sortBy: z.enum(['relevance', 'createdAt', 'updatedAt', 'startDate', 'endDate', 'feeCents']).default('relevance'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+}).refine(
+  (data) => {
+    // Ensure dateTo > dateFrom
+    if (data.dateFrom && data.dateTo) {
+      return new Date(data.dateTo) >= new Date(data.dateFrom);
+    }
+    return true;
+  },
+  {
+    message: 'End date must be after or equal to start date',
+    path: ['dateTo'],
+  }
+).refine(
+  (data) => {
+    // Ensure startDateTo > startDateFrom
+    if (data.startDateFrom && data.startDateTo) {
+      return new Date(data.startDateTo) >= new Date(data.startDateFrom);
+    }
+    return true;
+  },
+  {
+    message: 'Start date to must be after or equal to start date from',
+    path: ['startDateTo'],
+  }
+).refine(
+  (data) => {
+    // Ensure endDateTo > endDateFrom
+    if (data.endDateFrom && data.endDateTo) {
+      return new Date(data.endDateTo) >= new Date(data.endDateFrom);
+    }
+    return true;
+  },
+  {
+    message: 'End date to must be after or equal to end date from',
+    path: ['endDateTo'],
+  }
+);
+
 // ===========================
 // Helper Functions
 // ===========================
@@ -1110,6 +1182,275 @@ export const licensesRouter = createTRPCRouter({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error.message || 'Failed to get performance dashboard',
+        });
+      }
+    }),
+
+  /**
+   * SEARCH: Search licenses with advanced filters
+   * Search across licenses by name, description, status, type, and date ranges
+   */
+  search: protectedProcedure
+    .input(SearchLicensesSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        // Build where clause based on filters
+        const where: any = {
+          deletedAt: null,
+        };
+
+        // Apply text search if query provided
+        if (input.query) {
+          where.OR = [
+            { 
+              ipAsset: { 
+                title: { contains: input.query, mode: 'insensitive' as const } 
+              } 
+            },
+            { 
+              brand: { 
+                companyName: { contains: input.query, mode: 'insensitive' as const } 
+              } 
+            },
+          ];
+        }
+
+        // Apply status filter
+        if (input.status && input.status.length > 0) {
+          where.status = { in: input.status };
+        }
+
+        // Apply license type filter
+        if (input.licenseType && input.licenseType.length > 0) {
+          where.licenseType = { in: input.licenseType };
+        }
+
+        // Apply brand filter
+        if (input.brandId) {
+          where.brandId = input.brandId;
+        }
+
+        // Apply IP asset filter
+        if (input.ipAssetId) {
+          where.ipAssetId = input.ipAssetId;
+        }
+
+        // Apply project filter
+        if (input.projectId) {
+          where.projectId = input.projectId;
+        }
+
+        // Apply creator filter (via IP asset ownership)
+        if (input.creatorId) {
+          where.ipAsset = {
+            ownerships: {
+              some: {
+                creatorId: input.creatorId,
+                endDate: null,
+              },
+            },
+          };
+        }
+
+        // Apply created date range filter
+        if (input.dateFrom || input.dateTo) {
+          where.createdAt = {};
+          if (input.dateFrom) {
+            where.createdAt.gte = new Date(input.dateFrom);
+          }
+          if (input.dateTo) {
+            where.createdAt.lte = new Date(input.dateTo);
+          }
+        }
+
+        // Apply license start date range filter
+        if (input.startDateFrom || input.startDateTo) {
+          where.startDate = {};
+          if (input.startDateFrom) {
+            where.startDate.gte = new Date(input.startDateFrom);
+          }
+          if (input.startDateTo) {
+            where.startDate.lte = new Date(input.startDateTo);
+          }
+        }
+
+        // Apply license end date range filter
+        if (input.endDateFrom || input.endDateTo) {
+          where.endDate = {};
+          if (input.endDateFrom) {
+            where.endDate.gte = new Date(input.endDateFrom);
+          }
+          if (input.endDateTo) {
+            where.endDate.lte = new Date(input.endDateTo);
+          }
+        }
+
+        // Apply expiring within days filter
+        if (input.expiringWithinDays !== undefined) {
+          const now = new Date();
+          const futureDate = new Date();
+          futureDate.setDate(now.getDate() + input.expiringWithinDays);
+          
+          where.endDate = {
+            gte: now,
+            lte: futureDate,
+          };
+          where.status = 'ACTIVE';
+        }
+
+        // Apply permission filtering
+        if (userRole === 'BRAND') {
+          const userBrand = await ctx.db.brand.findUnique({
+            where: { userId },
+            select: { id: true },
+          });
+          if (userBrand) {
+            where.brandId = userBrand.id;
+          } else {
+            // Brand user without brand profile can't see any licenses
+            return {
+              data: {
+                licenses: [],
+                pagination: {
+                  page: input.page,
+                  limit: input.limit,
+                  total: 0,
+                  totalPages: 0,
+                  hasNextPage: false,
+                  hasPreviousPage: false,
+                },
+              },
+            };
+          }
+        } else if (userRole === 'CREATOR') {
+          const creatorRecord = await ctx.db.creator.findUnique({
+            where: { userId },
+            select: { id: true },
+          });
+          
+          if (creatorRecord) {
+            // Creators can see licenses for their IP assets
+            where.ipAsset = {
+              ownerships: {
+                some: {
+                  creatorId: creatorRecord.id,
+                  endDate: null,
+                },
+              },
+            };
+          } else {
+            // Creator without creator profile can't see any licenses
+            return {
+              data: {
+                licenses: [],
+                pagination: {
+                  page: input.page,
+                  limit: input.limit,
+                  total: 0,
+                  totalPages: 0,
+                  hasNextPage: false,
+                  hasPreviousPage: false,
+                },
+              },
+            };
+          }
+        }
+
+        // Build orderBy clause
+        let orderBy: any = {};
+        if (input.sortBy === 'relevance' && input.query) {
+          // For relevance with query, prioritize matches
+          orderBy = [
+            { createdAt: 'desc' as const },
+          ];
+        } else {
+          orderBy = { [input.sortBy === 'relevance' ? 'createdAt' : input.sortBy]: input.sortOrder };
+        }
+
+        // Count total results
+        const total = await ctx.db.license.count({ where });
+
+        // Fetch paginated results
+        const skip = (input.page - 1) * input.limit;
+        const licenses = await ctx.db.license.findMany({
+          where,
+          include: {
+            ipAsset: {
+              select: {
+                id: true,
+                title: true,
+                type: true,
+                thumbnailUrl: true,
+              },
+            },
+            brand: {
+              select: {
+                id: true,
+                companyName: true,
+                logo: true,
+              },
+            },
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            _count: {
+              select: {
+                amendments: true,
+                extensions: true,
+              },
+            },
+          },
+          orderBy,
+          skip,
+          take: input.limit,
+        });
+
+        const totalPages = Math.ceil(total / input.limit);
+
+        // Calculate facets
+        const facets = {
+          statuses: await ctx.db.license.groupBy({
+            by: ['status'],
+            where: { ...where, status: undefined },
+            _count: { status: true },
+          }).then(groups => 
+            groups.reduce((acc, g) => ({ ...acc, [g.status]: g._count.status }), {})
+          ),
+          licenseTypes: await ctx.db.license.groupBy({
+            by: ['licenseType'],
+            where: { ...where, licenseType: undefined },
+            _count: { licenseType: true },
+          }).then(groups => 
+            groups.reduce((acc, g) => ({ ...acc, [g.licenseType]: g._count.licenseType }), {})
+          ),
+        };
+
+        return {
+          data: {
+            licenses: licenses.map(transformLicenseForAPI),
+            pagination: {
+              page: input.page,
+              limit: input.limit,
+              total,
+              totalPages,
+              hasNextPage: input.page < totalPages,
+              hasPreviousPage: input.page > 1,
+            },
+            facets,
+          },
+        };
+      } catch (error) {
+        console.error('License search error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to search licenses',
+          cause: error,
         });
       }
     }),

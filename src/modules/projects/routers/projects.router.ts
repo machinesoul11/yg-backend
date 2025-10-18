@@ -15,6 +15,7 @@ import {
   updateProjectSchema,
   getProjectByIdSchema,
   listProjectsSchema,
+  searchProjectsSchema,
   deleteProjectSchema,
   getProjectAssetsSchema,
   getProjectTeamSchema,
@@ -661,6 +662,196 @@ export const projectsRouter = createTRPCRouter({
         return { data: summary };
       } catch (error) {
         throw mapErrorToTRPC(error);
+      }
+    }),
+
+  // ============================================================================
+  // SEARCH
+  // ============================================================================
+
+  /**
+   * SEARCH - Search projects with filters
+   * Advanced search across projects with multiple filter options
+   */
+  search: protectedProcedure
+    .input(searchProjectsSchema)
+    .query(async ({ ctx, input }) => {
+      try {
+        const userId = ctx.session.user.id;
+        const userRole = ctx.session.user.role;
+
+        // Build where clause based on filters
+        const where: any = {
+          deletedAt: null,
+        };
+
+        // Apply text search if query provided
+        if (input.query) {
+          where.OR = [
+            { name: { contains: input.query, mode: 'insensitive' as const } },
+            { description: { contains: input.query, mode: 'insensitive' as const } },
+          ];
+        }
+
+        // Apply status filter
+        if (input.status && input.status.length > 0) {
+          where.status = { in: input.status };
+        }
+
+        // Apply project type filter
+        if (input.projectType && input.projectType.length > 0) {
+          where.projectType = { in: input.projectType };
+        }
+
+        // Apply brand filter
+        if (input.brandId) {
+          where.brandId = input.brandId;
+        }
+
+        // Apply budget range filter
+        if (input.budgetMin !== undefined || input.budgetMax !== undefined) {
+          where.budgetCents = {};
+          if (input.budgetMin !== undefined) {
+            where.budgetCents.gte = input.budgetMin;
+          }
+          if (input.budgetMax !== undefined) {
+            where.budgetCents.lte = input.budgetMax;
+          }
+        }
+
+        // Apply date range filter
+        if (input.dateFrom || input.dateTo) {
+          where.createdAt = {};
+          if (input.dateFrom) {
+            where.createdAt.gte = new Date(input.dateFrom);
+          }
+          if (input.dateTo) {
+            where.createdAt.lte = new Date(input.dateTo);
+          }
+        }
+
+        // Apply permission filtering
+        if (userRole === 'BRAND') {
+          const userBrand = await prisma.brand.findUnique({
+            where: { userId },
+            select: { id: true },
+          });
+          if (userBrand) {
+            where.brandId = userBrand.id;
+          } else {
+            // Brand user without brand profile can't see any projects
+            return {
+              data: {
+                projects: [],
+                pagination: {
+                  page: input.page,
+                  limit: input.limit,
+                  total: 0,
+                  totalPages: 0,
+                  hasNextPage: false,
+                  hasPreviousPage: false,
+                },
+              },
+            };
+          }
+        } else if (userRole === 'CREATOR' && input.creatorId) {
+          // Creators can search projects they're involved in via IP assets
+          const creatorRecord = await prisma.creator.findUnique({
+            where: { userId },
+            select: { id: true },
+          });
+          
+          if (creatorRecord && input.creatorId === creatorRecord.id) {
+            where.ipAssets = {
+              some: {
+                ownerships: {
+                  some: {
+                    creatorId: creatorRecord.id,
+                    endDate: null,
+                  },
+                },
+              },
+            };
+          }
+        }
+
+        // Build orderBy clause
+        let orderBy: any = {};
+        if (input.sortBy === 'relevance' && input.query) {
+          // For relevance, we'll use a combination of exact matches and recency
+          orderBy = [
+            { name: 'asc' as const },
+            { createdAt: 'desc' as const },
+          ];
+        } else {
+          orderBy = { [input.sortBy === 'relevance' ? 'createdAt' : input.sortBy]: input.sortOrder };
+        }
+
+        // Count total results
+        const total = await prisma.project.count({ where });
+
+        // Fetch paginated results
+        const skip = (input.page - 1) * input.limit;
+        const projects = await prisma.project.findMany({
+          where,
+          include: {
+            brand: {
+              select: {
+                id: true,
+                companyName: true,
+                logo: true,
+              },
+            },
+            _count: {
+              select: {
+                ipAssets: true,
+                licenses: true,
+              },
+            },
+          },
+          orderBy,
+          skip,
+          take: input.limit,
+        });
+
+        const totalPages = Math.ceil(total / input.limit);
+
+        return {
+          data: {
+            projects,
+            pagination: {
+              page: input.page,
+              limit: input.limit,
+              total,
+              totalPages,
+              hasNextPage: input.page < totalPages,
+              hasPreviousPage: input.page > 1,
+            },
+            facets: {
+              statuses: await prisma.project.groupBy({
+                by: ['status'],
+                where: { ...where, status: undefined },
+                _count: { status: true },
+              }).then(groups => 
+                groups.reduce((acc, g) => ({ ...acc, [g.status]: g._count.status }), {})
+              ),
+              projectTypes: await prisma.project.groupBy({
+                by: ['projectType'],
+                where: { ...where, projectType: undefined },
+                _count: { projectType: true },
+              }).then(groups => 
+                groups.reduce((acc, g) => ({ ...acc, [g.projectType]: g._count.projectType }), {})
+              ),
+            },
+          },
+        };
+      } catch (error) {
+        console.error('Project search error:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to search projects',
+          cause: error,
+        });
       }
     }),
 });

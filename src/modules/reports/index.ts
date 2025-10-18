@@ -6,19 +6,21 @@
 
 // Core Services (implemented)
 export { FinancialReportingService } from './services/financial-reporting.service';
+export { CustomReportBuilderService, CustomReportConfigSchema } from './services/custom-report-builder.service';
+export { ReportTemplatesService } from './services/report-templates.service';
+export { ScheduledReportService } from './services/scheduled-reports.service';
+export { ReportArchiveService } from './services/report-archive.service';
+export { PDFReportGenerationService } from './services/pdf-generation.service';
+export { CSVExportService } from './services/csv-export.service';
+export { SecureDownloadService } from './services/secure-download.service';
 
-// Additional Services (to be implemented)
+// Additional Services (to be implemented as needed)
 // export { RevenueReconciliationService } from './services/revenue-reconciliation.service';
 // export { TransactionLedgerService } from './services/transaction-ledger.service';
 // export { PlatformFeeReportingService } from './services/platform-fee-reporting.service';
 // export { CreatorEarningsReportingService } from './services/creator-earnings-reporting.service';
 // export { BrandSpendAnalysisService } from './services/brand-spend-analysis.service';
 // export { ComparisonReportingService } from './services/comparison-reporting.service';
-
-// Infrastructure Services (to be implemented)
-// export { ReportExportService } from './services/report-export.service';
-// export { ReportTemplateService } from './services/report-template.service';
-// export { ScheduledReportsService } from './services/scheduled-reports.service';
 
 // API Layer
 export { reportsRouter } from './router';

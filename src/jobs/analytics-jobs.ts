@@ -1,56 +1,19 @@
 /**
  * Analytics Background Jobs
- * Handles event enrichment and daily metrics aggregation
+ * Handles event enrichment, daily metrics aggregation, and real-time metrics
  */
 
 import { Queue, Worker, type Job } from 'bullmq';
 import { prisma } from '@/lib/db';
-import { redisConnection } from '@/lib/db/redis';;
+import { redisConnection, redis } from '@/lib/db/redis';
 import { MetricsAggregationService } from '@/modules/analytics/services/metrics-aggregation.service';
+import { EventEnrichmentService } from '@/modules/analytics/services/event-enrichment.service';
+import { RealtimeMetricsService } from '@/modules/analytics/services/realtime-metrics.service';
+import { MetricsCacheService } from '@/modules/analytics/services/metrics-cache-layer.service';
 import type {
   EnrichEventJobData,
   AggregateDailyMetricsJobData,
-  ParsedUserAgent,
 } from '@/modules/analytics/types';
-
-/**
- * Parse user agent string into device/browser/os
- */
-function parseUserAgent(userAgent: string): ParsedUserAgent {
-  // Basic user agent parsing (in production, use a library like ua-parser-js)
-  const ua = userAgent.toLowerCase();
-
-  // Device detection
-  let deviceType = 'desktop';
-  if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
-    deviceType = 'tablet';
-  } else if (
-    /Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(
-      userAgent
-    )
-  ) {
-    deviceType = 'mobile';
-  }
-
-  // Browser detection
-  let browser = 'Unknown';
-  if (ua.includes('firefox')) browser = 'Firefox';
-  else if (ua.includes('chrome') && !ua.includes('edge')) browser = 'Chrome';
-  else if (ua.includes('safari') && !ua.includes('chrome')) browser = 'Safari';
-  else if (ua.includes('edge')) browser = 'Edge';
-  else if (ua.includes('trident') || ua.includes('msie')) browser = 'IE';
-
-  // OS detection
-  let os = 'Unknown';
-  if (ua.includes('windows')) os = 'Windows';
-  else if (ua.includes('mac')) os = 'macOS';
-  else if (ua.includes('linux')) os = 'Linux';
-  else if (ua.includes('android')) os = 'Android';
-  else if (ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad'))
-    os = 'iOS';
-
-  return { deviceType, browser, os };
-}
 
 /**
  * Job Queue: Enrich Event
@@ -60,7 +23,7 @@ export const enrichEventQueue = new Queue<EnrichEventJobData>(
   {
     connection: redisConnection,
     defaultJobOptions: {
-      attempts: 2,
+      attempts: 3,
       backoff: {
         type: 'exponential',
         delay: 5000,
@@ -73,6 +36,7 @@ export const enrichEventQueue = new Queue<EnrichEventJobData>(
 
 /**
  * Worker: Enrich Event
+ * Uses the EventEnrichmentService for comprehensive enrichment
  */
 export const enrichEventWorker = new Worker<EnrichEventJobData>(
   'enrich-event',
@@ -81,35 +45,20 @@ export const enrichEventWorker = new Worker<EnrichEventJobData>(
 
     console.log(`[EnrichEvent] Processing event ${eventId}`);
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      include: { attribution: true },
-    });
+    const enrichmentService = new EventEnrichmentService(prisma, redis);
 
-    if (!event) {
-      console.warn(`[EnrichEvent] Event ${eventId} not found`);
-      return;
-    }
-
-    // Parse user agent from props_json
-    const propsJson = event.propsJson as any;
-    const userAgent = propsJson?.userAgent;
-
-    if (userAgent && event.attribution) {
-      const { deviceType, browser, os } = parseUserAgent(userAgent);
-
-      // Update attribution with parsed data
-      await (prisma as any).attribution.updateMany({
-        where: { eventId: event.id },
-        data: { deviceType, browser, os },
-      });
-
-      console.log(
-        `[EnrichEvent] Enriched event ${eventId} with device=${deviceType}, browser=${browser}, os=${os}`
-      );
+    try {
+      await enrichmentService.enrichEvent(eventId);
+      console.log(`[EnrichEvent] Successfully enriched event ${eventId}`);
+    } catch (error) {
+      console.error(`[EnrichEvent] Error enriching event ${eventId}:`, error);
+      throw error; // Will trigger retry
     }
   },
-  { connection: redisConnection }
+  { 
+    connection: redisConnection,
+    concurrency: 5, // Process up to 5 enrichment jobs concurrently
+  }
 );
 
 /**
@@ -467,6 +416,38 @@ export async function scheduleNightlyAggregation() {
 }
 
 /**
+ * Get aggregation job health and statistics
+ */
+export async function getMetricsAggregationHealth() {
+  const [dailyWaiting, dailyActive, dailyCompleted, dailyFailed, postWaiting, postActive] = await Promise.all([
+    aggregateDailyMetricsQueue.getWaitingCount(),
+    aggregateDailyMetricsQueue.getActiveCount(),
+    aggregateDailyMetricsQueue.getCompletedCount(),
+    aggregateDailyMetricsQueue.getFailedCount(),
+    aggregatePostDailyMetricsQueue.getWaitingCount(),
+    aggregatePostDailyMetricsQueue.getActiveCount(),
+  ]);
+
+  return {
+    dailyMetrics: {
+      waiting: dailyWaiting,
+      active: dailyActive,
+      completed: dailyCompleted,
+      failed: dailyFailed,
+      isHealthy: dailyFailed < 5 && dailyActive < 10,
+    },
+    postMetrics: {
+      waiting: postWaiting,
+      active: postActive,
+      isHealthy: postActive < 10,
+    },
+    overall: {
+      isHealthy: dailyFailed < 5 && dailyActive < 10 && postActive < 10,
+    },
+  };
+}
+
+/**
  * Schedule nightly post metrics aggregation job (runs at 3 AM UTC)
  */
 export async function scheduleNightlyPostAggregation() {
@@ -535,4 +516,55 @@ aggregatePostDailyMetricsWorker.on('completed', (job) => {
   console.log(
     `[AggregatePostDailyMetrics] Job ${job.id} completed successfully`
   );
+});
+
+/**
+ * Initialize real-time metrics service
+ */
+export const realtimeMetricsService = new RealtimeMetricsService(prisma, redis);
+
+/**
+ * Initialize cache service
+ */
+export const metricsCacheService = new MetricsCacheService(prisma, redis);
+
+/**
+ * Reconcile real-time metrics (hourly job)
+ */
+export async function scheduleRealtimeMetricsReconciliation(): Promise<void> {
+  setInterval(async () => {
+    try {
+      console.log('[RealtimeMetrics] Starting reconciliation');
+      // Add metric keys to reconcile here
+      const metricKeys = ['events:asset_viewed', 'events:license_created'];
+      await realtimeMetricsService.reconcileMetrics(metricKeys);
+      console.log('[RealtimeMetrics] Reconciliation complete');
+    } catch (error) {
+      console.error('[RealtimeMetrics] Reconciliation error:', error);
+    }
+  }, 3600000); // Every hour
+}
+
+/**
+ * Cleanup expired real-time metrics (daily job)
+ */
+export async function scheduleRealtimeMetricsCleanup(): Promise<void> {
+  setInterval(async () => {
+    try {
+      console.log('[RealtimeMetrics] Starting cleanup');
+      await realtimeMetricsService.cleanupExpiredMetrics();
+      console.log('[RealtimeMetrics] Cleanup complete');
+    } catch (error) {
+      console.error('[RealtimeMetrics] Cleanup error:', error);
+    }
+  }, 86400000); // Every 24 hours
+}
+
+/**
+ * Invalidate cache after daily aggregation completes
+ */
+aggregateDailyMetricsWorker.on('completed', async (job) => {
+  if (job?.data?.date) {
+    await metricsCacheService.invalidateAfterDailyAggregation(job.data.date);
+  }
 });

@@ -24,6 +24,10 @@ export async function initializeAllWorkers(): Promise<void> {
     // Set up scheduled blog publishing job
     await setupScheduledPublishingJob();
 
+    // Set up analytics aggregation jobs
+    const { initializeMetricsAggregationJobs } = await import('./metrics-aggregation.job');
+    await initializeMetricsAggregationJobs();
+
     // Set up graceful shutdown handlers
     process.on('SIGTERM', async () => {
       console.log('[Workers] SIGTERM received, shutting down all workers...');

@@ -35,6 +35,8 @@ import LicenseRenewalComplete from '../../../../emails/templates/LicenseRenewalC
 import LicenseExpiry90DayNotice from '../../../../emails/templates/LicenseExpiry90DayNotice';
 import LicenseExpiry60DayNotice from '../../../../emails/templates/LicenseExpiry60DayNotice';
 import LicenseExpiry30DayNotice from '../../../../emails/templates/LicenseExpiry30DayNotice';
+import ScheduledReportDelivery from '../../../../emails/templates/ScheduledReportDelivery';
+import CustomReportReady from '../../../../emails/templates/CustomReportReady';
 import { EmailTemplateError } from '@/lib/services/email/errors';
 
 /**
@@ -302,6 +304,40 @@ export interface LicenseExpiry30DayNoticeProps {
   expired?: boolean;
 }
 
+export interface ScheduledReportDeliveryProps {
+  recipientName: string;
+  reportName: string;
+  reportType: string;
+  reportPeriod: string;
+  frequency: string;
+  downloadUrl: string;
+  expiresAt: string;
+  nextScheduledDate: string;
+  attachmentCount: number;
+  fileFormats: string[];
+  reportSummary?: {
+    keyMetrics: Array<{
+      label: string;
+      value: string;
+      trend?: 'up' | 'down' | 'stable';
+    }>;
+  };
+}
+
+export interface CustomReportReadyProps {
+  recipientName: string;
+  reportName: string;
+  reportDescription?: string;
+  reportCategory: string;
+  dateRange: string;
+  downloadUrl: string;
+  expiresAt: string;
+  fileFormat: string;
+  fileSizeMB: string;
+  generationTime: string;
+  warnings?: string[];
+}
+
 /**
  * Template registry mapping template keys to their components and props types
  */
@@ -422,6 +458,14 @@ export const TEMPLATE_REGISTRY = {
     component: LicenseExpiry30DayNotice,
     category: 'licenseExpiry',
   },
+  'scheduled-report-delivery': {
+    component: ScheduledReportDelivery,
+    category: 'reports',
+  },
+  'custom-report-ready': {
+    component: CustomReportReady,
+    category: 'reports',
+  },
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATE_REGISTRY;
@@ -459,9 +503,11 @@ export interface TemplateVariablesMap {
   'license-expiry-90-day': LicenseExpiry90DayNoticeProps;
   'license-expiry-60-day': LicenseExpiry60DayNoticeProps;
   'license-expiry-30-day': LicenseExpiry30DayNoticeProps;
+  'scheduled-report-delivery': ScheduledReportDeliveryProps;
+  'custom-report-ready': CustomReportReadyProps;
 }
 
-export type TemplateVariables<T extends TemplateKey = TemplateKey> = TemplateVariablesMap[T];
+export type TemplateVariables<T extends TemplateKey = TemplateKey> = T extends keyof TemplateVariablesMap ? TemplateVariablesMap[T] : never;
 
 /**
  * Render a template with type-safe variable injection
@@ -554,6 +600,8 @@ function getRequiredFields(templateKey: TemplateKey): string[] {
     'license-expiry-90-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
     'license-expiry-60-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
     'license-expiry-30-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
+    'scheduled-report-delivery': ['recipientName', 'reportName', 'reportType', 'reportPeriod', 'frequency', 'downloadUrl', 'expiresAt', 'nextScheduledDate', 'attachmentCount', 'fileFormats'],
+    'custom-report-ready': ['recipientName', 'reportName', 'reportCategory', 'dateRange', 'downloadUrl', 'expiresAt', 'fileFormat', 'fileSizeMB', 'generationTime'],
   };
 
   return requiredFieldsMap[templateKey] || [];

@@ -146,6 +146,60 @@ export const listProjectsSchema = z.object({
 
 export type ListProjectsInput = z.infer<typeof listProjectsSchema>;
 
+// Search Projects Schema
+export const searchProjectsSchema = z.object({
+  // Search query
+  query: z.string()
+    .min(2, 'Search query must be at least 2 characters')
+    .max(200, 'Search query must be at most 200 characters')
+    .trim()
+    .optional(),
+  
+  // Filters
+  status: z.array(z.enum(['DRAFT', 'ACTIVE', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'ARCHIVED'])).optional(),
+  projectType: z.array(z.enum(['CAMPAIGN', 'CONTENT', 'LICENSING'])).optional(),
+  brandId: z.string().cuid().optional(),
+  creatorId: z.string().cuid().optional(), // Search by creator involvement
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+  budgetMin: z.number().int().min(0).optional(),
+  budgetMax: z.number().int().min(0).optional(),
+  
+  // Pagination
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(20),
+  
+  // Sorting
+  sortBy: z.enum(['relevance', 'createdAt', 'updatedAt', 'name', 'budgetCents', 'startDate']).default('relevance'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+}).refine(
+  (data) => {
+    // Ensure budgetMax > budgetMin
+    if (data.budgetMin !== undefined && data.budgetMax !== undefined) {
+      return data.budgetMax >= data.budgetMin;
+    }
+    return true;
+  },
+  {
+    message: 'Maximum budget must be greater than or equal to minimum budget',
+    path: ['budgetMax'],
+  }
+).refine(
+  (data) => {
+    // Ensure dateTo > dateFrom
+    if (data.dateFrom && data.dateTo) {
+      return new Date(data.dateTo) >= new Date(data.dateFrom);
+    }
+    return true;
+  },
+  {
+    message: 'End date must be after or equal to start date',
+    path: ['dateTo'],
+  }
+);
+
+export type SearchProjectsInput = z.infer<typeof searchProjectsSchema>;
+
 // Delete Project Schema
 export const deleteProjectSchema = z.object({
   id: z.string().cuid('Invalid project ID'),

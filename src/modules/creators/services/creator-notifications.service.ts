@@ -6,10 +6,10 @@
 import { PrismaClient } from '@prisma/client';
 import { render } from '@react-email/render';
 import { emailService } from '@/lib/services/email/email.service';
-import CreatorWelcomeEmail from '@/emails/templates/CreatorWelcome';
-import CreatorVerificationApprovedEmail from '@/emails/templates/CreatorVerificationApproved';
-import CreatorVerificationRejectedEmail from '@/emails/templates/CreatorVerificationRejected';
-import StripeOnboardingReminderEmail from '@/emails/templates/StripeOnboardingReminder';
+import CreatorWelcomeEmail from '../../../../emails/templates/CreatorWelcome';
+import CreatorVerificationApprovedEmail from '../../../../emails/templates/CreatorVerificationApproved';
+import CreatorVerificationRejectedEmail from '../../../../emails/templates/CreatorVerificationRejected';
+import StripeOnboardingReminderEmail from '../../../../emails/templates/StripeOnboardingReminder';
 import { CreatorNotFoundError } from '../errors/creator.errors';
 
 export class CreatorNotificationsService {

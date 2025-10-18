@@ -395,14 +395,15 @@ export const reportsRouter = createTRPCRouter({
           data: {
             id: reportId,
             reportType: input.reportType.toUpperCase() as any,
+            period: input.parameters as any,
             generatedBy: ctx.session?.user?.id || 'anonymous',
             status: 'GENERATING',
-            parameters: input.parameters,
             metadata: {
               format: input.format,
               name: input.name || `${input.reportType}_report_${new Date().toISOString().split('T')[0]}`,
-              requestedAt: new Date().toISOString()
-            }
+              requestedAt: new Date().toISOString(),
+              parameters: input.parameters
+            } as any
           }
         });
 
@@ -493,15 +494,17 @@ export const reportsRouter = createTRPCRouter({
         // In a real implementation, you would generate a signed URL from your storage provider
         const downloadUrl = `/api/reports/${report.id}/file?token=${downloadRecord.id}`;
 
+        const metadata = report.metadata as any;
+        
         return {
           downloadUrl,
-          filename: `${report.metadata?.name || 'financial_report'}.${report.metadata?.format || 'pdf'}`,
+          filename: `${metadata?.name || 'financial_report'}.${metadata?.format || 'pdf'}`,
           expiresAt: downloadRecord.expiresAt,
           reportInfo: {
             id: report.id,
             type: report.reportType,
             generatedAt: report.createdAt,
-            size: report.metadata?.fileSize || 'Unknown'
+            size: metadata?.fileSize || 'Unknown'
           }
         };
 
@@ -730,6 +733,629 @@ export const reportsRouter = createTRPCRouter({
           downloadExpiration: '30 days'
         }
       };
+    }),
+
+  /**
+   * GET /reports/templates
+   * Get all available report templates
+   */
+  getTemplates: protectedProcedure
+    .query(async ({ ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { ReportTemplatesService } = await import('./services/report-templates.service');
+        const templatesService = new ReportTemplatesService(prisma);
+
+        const templates = templatesService.getAllTemplates();
+
+        // Filter templates based on user role
+        const userRole = ctx.session?.user?.role || 'VIEWER';
+        const filteredTemplates = templates.filter(template => 
+          template.accessLevel.includes(userRole as any)
+        );
+
+        return {
+          templates: filteredTemplates,
+          total: filteredTemplates.length
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch report templates',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * POST /reports/templates/generate
+   * Generate report from template
+   */
+  generateFromTemplate: protectedProcedure
+    .input(z.object({
+      templateId: z.string(),
+      parameters: z.object({
+        period: z.object({
+          startDate: z.coerce.date().optional(),
+          endDate: z.coerce.date().optional(),
+          month: z.number().min(0).max(11).optional(),
+          quarter: z.number().min(1).max(4).optional(),
+          year: z.number().optional()
+        }).optional(),
+        userId: z.string().optional(),
+        filters: z.record(z.string(), z.any()).optional(),
+        format: z.enum(['pdf', 'csv', 'excel']).default('pdf')
+      })
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { ReportTemplatesService } = await import('./services/report-templates.service');
+        const templatesService = new ReportTemplatesService(prisma);
+
+        const reportId = await templatesService.generateFromTemplate(
+          input.templateId,
+          input.parameters,
+          ctx.session!.user!.id
+        );
+
+        return {
+          reportId,
+          status: 'queued',
+          message: 'Report generation queued successfully'
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to generate report from template',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * GET /reports/custom-builder/fields
+   * Get available fields for custom report builder
+   */
+  getCustomBuilderFields: protectedProcedure
+    .input(z.object({
+      dataSource: z.enum(['transactions', 'royalties', 'licenses', 'assets', 'creators', 'brands'])
+    }))
+    .query(async ({ input }) => {
+      try {
+        const { CustomReportBuilderService } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(new PrismaClient());
+
+        const fields = builderService.getAvailableFields(input.dataSource);
+
+        return {
+          dataSource: input.dataSource,
+          fields,
+          total: fields.length
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch available fields',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * GET /reports/custom-builder/defaults
+   * Get intelligent defaults for report category
+   */
+  getCustomBuilderDefaults: protectedProcedure
+    .input(z.object({
+      category: z.enum(['financial', 'operational', 'creator_performance', 'brand_campaign', 'asset_portfolio', 'license_analytics'])
+    }))
+    .query(async ({ input }) => {
+      try {
+        const { CustomReportBuilderService } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(new PrismaClient());
+
+        const defaults = builderService.getReportDefaults(input.category);
+
+        return {
+          category: input.category,
+          defaults
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch report defaults',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * POST /reports/custom-builder/validate
+   * Validate custom report configuration
+   */
+  validateCustomReport: protectedProcedure
+    .input(z.object({
+      config: z.any() // Would use CustomReportConfigSchema
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { CustomReportBuilderService, CustomReportConfigSchema } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(new PrismaClient());
+
+        // Validate schema
+        const config = CustomReportConfigSchema.parse(input.config);
+
+        // Validate business rules
+        const validation = await builderService.validateReportConfig(config);
+
+        return validation;
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid report configuration',
+            cause: error
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to validate report configuration',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * POST /reports/custom-builder/generate
+   * Generate custom report
+   */
+  generateCustomReport: protectedProcedure
+    .input(z.object({
+      config: z.any() // Would use CustomReportConfigSchema
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { CustomReportBuilderService, CustomReportConfigSchema } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(prisma);
+
+        // Validate and parse config
+        const config = CustomReportConfigSchema.parse(input.config);
+
+        // Generate report
+        const reportId = await builderService.generateCustomReport(
+          config,
+          ctx.session!.user!.id,
+          ctx.session!.user!.role
+        );
+
+        return {
+          reportId,
+          status: 'queued',
+          message: 'Custom report generation queued successfully'
+        };
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Invalid report configuration',
+            cause: error
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to generate custom report',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * POST /reports/custom-builder/save
+   * Save custom report configuration for reuse
+   */
+  saveCustomReportConfig: protectedProcedure
+    .input(z.object({
+      config: z.any(), // Would use CustomReportConfigSchema
+      isPublic: z.boolean().default(false),
+      tags: z.array(z.string()).optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { CustomReportBuilderService, CustomReportConfigSchema } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(prisma);
+
+        const config = CustomReportConfigSchema.parse(input.config);
+
+        const saved = await builderService.saveReportConfig(
+          config,
+          ctx.session!.user!.id,
+          { isPublic: input.isPublic, tags: input.tags }
+        );
+
+        return {
+          success: true,
+          savedConfig: saved
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to save report configuration',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * GET /reports/custom-builder/saved
+   * List saved report configurations
+   */
+  getSavedConfigs: protectedProcedure
+    .query(async ({ ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { CustomReportBuilderService } = await import('./services/custom-report-builder.service');
+        const builderService = new CustomReportBuilderService(prisma);
+
+        const configs = await builderService.listSavedConfigs(
+          ctx.session!.user!.id,
+          ctx.session!.user!.role
+        );
+
+        return {
+          configs,
+          total: configs.length
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch saved configurations',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * POST /reports/schedule
+   * Schedule a recurring report
+   */
+  scheduleReport: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(255),
+      reportType: z.enum(['royalty_statements', 'transaction_ledger', 'creator_earnings', 'platform_revenue', 'payout_summary']),
+      frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']),
+      recipients: z.array(z.string().email()).min(1),
+      formats: z.array(z.enum(['CSV', 'EXCEL', 'PDF'])).min(1).default(['PDF']),
+      filters: z.object({
+        creatorIds: z.array(z.string()).optional(),
+        brandIds: z.array(z.string()).optional(),
+        assetTypes: z.array(z.string()).optional(),
+        licenseTypes: z.array(z.string()).optional(),
+        statuses: z.array(z.string()).optional()
+      }).optional(),
+      deliveryOptions: z.object({
+        emailDelivery: z.boolean().default(true),
+        secureDownload: z.boolean().default(true),
+        attachToEmail: z.boolean().default(false),
+        downloadExpiration: z.number().min(1).max(720).default(168) // hours, default 1 week
+      }).default({
+        emailDelivery: true,
+        secureDownload: true,
+        attachToEmail: false,
+        downloadExpiration: 168
+      }),
+      schedule: z.object({
+        dayOfWeek: z.number().min(0).max(6).optional(), // 0-6 for weekly
+        dayOfMonth: z.number().min(1).max(31).optional(), // 1-31 for monthly
+        monthOfQuarter: z.number().min(1).max(3).optional(), // 1-3 for quarterly
+        monthOfYear: z.number().min(1).max(12).optional(), // 1-12 for annually
+        hour: z.number().min(0).max(23).default(9), // 0-23
+        minute: z.number().min(0).max(59).default(0), // 0-59
+        timezone: z.string().default('America/New_York')
+      })
+    }).refine(
+      (data) => {
+        // Weekly reports need dayOfWeek
+        if (data.frequency === 'WEEKLY' && data.schedule.dayOfWeek === undefined) {
+          return false;
+        }
+        // Monthly reports need dayOfMonth
+        if (data.frequency === 'MONTHLY' && data.schedule.dayOfMonth === undefined) {
+          return false;
+        }
+        // Quarterly reports need monthOfQuarter and dayOfMonth
+        if (data.frequency === 'QUARTERLY' && (data.schedule.monthOfQuarter === undefined || data.schedule.dayOfMonth === undefined)) {
+          return false;
+        }
+        // Annual reports need monthOfYear and dayOfMonth
+        if (data.frequency === 'ANNUALLY' && (data.schedule.monthOfYear === undefined || data.schedule.dayOfMonth === undefined)) {
+          return false;
+        }
+        return true;
+      },
+      { message: 'Schedule configuration must match frequency type' }
+    ))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { ScheduledReportService } = await import('./services/scheduled-reports.service');
+        const scheduledService = new ScheduledReportService(prisma);
+
+        // Verify user has permission to schedule reports
+        const userRole = ctx.session?.user?.role;
+        if (!userRole || !['ADMIN', 'CREATOR', 'BRAND'].includes(userRole)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Insufficient permissions to schedule reports'
+          });
+        }
+
+        // Create the scheduled report
+        const scheduledReportId = await scheduledService.createScheduledReport({
+          name: input.name,
+          reportType: input.reportType,
+          frequency: input.frequency,
+          recipients: input.recipients,
+          formats: input.formats,
+          filters: input.filters,
+          deliveryOptions: input.deliveryOptions,
+          schedule: input.schedule,
+          createdBy: ctx.session!.user!.id
+        });
+
+        // Fetch the created report to return details
+        const scheduledReport = await prisma.scheduledReport.findUnique({
+          where: { id: scheduledReportId },
+          include: {
+            createdByUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+
+        if (!scheduledReport) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to retrieve created scheduled report'
+          });
+        }
+
+        return {
+          success: true,
+          scheduledReport: {
+            id: scheduledReport.id,
+            name: scheduledReport.name,
+            reportType: scheduledReport.reportType,
+            frequency: scheduledReport.frequency,
+            cronExpression: scheduledReport.cronExpression,
+            recipients: scheduledReport.recipients,
+            isActive: scheduledReport.isActive,
+            nextScheduledAt: scheduledReport.nextScheduledAt,
+            parameters: scheduledReport.parameters,
+            createdAt: scheduledReport.createdAt,
+            createdBy: {
+              id: scheduledReport.createdByUser.id,
+              name: scheduledReport.createdByUser.name,
+              email: scheduledReport.createdByUser.email
+            }
+          },
+          message: `Report scheduled successfully. Next execution: ${scheduledReport.nextScheduledAt?.toISOString()}`
+        };
+
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to schedule report',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * PUT /reports/schedule/:id
+   * Update a scheduled report
+   */
+  updateScheduledReport: protectedProcedure
+    .input(z.object({
+      scheduledReportId: z.string(),
+      name: z.string().min(1).max(255).optional(),
+      reportType: z.enum(['royalty_statements', 'transaction_ledger', 'creator_earnings', 'platform_revenue', 'payout_summary']).optional(),
+      frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'ANNUALLY']).optional(),
+      recipients: z.array(z.string().email()).min(1).optional(),
+      formats: z.array(z.enum(['CSV', 'EXCEL', 'PDF'])).min(1).optional(),
+      filters: z.object({
+        creatorIds: z.array(z.string()).optional(),
+        brandIds: z.array(z.string()).optional(),
+        assetTypes: z.array(z.string()).optional(),
+        licenseTypes: z.array(z.string()).optional(),
+        statuses: z.array(z.string()).optional()
+      }).optional(),
+      deliveryOptions: z.object({
+        emailDelivery: z.boolean(),
+        secureDownload: z.boolean(),
+        attachToEmail: z.boolean(),
+        downloadExpiration: z.number().min(1).max(720)
+      }).optional(),
+      schedule: z.object({
+        dayOfWeek: z.number().min(0).max(6).optional(),
+        dayOfMonth: z.number().min(1).max(31).optional(),
+        monthOfQuarter: z.number().min(1).max(3).optional(),
+        monthOfYear: z.number().min(1).max(12).optional(),
+        hour: z.number().min(0).max(23),
+        minute: z.number().min(0).max(59),
+        timezone: z.string()
+      }).optional(),
+      isActive: z.boolean().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { ScheduledReportService } = await import('./services/scheduled-reports.service');
+        const scheduledService = new ScheduledReportService(prisma);
+
+        // Check if user has permission to update this scheduled report
+        const existingReport = await prisma.scheduledReport.findUnique({
+          where: { id: input.scheduledReportId }
+        });
+
+        if (!existingReport) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Scheduled report not found'
+          });
+        }
+
+        // Verify user owns this report or is admin
+        if (existingReport.createdBy !== ctx.session?.user?.id && ctx.session?.user?.role !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Access denied to this scheduled report'
+          });
+        }
+
+        // Only call update if there are actual updates to make
+        const hasUpdates = input.name || input.reportType || input.frequency || 
+                          input.recipients || input.formats || input.filters || 
+                          input.deliveryOptions || input.schedule;
+
+        if (hasUpdates) {
+          // Update the scheduled report
+          await scheduledService.updateScheduledReport(
+            input.scheduledReportId,
+            {
+              name: input.name,
+              reportType: input.reportType,
+              frequency: input.frequency,
+              recipients: input.recipients,
+              formats: input.formats,
+              filters: input.filters,
+              deliveryOptions: input.deliveryOptions,
+              schedule: input.schedule
+            },
+            ctx.session!.user!.id
+          );
+        }
+
+        // If isActive is provided, update that separately
+        if (input.isActive !== undefined) {
+          await prisma.scheduledReport.update({
+            where: { id: input.scheduledReportId },
+            data: { isActive: input.isActive }
+          });
+        }
+
+        // Fetch updated report
+        const updatedReport = await prisma.scheduledReport.findUnique({
+          where: { id: input.scheduledReportId },
+          include: {
+            createdByUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+
+        return {
+          success: true,
+          scheduledReport: {
+            id: updatedReport!.id,
+            name: updatedReport!.name,
+            reportType: updatedReport!.reportType,
+            frequency: updatedReport!.frequency,
+            cronExpression: updatedReport!.cronExpression,
+            recipients: updatedReport!.recipients,
+            isActive: updatedReport!.isActive,
+            nextScheduledAt: updatedReport!.nextScheduledAt,
+            parameters: updatedReport!.parameters,
+            updatedAt: updatedReport!.updatedAt,
+            createdBy: {
+              id: updatedReport!.createdByUser.id,
+              name: updatedReport!.createdByUser.name,
+              email: updatedReport!.createdByUser.email
+            }
+          },
+          message: 'Scheduled report updated successfully'
+        };
+
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update scheduled report',
+          cause: error
+        });
+      }
+    }),
+
+  /**
+   * DELETE /reports/schedule/:id
+   * Delete/deactivate a scheduled report
+   */
+  deleteScheduledReport: protectedProcedure
+    .input(z.object({
+      scheduledReportId: z.string()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const prisma = ctx.db || new PrismaClient();
+        const { ScheduledReportService } = await import('./services/scheduled-reports.service');
+        const scheduledService = new ScheduledReportService(prisma);
+
+        // Check if user has permission to delete this scheduled report
+        const existingReport = await prisma.scheduledReport.findUnique({
+          where: { id: input.scheduledReportId }
+        });
+
+        if (!existingReport) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Scheduled report not found'
+          });
+        }
+
+        // Verify user owns this report or is admin
+        if (existingReport.createdBy !== ctx.session?.user?.id && ctx.session?.user?.role !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Access denied to this scheduled report'
+          });
+        }
+
+        // Delete the scheduled report
+        await scheduledService.deleteScheduledReport(
+          input.scheduledReportId,
+          ctx.session!.user!.id
+        );
+
+        return {
+          success: true,
+          message: 'Scheduled report deleted successfully'
+        };
+
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete scheduled report',
+          cause: error
+        });
+      }
     })
 });
 

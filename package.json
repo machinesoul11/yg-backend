@@ -48,6 +48,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/node-cron": "^3.0.11",
     "@types/pdfkit": "^0.17.3",
+    "@types/ua-parser-js": "^0.7.39",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.61.0",
     "chartjs-node-canvas": "^5.0.0",
@@ -75,6 +76,7 @@
     "stripe": "^19.1.0",
     "superjson": "^2.2.2",
     "tailwind-merge": "^3.3.1",
+    "ua-parser-js": "^2.0.6",
     "waveform-node": "^0.3.1",
     "xlsx": "^0.18.5",
     "zod": "^4.1.12"

@@ -15,7 +15,11 @@ import { taxComplianceRouter } from '@/modules/tax-compliance/router';
 import { reportsRouter } from '@/modules/reports/router';
 import { blogRouter, blogSEORouter, contentOptimizationRouter } from '@/modules/blog';
 import { seoManagementRouter } from '@/modules/seo';
-import { postAnalyticsRouter } from '@/modules/analytics/routers/post-analytics.router';
+import { postAnalyticsRouter, platformAnalyticsRouter } from '@/modules/analytics';
+import { searchRouter } from '@/modules/search';
+import { creatorsRouter } from '@/modules/creators/routers/creators.router';
+import { creatorAnalyticsRouter } from '@/modules/creators/routers/creator-analytics.router';
+import { brandsRouter, brandAnalyticsRouter } from '@/modules/brands';
 
 /**
  * This is the primary router for your server.
@@ -43,12 +47,12 @@ export const appRouter = createTRPCRouter({
   contentOptimization: contentOptimizationRouter,
   seo: seoManagementRouter,
   postAnalytics: postAnalyticsRouter,
-  // Add your routers here
-  // Example:
-  // royalties: royaltiesRouter,
-  // talent: talentRouter,
-  // brands: brandsRouter,
-  // analytics: analyticsRouter,
+  platformAnalytics: platformAnalyticsRouter,
+  search: searchRouter,
+  creators: creatorsRouter,
+  creatorAnalytics: creatorAnalyticsRouter,
+  brands: brandsRouter,
+  brandAnalytics: brandAnalyticsRouter,
 });
 
 // export type definition of API

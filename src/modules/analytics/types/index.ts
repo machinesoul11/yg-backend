@@ -273,3 +273,77 @@ export interface ExportEventsJobData {
   format: 'csv' | 'json';
   requestedBy: string;
 }
+
+/**
+ * Weekly and Monthly Metrics Types
+ */
+export interface WeeklyMetricsSummary {
+  totalWeeks: number;
+  totalViews: number;
+  totalClicks: number;
+  totalConversions: number;
+  totalRevenueCents: number;
+  weeklyBreakdown: Array<{
+    weekStart: Date;
+    weekEnd: Date;
+    views: number;
+    clicks: number;
+    conversions: number;
+    revenueCents: number;
+    viewsGrowth?: number | null;
+  }>;
+}
+
+export interface MonthlyMetricsSummary {
+  year: number;
+  totalMonths: number;
+  totalViews: number;
+  totalClicks: number;
+  totalConversions: number;
+  totalRevenueCents: number;
+  monthlyBreakdown: Array<{
+    month: number;
+    monthName: string;
+    views: number;
+    clicks: number;
+    conversions: number;
+    revenueCents: number;
+    viewsGrowth?: number | null;
+    weeksInMonth?: number | null;
+  }>;
+}
+
+/**
+ * Custom Metrics Types
+ */
+export interface CustomMetricDefinitionData {
+  name: string;
+  description?: string;
+  metricType: 'COUNT' | 'SUM' | 'AVERAGE' | 'DISTINCT_COUNT' | 'PERCENTILE' | 'RATIO' | 'MAX' | 'MIN';
+  dataSource: string;
+  calculationFormula: string;
+  dimensions?: string[];
+  filters?: Record<string, any>;
+  aggregationMethod: 'sum' | 'avg' | 'max' | 'min' | 'count';
+}
+
+/**
+ * Real-time Metrics Types
+ */
+export interface RealtimeMetricValue {
+  metricKey: string;
+  currentValue: number;
+  previousValue?: number;
+  lastUpdatedAt: Date;
+  unit?: string;
+}
+
+/**
+ * Platform Analytics Types
+ */
+export type { 
+  UserAnalytics,
+  EngagementAnalytics,
+  CohortAnalysis,
+  PeriodType,
+} from '../services/platform-analytics.service';

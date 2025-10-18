@@ -724,6 +724,3 @@ export const scheduledReportWorker = new Worker<ScheduledReportJobData>(
     concurrency: 2
   }
 );
-
-// Export service instance
-export { ScheduledReportService };

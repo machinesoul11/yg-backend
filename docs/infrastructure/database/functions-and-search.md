@@ -21,10 +21,21 @@ The database includes several PostgreSQL functions and triggers that enforce bus
 
 ### Migration Files
 
-- `007_add_database_functions.sql` - Core functions and triggers
-- `008_add_search_indexes.sql` - Full-text search and indexing
+- `add_search_infrastructure_indexes.sql` - **NEW** Comprehensive search indexes (2025-10-17)
 - `add_ownership_constraint.sql` - Ownership share validation (already existed)
 - `006_add_check_constraints.sql` - Check constraints (already existed)
+
+### Search Infrastructure
+
+**✅ IMPLEMENTED** - A comprehensive search infrastructure has been added with 28 specialized indexes:
+- Full-text search indexes for natural language queries
+- GIN indexes for efficient JSONB field searches
+- Trigram indexes for fuzzy matching and typo tolerance
+- Composite indexes for common filter patterns
+- Covering indexes to reduce table lookups
+
+📖 **See:** [Search Infrastructure Implementation Guide](./SEARCH_INFRASTRUCTURE_INDEXES_IMPLEMENTATION.md)  
+📖 **Quick Reference:** [Search Indexes Quick Reference](./SEARCH_INDEXES_QUICK_REFERENCE.md)
 
 ## Engagement Score Calculation
 

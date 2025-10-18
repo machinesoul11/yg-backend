@@ -143,6 +143,64 @@ export const getPlatformMetricsSchema = z.object({
 export type GetPlatformMetricsInput = z.infer<typeof getPlatformMetricsSchema>;
 
 /**
+ * Get Platform User Analytics Schema
+ */
+export const getPlatformUserAnalyticsSchema = z.object({
+  period: z.enum(['7d', '30d', '90d', '1y', 'all']).default('30d'),
+  granularity: z.enum(['daily', 'weekly', 'monthly']).default('daily'),
+});
+
+export type GetPlatformUserAnalyticsInput = z.infer<typeof getPlatformUserAnalyticsSchema>;
+
+/**
+ * Get Platform Engagement Analytics Schema
+ */
+export const getPlatformEngagementAnalyticsSchema = z.object({
+  period: z.enum(['7d', '30d', '90d', '1y']).default('30d'),
+});
+
+export type GetPlatformEngagementAnalyticsInput = z.infer<typeof getPlatformEngagementAnalyticsSchema>;
+
+/**
+ * Get Platform Cohort Analysis Schema
+ */
+export const getPlatformCohortAnalysisSchema = z.object({
+  cohortType: z.enum(['weekly', 'monthly']).default('monthly'),
+  metric: z.enum(['retention', 'revenue', 'engagement']).default('retention'),
+  period: z.enum(['30d', '90d', '180d', '1y']).default('90d'),
+});
+
+export type GetPlatformCohortAnalysisInput = z.infer<typeof getPlatformCohortAnalysisSchema>;
+
+/**
+ * Revenue Analytics Schemas
+ */
+export const getPlatformRevenueAnalyticsSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  groupBy: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('monthly'),
+});
+
+export type GetPlatformRevenueAnalyticsInput = z.infer<typeof getPlatformRevenueAnalyticsSchema>;
+
+export const getPlatformTransactionAnalyticsSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  status: z.enum(['all', 'completed', 'pending', 'failed', 'refunded']).default('all'),
+  groupBy: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
+});
+
+export type GetPlatformTransactionAnalyticsInput = z.infer<typeof getPlatformTransactionAnalyticsSchema>;
+
+export const getPlatformLTVAnalyticsSchema = z.object({
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  segmentBy: z.enum(['role', 'cohort']).optional(),
+});
+
+export type GetPlatformLTVAnalyticsInput = z.infer<typeof getPlatformLTVAnalyticsSchema>;
+
+/**
  * Period Enum for convenience
  */
 export const ANALYTICS_PERIODS = {

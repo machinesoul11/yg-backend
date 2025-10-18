@@ -15,10 +15,12 @@ export { CreatorService } from './services/creator.service';
 export { StripeConnectService } from './services/stripe-connect.service';
 export { CreatorAssetsService } from './services/creator-assets.service';
 export { CreatorNotificationsService } from './services/creator-notifications.service';
+export { CreatorAnalyticsService } from './services/creator-analytics.service';
 
-// Router
+// Routers
 export { creatorsRouter } from './routers/creators.router';
 export { default as creatorsRouterDefault } from './routers/creators.router';
+export { creatorAnalyticsRouter } from './routers/creator-analytics.router';
 
 // Types
 export type {
@@ -54,6 +56,20 @@ export {
   isOnboardingStatus,
 } from './types/creator.types';
 
+// Analytics Types
+export type {
+  EngagementAnalyticsResponse,
+  PortfolioPerformanceResponse,
+  LicenseMetricsResponse,
+  BenchmarkComparisonResponse,
+  DateRange,
+  MetricsAggregation,
+  TimeSeriesPoint,
+  AssetPerformance,
+  LicenseAggregation,
+  BenchmarkCalculation,
+} from './types/creator-analytics.types';
+
 // Schemas
 export {
   createCreatorSchema,
@@ -75,6 +91,21 @@ export type {
   ApproveCreatorInput,
   RejectCreatorInput,
 } from './schemas/creator.schema';
+
+// Analytics Schemas
+export {
+  getEngagementAnalyticsSchema,
+  getPortfolioPerformanceSchema,
+  getLicenseMetricsSchema,
+  getBenchmarksSchema,
+} from './schemas/creator-analytics.schema';
+
+export type {
+  GetEngagementAnalyticsInput,
+  GetPortfolioPerformanceInput,
+  GetLicenseMetricsInput,
+  GetBenchmarksInput,
+} from './schemas/creator-analytics.schema';
 
 // Errors
 export {

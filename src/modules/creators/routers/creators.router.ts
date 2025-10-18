@@ -21,6 +21,7 @@ import {
   rejectCreatorSchema,
   confirmProfileImageUploadSchema,
   updatePerformanceMetricsSchema,
+  CreatorSpecialtyEnum,
 } from '../schemas/creator.schema';
 
 // Initialize services
@@ -268,6 +269,272 @@ export const creatorsRouter = createTRPCRouter({
         ...input,
         verificationStatus: 'approved',
       });
+    }),
+
+  /**
+   * Search creators (public - for discovery)
+   */
+  searchCreators: publicProcedure
+    .input(z.object({
+      query: z.string().min(2).max(200).optional(),
+      verificationStatus: z.array(z.enum(['pending', 'approved', 'rejected'])).optional(),
+      specialties: z.array(CreatorSpecialtyEnum).optional(),
+      industry: z.array(z.string()).optional(),
+      category: z.array(z.string()).optional(),
+      availabilityStatus: z.enum(['available', 'limited', 'unavailable']).optional(),
+      sortBy: z.enum(['relevance', 'created_at', 'verified_at', 'total_collaborations', 'total_revenue', 'average_rating']).default('relevance'),
+      sortOrder: z.enum(['asc', 'desc']).default('desc'),
+      page: z.number().int().positive().default(1),
+      pageSize: z.number().int().positive().max(100).default(20),
+    }))
+    .query(async ({ input, ctx }) => {
+      const requestingUserId = ctx.session?.user?.id;
+      const requestingUserRole = ctx.session?.user?.role;
+
+      // Build where clause
+      const where: any = {
+        deletedAt: null,
+      };
+
+      // Text search across name and bio
+      if (input.query && input.query.trim().length >= 2) {
+        where.OR = [
+          { stageName: { contains: input.query.trim(), mode: 'insensitive' } },
+          { bio: { contains: input.query.trim(), mode: 'insensitive' } },
+        ];
+      }
+
+      // Verification status filter
+      // Public users and brands should only see approved creators
+      // Admins can see all
+      if (requestingUserRole === 'ADMIN') {
+        if (input.verificationStatus && input.verificationStatus.length > 0) {
+          where.verificationStatus = { in: input.verificationStatus };
+        }
+      } else {
+        // Non-admins only see approved creators
+        where.verificationStatus = 'approved';
+      }
+
+      // Specialties filter (JSONB array contains)
+      if (input.specialties && input.specialties.length > 0) {
+        where.specialties = {
+          path: '$',
+          array_contains: input.specialties,
+        };
+      }
+
+      // Industry/category filter
+      if (input.industry && input.industry.length > 0) {
+        where.specialties = {
+          path: '$',
+          array_contains: input.industry,
+        };
+      }
+
+      if (input.category && input.category.length > 0) {
+        where.specialties = {
+          path: '$',
+          array_contains: input.category,
+        };
+      }
+
+      // Availability filter (JSONB)
+      if (input.availabilityStatus) {
+        where.availability = {
+          path: ['status'],
+          equals: input.availabilityStatus,
+        };
+      }
+
+      // Count total matching creators
+      const total = await prisma.creator.count({ where });
+
+      // Build orderBy based on sortBy
+      let orderBy: any = {};
+      
+      if (input.sortBy === 'relevance' && input.query) {
+        // For relevance, we'll sort by created date and filter in application
+        orderBy = { createdAt: 'desc' };
+      } else if (input.sortBy === 'verified_at') {
+        orderBy = { verifiedAt: input.sortOrder };
+      } else if (input.sortBy === 'created_at') {
+        orderBy = { createdAt: input.sortOrder };
+      } else {
+        // Default to created date for metric-based sorts (will be sorted in application)
+        orderBy = { createdAt: 'desc' };
+      }
+
+      // Fetch creators with pagination
+      const skip = (input.page - 1) * input.pageSize;
+      const take = input.pageSize;
+
+      let creators = await prisma.creator.findMany({
+        where,
+        select: {
+          id: true,
+          userId: true,
+          stageName: true,
+          bio: true,
+          specialties: true,
+          verificationStatus: true,
+          portfolioUrl: true,
+          availability: true,
+          performanceMetrics: true,
+          verifiedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: {
+              avatar: true,
+            },
+          },
+        },
+        orderBy,
+        skip,
+        take,
+      });
+
+      // Sort by performance metrics if needed
+      if (['total_collaborations', 'total_revenue', 'average_rating'].includes(input.sortBy)) {
+        creators = creators.sort((a, b) => {
+          const aMetrics = (a.performanceMetrics as any) || {};
+          const bMetrics = (b.performanceMetrics as any) || {};
+          
+          let aValue = 0;
+          let bValue = 0;
+
+          if (input.sortBy === 'total_collaborations') {
+            aValue = aMetrics.totalCollaborations || 0;
+            bValue = bMetrics.totalCollaborations || 0;
+          } else if (input.sortBy === 'total_revenue') {
+            aValue = aMetrics.totalRevenue || 0;
+            bValue = bMetrics.totalRevenue || 0;
+          } else if (input.sortBy === 'average_rating') {
+            aValue = aMetrics.averageRating || 0;
+            bValue = bMetrics.averageRating || 0;
+          }
+
+          return input.sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        });
+      }
+
+      // Format results
+      const results = creators.map(creator => ({
+        id: creator.id,
+        userId: creator.userId,
+        stageName: creator.stageName,
+        bio: creator.bio ? (creator.bio.length > 200 ? creator.bio.substring(0, 200) + '...' : creator.bio) : null,
+        specialties: creator.specialties as any || [],
+        verificationStatus: creator.verificationStatus,
+        portfolioUrl: creator.portfolioUrl,
+        availability: creator.availability as any,
+        performanceMetrics: creator.performanceMetrics as any,
+        avatar: creator.user.avatar,
+        verifiedAt: creator.verifiedAt,
+        createdAt: creator.createdAt,
+        updatedAt: creator.updatedAt,
+      }));
+
+      return {
+        results,
+        pagination: {
+          page: input.page,
+          pageSize: input.pageSize,
+          total,
+          totalPages: Math.ceil(total / input.pageSize),
+          hasNextPage: input.page * input.pageSize < total,
+          hasPreviousPage: input.page > 1,
+        },
+      };
+    }),
+
+  /**
+   * Get creator search facets (for filtering UI)
+   */
+  getCreatorSearchFacets: publicProcedure
+    .input(z.object({
+      query: z.string().min(2).max(200).optional(),
+      verificationStatus: z.array(z.enum(['pending', 'approved', 'rejected'])).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const requestingUserRole = ctx.session?.user?.role;
+
+      // Build base where clause
+      const where: any = {
+        deletedAt: null,
+      };
+
+      // Text search
+      if (input.query && input.query.trim().length >= 2) {
+        where.OR = [
+          { stageName: { contains: input.query.trim(), mode: 'insensitive' } },
+          { bio: { contains: input.query.trim(), mode: 'insensitive' } },
+        ];
+      }
+
+      // Verification status
+      if (requestingUserRole === 'ADMIN') {
+        if (input.verificationStatus && input.verificationStatus.length > 0) {
+          where.verificationStatus = { in: input.verificationStatus };
+        }
+      } else {
+        where.verificationStatus = 'approved';
+      }
+
+      // Fetch all matching creators for facet calculation
+      const creators = await prisma.creator.findMany({
+        where,
+        select: {
+          specialties: true,
+          availability: true,
+          verificationStatus: true,
+        },
+      });
+
+      // Calculate facets
+      const specialtiesMap = new Map<string, number>();
+      const availabilityMap = new Map<string, number>();
+      const verificationMap = new Map<string, number>();
+
+      creators.forEach(creator => {
+        // Count specialties
+        const specs = (creator.specialties as any) || [];
+        if (Array.isArray(specs)) {
+          specs.forEach((spec: string) => {
+            specialtiesMap.set(spec, (specialtiesMap.get(spec) || 0) + 1);
+          });
+        }
+
+        // Count availability
+        const avail = creator.availability as any;
+        if (avail && avail.status) {
+          availabilityMap.set(avail.status, (availabilityMap.get(avail.status) || 0) + 1);
+        }
+
+        // Count verification status (for admins)
+        if (requestingUserRole === 'ADMIN') {
+          verificationMap.set(
+            creator.verificationStatus,
+            (verificationMap.get(creator.verificationStatus) || 0) + 1
+          );
+        }
+      });
+
+      return {
+        specialties: Array.from(specialtiesMap.entries())
+          .map(([specialty, count]) => ({ specialty, count }))
+          .sort((a, b) => b.count - a.count),
+        availability: Array.from(availabilityMap.entries())
+          .map(([status, count]) => ({ status, count }))
+          .sort((a, b) => b.count - a.count),
+        verificationStatus: requestingUserRole === 'ADMIN'
+          ? Array.from(verificationMap.entries())
+              .map(([status, count]) => ({ status, count }))
+              .sort((a, b) => b.count - a.count)
+          : [],
+        totalCount: creators.length,
+      };
     }),
 
   // ==================== Admin Endpoints ====================
