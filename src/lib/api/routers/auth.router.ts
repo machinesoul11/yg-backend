@@ -20,6 +20,14 @@ import {
   changePasswordSchema,
   updateProfileSchema,
   resendVerificationSchema,
+  verifyTotpSchema,
+  confirmTotpSetupSchema,
+  disableTotpSchema,
+  verifyBackupCodeSchema,
+  verify2FALoginSchema,
+  verifyBackupCodeLoginSchema,
+  revokeTrustedDeviceSchema,
+  loginWithTrustedDeviceSchema,
 } from '@/lib/validators/auth.validators';
 
 // Initialize services
@@ -400,6 +408,485 @@ export const authRouter = createTRPCRouter({
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Account deletion failed',
+      });
+    }
+  }),
+
+  /**
+   * ======================================================================
+   * TOTP (Two-Factor Authentication) Endpoints
+   * ======================================================================
+   */
+
+  /**
+   * Initiate TOTP setup
+   * Returns QR code and manual entry key
+   */
+  totpSetup: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      if (!ctx.session?.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Not authenticated',
+        });
+      }
+
+      const context = getRequestContext(ctx);
+      const setupData = await authService.initiateTotpSetup(
+        ctx.session.user.id,
+        context
+      );
+
+      return {
+        success: true,
+        data: {
+          qrCodeDataUrl: setupData.qrCodeDataUrl,
+          manualEntryKey: setupData.manualEntryKey,
+          message: 'Scan QR code with your authenticator app or enter the key manually',
+        },
+      };
+    } catch (error) {
+      if (isAuthError(error)) {
+        throw new TRPCError({
+          code: error.statusCode === 400 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
+          message: error.message,
+          cause: {
+            code: error.code,
+            statusCode: error.statusCode,
+          },
+        });
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'TOTP setup failed',
+      });
+    }
+  }),
+
+  /**
+   * Confirm TOTP setup with verification code
+   * Enables TOTP and returns backup codes
+   */
+  totpConfirm: protectedProcedure
+    .input(confirmTotpSetupSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        const result = await authService.confirmTotpSetup(
+          ctx.session.user.id,
+          input,
+          context
+        );
+
+        return {
+          success: true,
+          data: {
+            backupCodes: result.backupCodes,
+            message: 'Two-factor authentication enabled successfully. Save your backup codes in a secure location.',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'TOTP confirmation failed',
+        });
+      }
+    }),
+
+  /**
+   * Verify TOTP code during login
+   */
+  totpVerify: protectedProcedure
+    .input(verifyTotpSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        await authService.verifyTotpForLogin(
+          ctx.session.user.id,
+          input,
+          context
+        );
+
+        return {
+          success: true,
+          data: {
+            message: 'Two-factor authentication verified',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'TOTP verification failed',
+        });
+      }
+    }),
+
+  /**
+   * Verify backup code during login
+   */
+  backupCodeVerify: protectedProcedure
+    .input(verifyBackupCodeSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        await authService.verifyBackupCodeForLogin(
+          ctx.session.user.id,
+          input,
+          context
+        );
+
+        return {
+          success: true,
+          data: {
+            message: 'Backup code verified',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Backup code verification failed',
+        });
+      }
+    }),
+
+  /**
+   * Disable TOTP
+   */
+  totpDisable: protectedProcedure
+    .input(disableTotpSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        await authService.disableTotp(ctx.session.user.id, input, context);
+
+        return {
+          success: true,
+          data: {
+            message: 'Two-factor authentication disabled',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'TOTP disable failed',
+        });
+      }
+    }),
+
+  /**
+   * Regenerate backup codes
+   */
+  backupCodesRegenerate: protectedProcedure
+    .input(z.object({ password: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        const result = await authService.regenerateBackupCodes(
+          ctx.session.user.id,
+          input.password,
+          context
+        );
+
+        return {
+          success: true,
+          data: {
+            backupCodes: result.backupCodes,
+            message: 'New backup codes generated. Save them in a secure location.',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Backup code regeneration failed',
+        });
+      }
+    }),
+
+  /**
+   * Get TOTP status
+   */
+  totpStatus: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      if (!ctx.session?.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Not authenticated',
+        });
+      }
+
+      const status = await authService.getTotpStatus(ctx.session.user.id);
+
+      return {
+        success: true,
+        data: status,
+      };
+    } catch (error) {
+      if (isAuthError(error)) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: error.message,
+        });
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get TOTP status',
+      });
+    }
+  }),
+
+  /**
+   * ======================================================================
+   * Multi-Step Login Endpoints
+   * ======================================================================
+   */
+
+  /**
+   * Verify 2FA code and complete login (Step 2)
+   */
+  verify2FALogin: publicProcedure
+    .input(verify2FALoginSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const context = getRequestContext(ctx);
+        const result = await authService.verify2FALogin(input, context);
+
+        return {
+          success: true,
+          data: result,
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: '2FA verification failed',
+        });
+      }
+    }),
+
+  /**
+   * Verify backup code and complete login (Step 2 alternative)
+   */
+  verifyBackupCodeLogin: publicProcedure
+    .input(verifyBackupCodeLoginSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const context = getRequestContext(ctx);
+        const result = await authService.verifyBackupCodeLogin(input, context);
+
+        return {
+          success: true,
+          data: result,
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: error.statusCode === 401 ? 'UNAUTHORIZED' : 'BAD_REQUEST',
+            message: error.message,
+            cause: {
+              code: error.code,
+              statusCode: error.statusCode,
+            },
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Backup code verification failed',
+        });
+      }
+    }),
+
+  /**
+   * ======================================================================
+   * Trusted Device Management Endpoints
+   * ======================================================================
+   */
+
+  /**
+   * Get all trusted devices for current user
+   */
+  getTrustedDevices: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      if (!ctx.session?.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Not authenticated',
+        });
+      }
+
+      const devices = await authService.getTrustedDevices(ctx.session.user.id);
+
+      return {
+        success: true,
+        data: devices,
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get trusted devices',
+      });
+    }
+  }),
+
+  /**
+   * Revoke a specific trusted device
+   */
+  revokeTrustedDevice: protectedProcedure
+    .input(revokeTrustedDeviceSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        if (!ctx.session?.user) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Not authenticated',
+          });
+        }
+
+        const context = getRequestContext(ctx);
+        await authService.revokeTrustedDevice(ctx.session.user.id, input, context);
+
+        return {
+          success: true,
+          data: {
+            message: 'Trusted device revoked successfully',
+          },
+        };
+      } catch (error) {
+        if (isAuthError(error)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to revoke trusted device',
+        });
+      }
+    }),
+
+  /**
+   * Revoke all trusted devices
+   */
+  revokeAllTrustedDevices: protectedProcedure.mutation(async ({ ctx }) => {
+    try {
+      if (!ctx.session?.user) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Not authenticated',
+        });
+      }
+
+      const context = getRequestContext(ctx);
+      const count = await authService.revokeAllTrustedDevices(
+        ctx.session.user.id,
+        context
+      );
+
+      return {
+        success: true,
+        data: {
+          message: `Successfully revoked ${count} trusted device(s)`,
+          devicesRevoked: count,
+        },
+      };
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to revoke trusted devices',
       });
     }
   }),

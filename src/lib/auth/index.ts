@@ -31,6 +31,19 @@ export type {
   RememberMeTokenInfo,
 } from './remember-me.service';
 
+// TOTP (Two-Factor Authentication)
+export { TotpService } from './totp.service';
+export type { TotpSecret, BackupCode } from './totp.service';
+
+// Encryption utilities
+export {
+  encrypt,
+  decrypt,
+  canDecrypt,
+  generateEncryptionKey,
+  validateEncryptionConfig,
+} from './encryption';
+
 // Validators
 export {
   passwordSchema,
@@ -45,6 +58,12 @@ export {
   changePasswordSchema,
   updateProfileSchema,
   resendVerificationSchema,
+  totpCodeSchema,
+  verifyTotpSchema,
+  confirmTotpSetupSchema,
+  disableTotpSchema,
+  verifyBackupCodeSchema,
+  totpLoginVerificationSchema,
 } from '../validators/auth.validators';
 
 export type {
@@ -56,6 +75,10 @@ export type {
   ChangePasswordInput,
   UpdateProfileInput,
   ResendVerificationInput,
+  VerifyTotpInput,
+  ConfirmTotpSetupInput,
+  DisableTotpInput,
+  VerifyBackupCodeInput,
 } from '../validators/auth.validators';
 
 // Error classes

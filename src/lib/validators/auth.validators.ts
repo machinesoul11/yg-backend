@@ -139,3 +139,151 @@ export const resendVerificationSchema = z.object({
 });
 
 export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+
+/**
+ * TOTP code validation schema
+ * 6-digit code with optional whitespace
+ */
+export const totpCodeSchema = z
+  .string()
+  .min(6, 'TOTP code must be 6 digits')
+  .max(10, 'TOTP code is too long') // Allow for spaces
+  .regex(/^[0-9\s]+$/, 'TOTP code must contain only digits')
+  .transform((code) => code.replace(/\s/g, '')) // Remove whitespace
+  .refine((code) => code.length === 6, {
+    message: 'TOTP code must be exactly 6 digits',
+  });
+
+/**
+ * TOTP verification schema
+ */
+export const verifyTotpSchema = z.object({
+  code: totpCodeSchema,
+});
+
+export type VerifyTotpInput = z.infer<typeof verifyTotpSchema>;
+
+/**
+ * TOTP setup confirmation schema
+ */
+export const confirmTotpSetupSchema = z.object({
+  code: totpCodeSchema,
+});
+
+export type ConfirmTotpSetupInput = z.infer<typeof confirmTotpSetupSchema>;
+
+/**
+ * TOTP disable schema
+ */
+export const disableTotpSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+  code: totpCodeSchema.optional(),
+});
+
+export type DisableTotpInput = z.infer<typeof disableTotpSchema>;
+
+/**
+ * Backup code verification schema
+ */
+export const verifyBackupCodeSchema = z.object({
+  code: z
+    .string()
+    .min(8, 'Backup code must be at least 8 characters')
+    .max(20, 'Backup code is too long')
+    .transform((code) => code.replace(/\s/g, '').toUpperCase()),
+});
+
+export type VerifyBackupCodeInput = z.infer<typeof verifyBackupCodeSchema>;
+
+/**
+ * TOTP login verification schema
+ * Used during login flow when TOTP is enabled
+ */
+export const totpLoginVerificationSchema = z.object({
+  code: totpCodeSchema,
+  rememberMe: z.boolean().optional().default(false),
+});
+
+/**
+ * Multi-step login: Verify 2FA challenge with temporary token
+ */
+export const verify2FALoginSchema = z.object({
+  temporaryToken: z.string().min(32, 'Invalid temporary token'),
+  code: totpCodeSchema,
+  trustDevice: z.boolean().optional().default(false),
+});
+
+export type Verify2FALoginInput = z.infer<typeof verify2FALoginSchema>;
+
+/**
+ * Verify backup code during multi-step login
+ */
+export const verifyBackupCodeLoginSchema = z.object({
+  temporaryToken: z.string().min(32, 'Invalid temporary token'),
+  code: z
+    .string()
+    .min(8, 'Backup code must be at least 8 characters')
+    .max(20, 'Backup code is too long')
+    .transform((code) => code.replace(/\s/g, '').toUpperCase()),
+  trustDevice: z.boolean().optional().default(false),
+});
+
+export type VerifyBackupCodeLoginInput = z.infer<typeof verifyBackupCodeLoginSchema>;
+
+/**
+ * Revoke a specific trusted device
+ */
+export const revokeTrustedDeviceSchema = z.object({
+  deviceId: z.string().cuid('Invalid device ID'),
+});
+
+export type RevokeTrustedDeviceInput = z.infer<typeof revokeTrustedDeviceSchema>;
+
+/**
+ * Login with trusted device token
+ */
+export const loginWithTrustedDeviceSchema = z.object({
+  email: emailSchema,
+  password: z.string().min(1, 'Password is required'),
+  trustedDeviceToken: z.string().min(32, 'Invalid device token'),
+  rememberMe: z.boolean().optional().default(false),
+});
+
+/**
+ * 2FA Method enum for validation
+ */
+export const twoFactorMethodEnum = z.enum(['SMS', 'AUTHENTICATOR']);
+
+/**
+ * Set preferred 2FA method schema
+ * User must have both methods enabled before setting preference
+ */
+export const setPreferred2FAMethodSchema = z.object({
+  method: twoFactorMethodEnum,
+  verificationCode: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type SetPreferred2FAMethodInput = z.infer<typeof setPreferred2FAMethodSchema>;
+
+/**
+ * Remove 2FA method schema
+ * Requires verification code from the method that will remain active
+ */
+export const remove2FAMethodSchema = z.object({
+  methodToRemove: twoFactorMethodEnum,
+  verificationCode: z.string().length(6, 'Verification code must be 6 digits'),
+});
+
+export type Remove2FAMethodInput = z.infer<typeof remove2FAMethodSchema>;
+
+/**
+ * Switch 2FA method during login challenge
+ */
+export const switchChallengeMethodSchema = z.object({
+  challengeToken: z.string().min(32, 'Invalid challenge token'),
+  newMethod: twoFactorMethodEnum,
+});
+
+export type SwitchChallengeMethodInput = z.infer<typeof switchChallengeMethodSchema>;
+
+export type LoginWithTrustedDeviceInput = z.infer<typeof loginWithTrustedDeviceSchema>;

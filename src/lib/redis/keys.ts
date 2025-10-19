@@ -55,6 +55,7 @@ export const RedisKeys = {
     login: (identifier: string) => `ratelimit:login:${identifier}`,
     passwordReset: (email: string) => `ratelimit:password-reset:${email}`,
     webhook: (endpoint: string) => `ratelimit:webhook:${endpoint}`,
+    sms: (userId: string) => `ratelimit:sms:${userId}`,
   },
 
   // Idempotency keys (prevent duplicate operations)
@@ -114,6 +115,7 @@ export const RedisTTL = {
   MESSAGE_RATE_LIMIT: 60, // 1 minute
   LOGIN_RATE_LIMIT: 900, // 15 minutes
   PASSWORD_RESET_RATE_LIMIT: 3600, // 1 hour
+  SMS_RATE_LIMIT: 900, // 15 minutes
 
   // Idempotency
   IDEMPOTENCY_KEY: 86400, // 24 hours

@@ -55,6 +55,13 @@ DATABASE_REPLICA_URL="postgresql://user:pass@replica-host:5432/db"
 - **Health Monitoring**: Real-time connection health and latency tracking
 - **Graceful Shutdown**: Proper cleanup of connections on process exit
 
+### Performance Optimization
+
+- **Query Optimization**: Comprehensive guide and best practices
+- **Index Analysis**: Automated index usage and recommendations
+- **Vacuum Management**: Automatic maintenance and bloat detection
+- **Slow Query Logging**: Application-level and database-level monitoring
+
 ### Usage Examples
 
 ```typescript
@@ -152,7 +159,10 @@ DB_STATEMENT_TIMEOUT=60000        # Query timeout (milliseconds)
 | `npm run db:migrate:status` | Check migration status |
 | `npm run db:push` | Push schema changes (dev only) |
 | `npm run db:studio` | Open Prisma Studio GUI |
-| `npm run db:health` | Run health check |
+| `npm run db:health` | Run comprehensive health check |
+| `npm run db:analyze:indexes` | Analyze index usage and suggestions |
+| `npm run db:analyze:vacuum` | Analyze vacuum needs and bloat |
+| `npm run db:check-bloat` | Check table bloat (alias) |
 | `npm run db:backup:verify` | Verify backup config |
 
 ## 🔍 Monitoring & Alerts
@@ -239,9 +249,17 @@ DB_CONNECTION_TIMEOUT=30
 
 **Problem**: "Slow queries detected"
 ```bash
-# Solution: Check query performance
+# Solution: Analyze query performance
 npm run db:health
-# Add indexes where needed
+npm run db:analyze:indexes
+# See docs/infrastructure/database/query-optimization-guide.md
+```
+
+**Problem**: "Table bloat / High dead tuples"
+```bash
+# Solution: Check vacuum status
+npm run db:analyze:vacuum
+# See docs/infrastructure/database/optimization-guide.md
 ```
 
 **Problem**: "Migration failed"
@@ -263,10 +281,16 @@ NODE_ENV=development
 
 ## 📖 Additional Resources
 
-- [Complete Database Setup Guide](../docs/database-setup.md)
-- [Migration Workflow](../prisma/migrations/README.md)
-- [Database Checklist](../DATABASE_CHECKLIST.md)
+### Internal Documentation
+- [Database Optimization Guide](../../../docs/infrastructure/database/optimization-guide.md) - Complete optimization reference
+- [Query Optimization Guide](../../../docs/infrastructure/database/query-optimization-guide.md) - Query performance best practices
+- [Supabase Setup Guide](../../../docs/infrastructure/supabase/setup.md) - Supabase-specific configuration
+- [Migration Workflow](../../../prisma/migrations/README.md) - Database migration guide
+
+### External Resources
 - [Supabase Documentation](https://supabase.com/docs)
+- [PostgreSQL Performance Tips](https://wiki.postgresql.org/wiki/Performance_Optimization)
+- [Prisma Best Practices](https://www.prisma.io/docs/guides/performance-and-optimization)
 - [Prisma Documentation](https://www.prisma.io/docs)
 
 ## 🤝 Support

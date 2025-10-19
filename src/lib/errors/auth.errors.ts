@@ -125,6 +125,75 @@ export const AuthErrors = {
     'Cannot delete account with pending financial obligations',
     409
   ),
+
+  // Two-Factor Authentication Errors
+  TOTP_REQUIRED: new AuthError(
+    'TOTP_REQUIRED',
+    'Two-factor authentication code required',
+    403
+  ),
+  TOTP_INVALID: new AuthError(
+    'TOTP_INVALID',
+    'Invalid two-factor authentication code',
+    401
+  ),
+  TOTP_ALREADY_ENABLED: new AuthError(
+    'TOTP_ALREADY_ENABLED',
+    'Two-factor authentication is already enabled',
+    400
+  ),
+  TOTP_NOT_ENABLED: new AuthError(
+    'TOTP_NOT_ENABLED',
+    'Two-factor authentication is not enabled',
+    400
+  ),
+  TOTP_SETUP_REQUIRED: new AuthError(
+    'TOTP_SETUP_REQUIRED',
+    'Two-factor authentication setup required',
+    400
+  ),
+  TOTP_SETUP_PENDING: new AuthError(
+    'TOTP_SETUP_PENDING',
+    'Two-factor authentication setup in progress',
+    400
+  ),
+  BACKUP_CODE_INVALID: new AuthError(
+    'BACKUP_CODE_INVALID',
+    'Invalid backup code',
+    401
+  ),
+  BACKUP_CODE_ALREADY_USED: new AuthError(
+    'BACKUP_CODE_ALREADY_USED',
+    'This backup code has already been used',
+    400
+  ),
+  NO_BACKUP_CODES_REMAINING: new AuthError(
+    'NO_BACKUP_CODES_REMAINING',
+    'No backup codes remaining. Please contact support.',
+    400
+  ),
+
+  // Multi-Step Login Errors
+  TEMP_TOKEN_INVALID: new AuthError(
+    'TEMP_TOKEN_INVALID',
+    'Invalid temporary authentication token',
+    401
+  ),
+  TEMP_TOKEN_EXPIRED: new AuthError(
+    'TEMP_TOKEN_EXPIRED',
+    'Temporary authentication token has expired',
+    401
+  ),
+  TEMP_TOKEN_ALREADY_USED: new AuthError(
+    'TEMP_TOKEN_ALREADY_USED',
+    'Temporary authentication token has already been used',
+    401
+  ),
+  DEVICE_NOT_FOUND: new AuthError(
+    'DEVICE_NOT_FOUND',
+    'Trusted device not found',
+    404
+  ),
 } as const;
 
 /**

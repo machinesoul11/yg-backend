@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { Json2CsvTransform } from 'json2csv';
+import { Transform } from 'json2csv';
 import { format } from 'date-fns';
 
 export interface CSVExportConfig {
@@ -81,7 +81,7 @@ export class CSVExportService {
     }
 
     // Convert to CSV
-    const json2csvParser = new Json2CsvTransform({
+    const json2csvParser = new Transform({
       fields,
       formatters: {
         number: (value: any) => {

@@ -154,6 +154,11 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        // Check if TOTP is enabled for this user
+        // Note: TOTP verification should be handled separately via the tRPC endpoints
+        // The frontend should check if user.two_factor_enabled and prompt for TOTP
+        // This is a limitation of NextAuth - full 2FA flow requires custom implementation
+        
         // Check email verification requirement (optional - can be enforced based on business logic)
         // For now, we'll allow login even if email is not verified
         // Uncomment the following to enforce email verification:
@@ -283,6 +288,11 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
+        // Add TOTP status to token
+        if (userData) {
+          token.twoFactorEnabled = userData.two_factor_enabled;
+        }
+
         // Add role-specific data
         if (userData?.creator) {
           token.creatorId = userData.creator.id;
@@ -323,6 +333,7 @@ export const authOptions: NextAuthOptions = {
         if (userData) {
           token.role = userData.role;
           token.emailVerified = !!userData.email_verified;
+          token.twoFactorEnabled = userData.two_factor_enabled;
           token.name = userData.name;
           token.picture = userData.avatar;
 
@@ -353,6 +364,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.userId as string;
         session.user.role = token.role as string;
         session.user.emailVerified = token.emailVerified as boolean;
+        session.user.twoFactorEnabled = token.twoFactorEnabled as boolean;
 
         // Add role-specific data
         if (token.creatorId) {

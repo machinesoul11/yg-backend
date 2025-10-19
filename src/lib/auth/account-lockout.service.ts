@@ -118,16 +118,13 @@ export class AccountLockoutService {
       // Send lockout notification email
       if (this.emailService) {
         try {
-          await this.emailService.sendTransactional({
+          await this.emailService.sendAccountLockoutEmail({
             email: user.email,
-            subject: 'Account Security Alert',
-            template: 'account-locked',
-            variables: {
-              userName: user.name || 'User',
-              lockedUntil: lockedUntil.toISOString(),
-              lockoutMinutes: lockoutDuration,
-              ipAddress: ipAddress || 'Unknown',
-            },
+            name: user.name || 'User',
+            lockedUntil,
+            lockoutMinutes: lockoutDuration,
+            ipAddress,
+            failedAttempts: newFailedCount,
           });
         } catch (error) {
           console.error('Failed to send account lockout email:', error);

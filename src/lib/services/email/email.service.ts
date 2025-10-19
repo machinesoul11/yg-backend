@@ -357,6 +357,213 @@ export class EmailService {
     });
   }
 
+  /**
+   * Send low backup codes alert when user has fewer than 3 codes remaining
+   */
+  async sendLowBackupCodesAlert(params: {
+    email: string;
+    name: string;
+    remainingCodes: number;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    const regenerateUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/security/2fa`;
+
+    return this.sendTransactional({
+      email: params.email,
+      subject: '⚠️ Low backup codes remaining - Action required',
+      template: 'low-backup-codes-alert',
+      variables: {
+        userName: params.name,
+        remainingCodes: params.remainingCodes,
+        regenerateUrl,
+      },
+      tags: {
+        type: '2fa-backup-codes-low',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send 2FA enabled notification email
+   */
+  async send2FAEnabledEmail(params: {
+    email: string;
+    name: string;
+    enabledAt: Date;
+    method: string;
+    ipAddress?: string;
+    device?: string;
+    backupCodesCount: number;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    const securityUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/security`;
+
+    return this.sendTransactional({
+      email: params.email,
+      subject: '🔐 Two-Factor Authentication Enabled',
+      template: 'two-factor-enabled',
+      variables: {
+        userName: params.name,
+        enabledAt: params.enabledAt.toLocaleString('en-US', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        }),
+        method: params.method,
+        ipAddress: params.ipAddress || 'Unknown',
+        device: params.device || 'Unknown',
+        backupCodesCount: params.backupCodesCount,
+        securityUrl,
+      },
+      tags: {
+        type: '2fa-enabled',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send 2FA disabled notification email
+   */
+  async send2FADisabledEmail(params: {
+    email: string;
+    name: string;
+    disabledAt: Date;
+    method: string;
+    ipAddress?: string;
+    device?: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    const securityUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/security`;
+
+    return this.sendTransactional({
+      email: params.email,
+      subject: '🔓 Two-Factor Authentication Disabled',
+      template: 'two-factor-disabled',
+      variables: {
+        userName: params.name,
+        disabledAt: params.disabledAt.toLocaleString('en-US', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        }),
+        method: params.method,
+        ipAddress: params.ipAddress || 'Unknown',
+        device: params.device || 'Unknown',
+        securityUrl,
+      },
+      tags: {
+        type: '2fa-disabled',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send new device login notification email
+   */
+  async sendNewDeviceLoginEmail(params: {
+    email: string;
+    name: string;
+    loginTime: Date;
+    deviceName?: string;
+    deviceType?: string;
+    browser?: string;
+    operatingSystem?: string;
+    ipAddress?: string;
+    location?: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    const securityUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/security`;
+
+    return this.sendTransactional({
+      email: params.email,
+      subject: '🔔 New Device Sign-In Detected',
+      template: 'new-device-login',
+      variables: {
+        userName: params.name,
+        loginTime: params.loginTime.toLocaleString('en-US', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        }),
+        deviceName: params.deviceName || 'Unknown Device',
+        deviceType: params.deviceType || 'Unknown',
+        browser: params.browser || 'Unknown',
+        operatingSystem: params.operatingSystem || 'Unknown',
+        ipAddress: params.ipAddress || 'Unknown',
+        location: params.location || 'Unknown',
+        securityUrl,
+      },
+      tags: {
+        type: 'new-device-login',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send account lockout notification email
+   */
+  async sendAccountLockoutEmail(params: {
+    email: string;
+    name: string;
+    lockedUntil: Date;
+    lockoutMinutes: number;
+    ipAddress?: string;
+    failedAttempts: number;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    return this.sendTransactional({
+      email: params.email,
+      subject: '🔒 Account Security Alert - Account Locked',
+      template: 'account-locked',
+      variables: {
+        userName: params.name,
+        lockedUntil: params.lockedUntil.toISOString(),
+        lockoutMinutes: params.lockoutMinutes,
+        ipAddress: params.ipAddress || 'Unknown',
+        failedAttempts: params.failedAttempts,
+        unlockTime: params.lockedUntil.toLocaleString('en-US', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        }),
+      },
+      tags: {
+        type: 'account-locked',
+        category: 'system',
+      },
+    });
+  }
+
+  /**
+   * Send backup codes regenerated notification email
+   */
+  async sendBackupCodesRegeneratedEmail(params: {
+    email: string;
+    name: string;
+    regeneratedAt: Date;
+    newCodesCount: number;
+    ipAddress?: string;
+    device?: string;
+  }): Promise<{ success: boolean; messageId?: string }> {
+    const securityUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/security/2fa`;
+
+    return this.sendTransactional({
+      email: params.email,
+      subject: '🔑 Backup Codes Regenerated',
+      template: 'backup-codes-regenerated',
+      variables: {
+        userName: params.name,
+        regeneratedAt: params.regeneratedAt.toLocaleString('en-US', {
+          dateStyle: 'long',
+          timeStyle: 'short',
+        }),
+        newCodesCount: params.newCodesCount,
+        ipAddress: params.ipAddress || 'Unknown',
+        device: params.device || 'Unknown',
+        securityUrl,
+      },
+      tags: {
+        type: 'backup-codes-regenerated',
+        category: 'system',
+      },
+    });
+  }
+
   // --- Private helper methods ---
 
   private async isEmailSuppressed(email: string): Promise<boolean> {

@@ -37,6 +37,14 @@ import LicenseExpiry60DayNotice from '../../../../emails/templates/LicenseExpiry
 import LicenseExpiry30DayNotice from '../../../../emails/templates/LicenseExpiry30DayNotice';
 import ScheduledReportDelivery from '../../../../emails/templates/ScheduledReportDelivery';
 import CustomReportReady from '../../../../emails/templates/CustomReportReady';
+import LowBackupCodesAlert from '../../../../emails/templates/LowBackupCodesAlert';
+import AccountLocked from '../../../../emails/templates/AccountLocked';
+import UnusualLoginAlert from '../../../../emails/templates/UnusualLoginAlert';
+import TwoFactorEnabled from '../../../../emails/templates/TwoFactorEnabled';
+import TwoFactorDisabled from '../../../../emails/templates/TwoFactorDisabled';
+import NewDeviceLogin from '../../../../emails/templates/NewDeviceLogin';
+import BackupCodesRegenerated from '../../../../emails/templates/BackupCodesRegenerated';
+import TwoFactorAdminReset from '../../../../emails/templates/TwoFactorAdminReset';
 import { EmailTemplateError } from '@/lib/services/email/errors';
 
 /**
@@ -65,6 +73,77 @@ export interface PasswordChangedProps {
   changeTime?: Date;
   ipAddress?: string;
   deviceInfo?: string;
+}
+
+export interface LowBackupCodesAlertProps {
+  userName: string;
+  remainingCodes: number;
+  regenerateUrl: string;
+}
+
+export interface AccountLockedProps {
+  userName: string;
+  lockedUntil: string;
+  lockoutMinutes: number;
+  ipAddress: string;
+  failedAttempts: number;
+  unlockTime: string;
+}
+
+export interface UnusualLoginAlertProps {
+  userName: string;
+  ipAddress: string;
+  location: string;
+  device: string;
+  timestamp: string;
+  anomalyReasons: string;
+}
+
+export interface TwoFactorEnabledProps {
+  userName: string;
+  enabledAt: string;
+  method: string;
+  ipAddress: string;
+  device: string;
+  backupCodesCount: number;
+  securityUrl: string;
+}
+
+export interface TwoFactorDisabledProps {
+  userName: string;
+  disabledAt: string;
+  method: string;
+  ipAddress: string;
+  device: string;
+  securityUrl: string;
+}
+
+export interface NewDeviceLoginProps {
+  userName: string;
+  loginTime: string;
+  deviceName: string;
+  deviceType: string;
+  browser: string;
+  operatingSystem: string;
+  ipAddress: string;
+  location: string;
+  securityUrl: string;
+}
+
+export interface BackupCodesRegeneratedProps {
+  userName: string;
+  regeneratedAt: string;
+  newCodesCount: number;
+  ipAddress: string;
+  device: string;
+  securityUrl: string;
+}
+
+export interface TwoFactorAdminResetProps {
+  userName: string;
+  resetReason: string;
+  resetDate: string;
+  setupUrl: string;
 }
 
 export interface RoyaltyStatementProps {
@@ -466,6 +545,38 @@ export const TEMPLATE_REGISTRY = {
     component: CustomReportReady,
     category: 'reports',
   },
+  'low-backup-codes-alert': {
+    component: LowBackupCodesAlert,
+    category: 'system',
+  },
+  'account-locked': {
+    component: AccountLocked,
+    category: 'system',
+  },
+  'unusual-login-alert': {
+    component: UnusualLoginAlert,
+    category: 'system',
+  },
+  'two-factor-enabled': {
+    component: TwoFactorEnabled,
+    category: 'system',
+  },
+  'two-factor-disabled': {
+    component: TwoFactorDisabled,
+    category: 'system',
+  },
+  'new-device-login': {
+    component: NewDeviceLogin,
+    category: 'system',
+  },
+  'backup-codes-regenerated': {
+    component: BackupCodesRegenerated,
+    category: 'system',
+  },
+  '2fa-admin-reset': {
+    component: TwoFactorAdminReset,
+    category: 'system',
+  },
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATE_REGISTRY;
@@ -505,6 +616,14 @@ export interface TemplateVariablesMap {
   'license-expiry-30-day': LicenseExpiry30DayNoticeProps;
   'scheduled-report-delivery': ScheduledReportDeliveryProps;
   'custom-report-ready': CustomReportReadyProps;
+  'low-backup-codes-alert': LowBackupCodesAlertProps;
+  'account-locked': AccountLockedProps;
+  'unusual-login-alert': UnusualLoginAlertProps;
+  'two-factor-enabled': TwoFactorEnabledProps;
+  'two-factor-disabled': TwoFactorDisabledProps;
+  'new-device-login': NewDeviceLoginProps;
+  'backup-codes-regenerated': BackupCodesRegeneratedProps;
+  '2fa-admin-reset': TwoFactorAdminResetProps;
 }
 
 export type TemplateVariables<T extends TemplateKey = TemplateKey> = T extends keyof TemplateVariablesMap ? TemplateVariablesMap[T] : never;
@@ -602,6 +721,14 @@ function getRequiredFields(templateKey: TemplateKey): string[] {
     'license-expiry-30-day': ['userName', 'licenseName', 'brandName', 'expiryDate', 'daysRemaining', 'licenseUrl'],
     'scheduled-report-delivery': ['recipientName', 'reportName', 'reportType', 'reportPeriod', 'frequency', 'downloadUrl', 'expiresAt', 'nextScheduledDate', 'attachmentCount', 'fileFormats'],
     'custom-report-ready': ['recipientName', 'reportName', 'reportCategory', 'dateRange', 'downloadUrl', 'expiresAt', 'fileFormat', 'fileSizeMB', 'generationTime'],
+    'low-backup-codes-alert': ['userName', 'remainingCodes', 'regenerateUrl'],
+    'account-locked': ['userName', 'lockedUntil', 'lockoutMinutes', 'ipAddress', 'failedAttempts', 'unlockTime'],
+    'unusual-login-alert': ['userName', 'ipAddress', 'location', 'device', 'timestamp', 'anomalyReasons'],
+    'two-factor-enabled': ['userName', 'enabledAt', 'method', 'ipAddress', 'device', 'backupCodesCount', 'securityUrl'],
+    'two-factor-disabled': ['userName', 'disabledAt', 'method', 'ipAddress', 'device', 'securityUrl'],
+    'new-device-login': ['userName', 'loginTime', 'deviceName', 'deviceType', 'browser', 'operatingSystem', 'ipAddress', 'location', 'securityUrl'],
+    'backup-codes-regenerated': ['userName', 'regeneratedAt', 'newCodesCount', 'ipAddress', 'device', 'securityUrl'],
+    '2fa-admin-reset': ['userName', 'resetReason', 'resetDate', 'setupUrl'],
   };
 
   return requiredFieldsMap[templateKey] || [];

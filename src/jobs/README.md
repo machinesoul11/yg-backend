@@ -50,15 +50,31 @@ This directory contains all BullMQ background job definitions for the YesGoddess
 - `royalty-calculation.job.ts` - Calculates royalties for a royalty run
 - `statement-notification.job.ts` - Notifies creators when statements are ready
 
+### **Notification Jobs**
+- `notification-delivery.job.ts` - Delivers individual notifications via email and in-app channels (on-demand)
+- `notification-digest.job.ts` - Sends daily and weekly notification digests (daily at 9 AM, weekly on Mondays at 9 AM)
+- `notification-cleanup.job.ts` - Deletes old read notifications (daily at 3 AM)
+
 ### **Analytics Jobs**
 - `analytics-jobs.ts` - Event enrichment and daily metrics aggregation
+- `metrics-aggregation.job.ts` - Weekly and monthly metrics rollup (weekly on Mondays at 4 AM, monthly on 2nd at 5 AM)
+- `weekly-monthly-metrics-aggregation.job.ts` - Additional metrics aggregation tasks
+
+### **Search Jobs**
+- `search-index-update.job.ts` - Maintains PostgreSQL full-text search indexes (real-time updates + weekly full reindex on Sundays at 3 AM)
 
 ### **Email Jobs**
 - `email-campaign.job.ts` - Sends bulk email campaigns
+- `email-digest.job.ts` - Sends email digests
+- `message-digest.job.ts` - Sends message digests
 - `reputation-monitoring.job.ts` - Daily reputation checks (2 AM)
+
+### **Blog Jobs**
+- `scheduled-blog-publishing.job.ts` - Publishes scheduled blog posts (checks every minute)
 
 ### **Other Jobs**
 - `ownership-verification.job.ts` - Verifies IP ownership documents
+- `storage-metrics-calculation.job.ts` - Calculates storage usage metrics
 
 ### **Starting Jobs**
 
@@ -93,6 +109,15 @@ await scheduleUploadCleanup();
 - `idempotency-cleanup` - Every 6 hours
 - `notification-cleanup` - Daily at 3 AM
 - `asset-cleanup` - Daily at 2 AM
+- `search-index-update` - Real-time updates + weekly full reindex on Sundays at 3 AM
+
+**Notifications:**
+- `notification-delivery` - On-demand (when notifications are created)
+- `notification-digest` - Daily at 9 AM, weekly on Mondays at 9 AM
+
+**Analytics:**
+- `analytics-jobs` - Event enrichment (real-time), daily metrics aggregation
+- `metrics-aggregation` - Weekly on Mondays at 4 AM, monthly on 2nd at 5 AM
 
 **Authentication:**
 - `token-cleanup` - Hourly
@@ -108,6 +133,7 @@ await scheduleUploadCleanup();
 - `brand-inactivity-check` - Weekly on Mondays
 - `brand-data-cleanup` - Monthly on 1st
 - `project-expiry-check` - Daily at 2 AM
+- `scheduled-blog-publishing` - Checks every minute
 
 ### **Monitoring Jobs**
 

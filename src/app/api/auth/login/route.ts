@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { AuthService } from '@/lib/services/auth.service';
+import { AuthService, type LoginOutput } from '@/lib/services/auth.service';
 import { emailService } from '@/lib/services/email/email.service';
 import { AuditService } from '@/lib/services/audit.service';
 import { prisma } from '@/lib/db';
@@ -26,6 +26,8 @@ const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
   rememberMe: z.boolean().optional().default(false),
+  captchaToken: z.string().optional(),
+  deviceFingerprint: z.string().optional(),
 });
 
 // Rate limiting map (in production, use Redis)
@@ -104,10 +106,12 @@ export async function POST(req: NextRequest) {
           email: validatedData.email,
           password: validatedData.password,
           rememberMe: validatedData.rememberMe,
+          captchaToken: validatedData.captchaToken,
         },
         {
           ipAddress,
           userAgent,
+          deviceFingerprint: validatedData.deviceFingerprint,
         }
       ),
       15000,
@@ -117,12 +121,35 @@ export async function POST(req: NextRequest) {
     const duration = Date.now() - startTime;
     console.log(`[Login] Success for ${validatedData.email} in ${duration}ms`);
 
-    // Return success response with CORS headers
+    // Check if 2FA is required
+    if ('requiresTwoFactor' in result && result.requiresTwoFactor) {
+      return NextResponse.json(
+        {
+          success: true,
+          requiresTwoFactor: true,
+          data: {
+            temporaryToken: result.temporaryToken,
+            challengeType: result.challengeType,
+            expiresAt: result.expiresAt,
+          },
+        },
+        { 
+          status: 200,
+          headers: {
+            'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
+            'Access-Control-Allow-Credentials': 'true',
+          },
+        }
+      );
+    }
+
+    // Return success response with CORS headers (regular login without 2FA)
+    const loginResult = result as LoginOutput;
     return NextResponse.json(
       {
         success: true,
         data: {
-          user: result.user,
+          user: loginResult.user,
         },
       },
       { 
@@ -157,6 +184,33 @@ export async function POST(req: NextRequest) {
         },
         { status: 401 }
       );
+    }
+
+    // Handle CAPTCHA errors
+    if (error instanceof Error) {
+      if (error.message === 'CAPTCHA_REQUIRED') {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'CAPTCHA verification is required after multiple failed login attempts.',
+            code: 'CAPTCHA_REQUIRED',
+            requiresCaptcha: true,
+          },
+          { status: 429 }
+        );
+      }
+
+      if (error.message === 'CAPTCHA_FAILED') {
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'CAPTCHA verification failed. Please try again.',
+            code: 'CAPTCHA_FAILED',
+            requiresCaptcha: true,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     if (error === AuthErrors.ACCOUNT_LOCKED) {

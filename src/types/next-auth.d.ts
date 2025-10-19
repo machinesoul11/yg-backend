@@ -32,6 +32,7 @@ declare module 'next-auth' {
       image: string | null;
       role: string;
       emailVerified: boolean;
+      twoFactorEnabled: boolean;
       
       // Creator-specific fields
       creatorId?: string;
@@ -61,6 +62,7 @@ declare module 'next-auth/jwt' {
     email: string;
     role: string;
     emailVerified: boolean;
+    twoFactorEnabled: boolean;
     name?: string | null;
     picture?: string | null;
     
