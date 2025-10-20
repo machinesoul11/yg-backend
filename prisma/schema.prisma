@@ -1,6 +1,6 @@
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres", "metrics"]
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 datasource db {
@@ -3330,56 +3330,56 @@ model MetricsAggregationJobsLog {
 // ============================================================================
 
 model TwoFactorComplianceMetrics {
-  id                         String   @id @default(cuid())
-  periodStart                DateTime @map("period_start")
-  periodEnd                  DateTime @map("period_end")
-  periodType                 String   @map("period_type") // 'daily', 'weekly', 'monthly'
-  
+  id          String   @id @default(cuid())
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  periodType  String   @map("period_type") // 'daily', 'weekly', 'monthly'
+
   // Adoption metrics
-  totalUsers                 Int      @map("total_users")
-  usersWithTwoFactor         Int      @map("users_with_two_factor")
-  adoptionRate               Decimal  @map("adoption_rate") @db.Decimal(5, 2)
-  
+  totalUsers         Int     @map("total_users")
+  usersWithTwoFactor Int     @map("users_with_two_factor")
+  adoptionRate       Decimal @map("adoption_rate") @db.Decimal(5, 2)
+
   // Breakdown by role
-  adminTotal                 Int      @map("admin_total")
-  adminEnabled               Int      @map("admin_enabled")
-  creatorTotal               Int      @map("creator_total")
-  creatorEnabled             Int      @map("creator_enabled")
-  brandTotal                 Int      @map("brand_total")
-  brandEnabled               Int      @map("brand_enabled")
-  talentTotal                Int      @map("talent_total")
-  talentEnabled              Int      @map("talent_enabled")
-  viewerTotal                Int      @map("viewer_total")
-  viewerEnabled              Int      @map("viewer_enabled")
-  
+  adminTotal     Int @map("admin_total")
+  adminEnabled   Int @map("admin_enabled")
+  creatorTotal   Int @map("creator_total")
+  creatorEnabled Int @map("creator_enabled")
+  brandTotal     Int @map("brand_total")
+  brandEnabled   Int @map("brand_enabled")
+  talentTotal    Int @map("talent_total")
+  talentEnabled  Int @map("talent_enabled")
+  viewerTotal    Int @map("viewer_total")
+  viewerEnabled  Int @map("viewer_enabled")
+
   // Authentication metrics
-  totalAuthAttempts          Int      @map("total_auth_attempts")
-  successfulAuths            Int      @map("successful_auths")
-  failedAuths                Int      @map("failed_auths")
-  failureRate                Decimal  @map("failure_rate") @db.Decimal(5, 2)
-  
+  totalAuthAttempts Int     @map("total_auth_attempts")
+  successfulAuths   Int     @map("successful_auths")
+  failedAuths       Int     @map("failed_auths")
+  failureRate       Decimal @map("failure_rate") @db.Decimal(5, 2)
+
   // Method breakdown
-  totpAttempts               Int      @map("totp_attempts")
-  smsAttempts                Int      @map("sms_attempts")
-  backupCodeAttempts         Int      @map("backup_code_attempts")
-  
+  totpAttempts       Int @map("totp_attempts")
+  smsAttempts        Int @map("sms_attempts")
+  backupCodeAttempts Int @map("backup_code_attempts")
+
   // Security events
-  accountLockouts            Int      @map("account_lockouts")
-  suspiciousActivities       Int      @map("suspicious_activities")
-  emergencyCodesGenerated    Int      @map("emergency_codes_generated")
-  adminResets                Int      @map("admin_resets")
-  
+  accountLockouts         Int @map("account_lockouts")
+  suspiciousActivities    Int @map("suspicious_activities")
+  emergencyCodesGenerated Int @map("emergency_codes_generated")
+  adminResets             Int @map("admin_resets")
+
   // Backup code metrics
-  backupCodesRegenerated     Int      @map("backup_codes_regenerated")
-  usersWithLowBackupCodes    Int      @map("users_with_low_backup_codes") // < 3 codes
-  backupCodesUsed            Int      @map("backup_codes_used")
-  
+  backupCodesRegenerated  Int @map("backup_codes_regenerated")
+  usersWithLowBackupCodes Int @map("users_with_low_backup_codes") // < 3 codes
+  backupCodesUsed         Int @map("backup_codes_used")
+
   // Trends (comparison to previous period)
-  adoptionRateChange         Decimal? @map("adoption_rate_change") @db.Decimal(5, 2)
-  failureRateChange          Decimal? @map("failure_rate_change") @db.Decimal(5, 2)
-  
-  createdAt                  DateTime @default(now()) @map("created_at")
-  updatedAt                  DateTime @updatedAt @map("updated_at")
+  adoptionRateChange Decimal? @map("adoption_rate_change") @db.Decimal(5, 2)
+  failureRateChange  Decimal? @map("failure_rate_change") @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([periodStart, periodEnd, periodType])
   @@index([periodStart(sort: Desc)])
@@ -3388,36 +3388,36 @@ model TwoFactorComplianceMetrics {
 }
 
 model TwoFactorSecurityEvent {
-  id                  String   @id @default(cuid())
-  userId              String   @map("user_id")
-  eventType           String   @map("event_type") // 'setup', 'disable', 'failed_attempt', 'lockout', 'backup_code_usage', 'admin_reset'
-  eventCategory       String   @map("event_category") // 'authentication', 'configuration', 'security'
-  success             Boolean  @default(true)
-  failureReason       String?  @map("failure_reason")
-  method              String?  // 'totp', 'sms', 'backup_code'
-  
+  id            String  @id @default(cuid())
+  userId        String  @map("user_id")
+  eventType     String  @map("event_type") // 'setup', 'disable', 'failed_attempt', 'lockout', 'backup_code_usage', 'admin_reset'
+  eventCategory String  @map("event_category") // 'authentication', 'configuration', 'security'
+  success       Boolean @default(true)
+  failureReason String? @map("failure_reason")
+  method        String? // 'totp', 'sms', 'backup_code'
+
   // Location & device info
-  ipAddress           String?  @map("ip_address")
-  userAgent           String?  @map("user_agent")
-  deviceFingerprint   String?  @map("device_fingerprint")
-  locationCountry     String?  @map("location_country")
-  locationRegion      String?  @map("location_region")
-  locationCity        String?  @map("location_city")
-  
+  ipAddress         String? @map("ip_address")
+  userAgent         String? @map("user_agent")
+  deviceFingerprint String? @map("device_fingerprint")
+  locationCountry   String? @map("location_country")
+  locationRegion    String? @map("location_region")
+  locationCity      String? @map("location_city")
+
   // Anomaly detection
-  isAnomalous         Boolean  @default(false) @map("is_anomalous")
-  anomalyScore        Decimal? @map("anomaly_score") @db.Decimal(5, 2)
-  anomalyReasons      String[] @map("anomaly_reasons")
-  
+  isAnomalous    Boolean  @default(false) @map("is_anomalous")
+  anomalyScore   Decimal? @map("anomaly_score") @db.Decimal(5, 2)
+  anomalyReasons String[] @map("anomaly_reasons")
+
   // Admin actions
-  adminId             String?  @map("admin_id")
-  adminAction         String?  @map("admin_action")
-  adminReason         String?  @map("admin_reason")
-  
+  adminId     String? @map("admin_id")
+  adminAction String? @map("admin_action")
+  adminReason String? @map("admin_reason")
+
   // Additional metadata
-  metadata            Json?
-  
-  timestamp           DateTime @default(now())
+  metadata Json?
+
+  timestamp DateTime @default(now())
 
   @@index([userId, timestamp(sort: Desc)])
   @@index([eventType, timestamp(sort: Desc)])
@@ -3430,46 +3430,46 @@ model TwoFactorSecurityEvent {
 }
 
 model TwoFactorSecurityAlert {
-  id                  String   @id @default(cuid())
-  alertType           String   @map("alert_type") // 'spike_failures', 'velocity_attack', 'geographic_anomaly', 'sustained_attack'
-  severity            String   @map("severity") // 'info', 'warning', 'critical', 'urgent'
-  title               String
-  description         String   @db.Text
-  recommendation      String?  @db.Text
-  
+  id             String  @id @default(cuid())
+  alertType      String  @map("alert_type") // 'spike_failures', 'velocity_attack', 'geographic_anomaly', 'sustained_attack'
+  severity       String  @map("severity") // 'info', 'warning', 'critical', 'urgent'
+  title          String
+  description    String  @db.Text
+  recommendation String? @db.Text
+
   // Metrics that triggered alert
-  metric              String
-  currentValue        Decimal  @map("current_value") @db.Decimal(10, 2)
-  threshold           Decimal  @map("threshold") @db.Decimal(10, 2)
-  baselineValue       Decimal? @map("baseline_value") @db.Decimal(10, 2)
-  
+  metric        String
+  currentValue  Decimal  @map("current_value") @db.Decimal(10, 2)
+  threshold     Decimal  @map("threshold") @db.Decimal(10, 2)
+  baselineValue Decimal? @map("baseline_value") @db.Decimal(10, 2)
+
   // Time period
-  periodStart         DateTime @map("period_start")
-  periodEnd           DateTime @map("period_end")
-  
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+
   // Affected entities
   affectedUserCount   Int?     @map("affected_user_count")
   affectedUsers       String[] @map("affected_users")
   affectedIpAddresses String[] @map("affected_ip_addresses")
-  
+
   // Status
-  status              String   @default("active") // 'active', 'acknowledged', 'resolved', 'false_positive'
-  acknowledgedAt      DateTime? @map("acknowledged_at")
-  acknowledgedBy      String?  @map("acknowledged_by")
-  resolvedAt          DateTime? @map("resolved_at")
-  resolvedBy          String?  @map("resolved_by")
-  resolution          String?  @db.Text
-  
+  status         String    @default("active") // 'active', 'acknowledged', 'resolved', 'false_positive'
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  acknowledgedBy String?   @map("acknowledged_by")
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedBy     String?   @map("resolved_by")
+  resolution     String?   @db.Text
+
   // Notification
-  notificationSent    Boolean  @default(false) @map("notification_sent")
-  notificationSentAt  DateTime? @map("notification_sent_at")
-  notifiedAdmins      String[] @map("notified_admins")
-  
+  notificationSent   Boolean   @default(false) @map("notification_sent")
+  notificationSentAt DateTime? @map("notification_sent_at")
+  notifiedAdmins     String[]  @map("notified_admins")
+
   // Metadata
-  metadata            Json?
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([alertType, createdAt(sort: Desc)])
   @@index([severity, status])
@@ -3479,46 +3479,46 @@ model TwoFactorSecurityAlert {
 }
 
 model TwoFactorComplianceReport {
-  id                  String   @id @default(cuid())
-  reportType          String   @map("report_type") // 'monthly_security', 'adoption_trend', 'security_incidents', 'custom'
-  format              String   // 'pdf', 'csv', 'json'
-  periodStart         DateTime @map("period_start")
-  periodEnd           DateTime @map("period_end")
-  
+  id          String   @id @default(cuid())
+  reportType  String   @map("report_type") // 'monthly_security', 'adoption_trend', 'security_incidents', 'custom'
+  format      String // 'pdf', 'csv', 'json'
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+
   // Generation info
-  generatedBy         String?  @map("generated_by")
-  generatedAt         DateTime @default(now()) @map("generated_at")
-  generationStatus    String   @default("pending") @map("generation_status") // 'pending', 'generating', 'completed', 'failed'
-  
+  generatedBy      String?  @map("generated_by")
+  generatedAt      DateTime @default(now()) @map("generated_at")
+  generationStatus String   @default("pending") @map("generation_status") // 'pending', 'generating', 'completed', 'failed'
+
   // Report content
-  reportData          Json?    @map("report_data")
-  summary             String?  @db.Text
-  
+  reportData Json?   @map("report_data")
+  summary    String? @db.Text
+
   // Storage
-  storageUrl          String?  @map("storage_url")
-  storageKey          String?  @map("storage_key")
-  fileSize            Int?     @map("file_size")
-  
+  storageUrl String? @map("storage_url")
+  storageKey String? @map("storage_key")
+  fileSize   Int?    @map("file_size")
+
   // Delivery
-  emailedTo           String[] @map("emailed_to")
-  emailedAt           DateTime? @map("emailed_at")
-  downloadCount       Int      @default(0) @map("download_count")
-  lastDownloadedAt    DateTime? @map("last_downloaded_at")
-  
+  emailedTo        String[]  @map("emailed_to")
+  emailedAt        DateTime? @map("emailed_at")
+  downloadCount    Int       @default(0) @map("download_count")
+  lastDownloadedAt DateTime? @map("last_downloaded_at")
+
   // Scheduling (for recurring reports)
-  isScheduled         Boolean  @default(false) @map("is_scheduled")
-  scheduleFrequency   String?  @map("schedule_frequency") // 'monthly', 'weekly', 'quarterly'
-  nextGenerationDate  DateTime? @map("next_generation_date")
-  
+  isScheduled        Boolean   @default(false) @map("is_scheduled")
+  scheduleFrequency  String?   @map("schedule_frequency") // 'monthly', 'weekly', 'quarterly'
+  nextGenerationDate DateTime? @map("next_generation_date")
+
   // Error tracking
-  errorMessage        String?  @map("error_message")
-  errorStack          String?  @map("error_stack")
-  
+  errorMessage String? @map("error_message")
+  errorStack   String? @map("error_stack")
+
   // Metadata
-  metadata            Json?
-  
-  expiresAt           DateTime? @map("expires_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  metadata Json?
+
+  expiresAt DateTime? @map("expires_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@index([reportType, generatedAt(sort: Desc)])
   @@index([generatedBy, generatedAt(sort: Desc)])
