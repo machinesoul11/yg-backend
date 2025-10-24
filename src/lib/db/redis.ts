@@ -34,13 +34,19 @@ function getRedisClient(): Redis {
       },
       enableReadyCheck: false,
       enableOfflineQueue: true,
-      lazyConnect: true, // Don't connect immediately
+      lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
       connectTimeout: 5000,
       commandTimeout: 3000,
-      keepAlive: 0, // Disable keep-alive for serverless
+      keepAlive: 30000, // Keep connection alive
       family: 4,
-      // Disable automatic reconnection to prevent connection storms
-      reconnectOnError: () => false,
+      // Allow reconnection on errors
+      reconnectOnError: (err) => {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          return true; // Reconnect on READONLY errors
+        }
+        return false;
+      },
     });
 
     // Only log critical errors
@@ -48,6 +54,16 @@ function getRedisClient(): Redis {
       if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
         console.error('[Redis] Critical error:', error.message);
       }
+    });
+
+    // Log when connected
+    redisInstance.on('connect', () => {
+      console.log('[Redis] Connected successfully');
+    });
+
+    // Log when ready
+    redisInstance.on('ready', () => {
+      console.log('[Redis] Ready to accept commands');
     });
   }
   
@@ -67,13 +83,19 @@ function getBullMQConnection(): Redis {
         return delay;
       },
       enableReadyCheck: false,
-      enableOfflineQueue: false,
-      lazyConnect: true,
+      enableOfflineQueue: true, // Enable offline queue for BullMQ
+      lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
       connectTimeout: 10000,
       commandTimeout: 5000,
-      keepAlive: 0, // Disable keep-alive for serverless
+      keepAlive: 30000, // Keep connection alive
       family: 4,
-      reconnectOnError: () => false,
+      reconnectOnError: (err) => {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          return true;
+        }
+        return false;
+      },
     });
 
     // Only log critical errors
@@ -81,6 +103,16 @@ function getBullMQConnection(): Redis {
       if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
         console.error('[Redis BullMQ] Critical error:', error.message);
       }
+    });
+
+    // Log when connected
+    redisConnectionInstance.on('connect', () => {
+      console.log('[Redis BullMQ] Connected successfully');
+    });
+
+    // Log when ready
+    redisConnectionInstance.on('ready', () => {
+      console.log('[Redis BullMQ] Ready to accept commands');
     });
   }
   

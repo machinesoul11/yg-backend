@@ -45,6 +45,22 @@ export const eventIngestionRouter = createTRPCRouter({
     .input(trackEventSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        // Ensure Redis connection is ready before proceeding
+        if (redis.status !== 'ready') {
+          console.log('[EventIngestion] Redis not ready, attempting connection...');
+          try {
+            await redis.connect();
+          } catch (connError) {
+            console.error('[EventIngestion] Redis connection failed:', connError);
+            // Return success to prevent client-side errors, event will be lost
+            return {
+              id: `offline-${Date.now()}`,
+              eventType: input.eventType,
+              status: 'queued' as const,
+            };
+          }
+        }
+
         const ingestionService = getIngestionService(ctx.db);
 
         // Build request context from session and headers
@@ -87,6 +103,28 @@ export const eventIngestionRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        // Ensure Redis connection is ready before proceeding
+        if (redis.status !== 'ready') {
+          console.log('[EventIngestion] Redis not ready for batch, attempting connection...');
+          try {
+            await redis.connect();
+          } catch (connError) {
+            console.error('[EventIngestion] Redis connection failed for batch:', connError);
+            // Return degraded response
+            return {
+              total: input.events.length,
+              successful: 0,
+              failed: input.events.length,
+              results: input.events.map((_, i) => ({
+                index: i,
+                status: 'rejected' as const,
+                data: null,
+                error: 'Service temporarily unavailable',
+              })),
+            };
+          }
+        }
+
         const ingestionService = getIngestionService(ctx.db);
 
         // Build request context

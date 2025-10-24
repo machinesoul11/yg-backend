@@ -40,16 +40,28 @@ export const postAnalyticsRouter = createTRPCRouter({
   trackView: publicProcedure
     .input(trackPostViewSchema)
     .mutation(async ({ input, ctx }) => {
-      const context = {
-        session: ctx.session,
-        deviceType: ctx.req?.headers['x-device-type'] as string,
-        browser: ctx.req?.headers['x-browser'] as string,
-        os: ctx.req?.headers['x-os'] as string,
-        ipAddress: ctx.req?.headers['x-forwarded-for'] as string || ctx.req?.ip,
-        userAgent: ctx.req?.headers['user-agent'],
-      };
+      try {
+        const context = {
+          session: ctx.session
+            ? {
+                userId: ctx.session.user.id,
+                role: ctx.session.user.role,
+                email: ctx.session.user.email,
+              }
+            : undefined,
+          deviceType: ctx.req?.headers?.get('x-device-type') || undefined,
+          browser: ctx.req?.headers?.get('x-browser') || undefined,
+          os: ctx.req?.headers?.get('x-os') || undefined,
+          ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
+          userAgent: ctx.req?.headers?.get('user-agent') || undefined,
+        };
 
-      return postAnalyticsService.trackPostView(input, context);
+        return await postAnalyticsService.trackPostView(input, context);
+      } catch (error) {
+        console.error('[PostAnalytics] TrackView error:', error);
+        // Return success to prevent frontend errors
+        return { tracked: true };
+      }
     }),
 
   /**
@@ -58,16 +70,27 @@ export const postAnalyticsRouter = createTRPCRouter({
   trackEngagement: publicProcedure
     .input(trackEngagementTimeSchema)
     .mutation(async ({ input, ctx }) => {
-      const context = {
-        session: ctx.session,
-        deviceType: ctx.req?.headers['x-device-type'] as string,
-        browser: ctx.req?.headers['x-browser'] as string,
-        os: ctx.req?.headers['x-os'] as string,
-        ipAddress: ctx.req?.headers['x-forwarded-for'] as string || ctx.req?.ip,
-        userAgent: ctx.req?.headers['user-agent'],
-      };
+      try {
+        const context = {
+          session: ctx.session
+            ? {
+                userId: ctx.session.user.id,
+                role: ctx.session.user.role,
+                email: ctx.session.user.email,
+              }
+            : undefined,
+          deviceType: ctx.req?.headers?.get('x-device-type') || undefined,
+          browser: ctx.req?.headers?.get('x-browser') || undefined,
+          os: ctx.req?.headers?.get('x-os') || undefined,
+          ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
+          userAgent: ctx.req?.headers?.get('user-agent') || undefined,
+        };
 
-      return postAnalyticsService.trackEngagementTime(input, context);
+        return await postAnalyticsService.trackEngagementTime(input, context);
+      } catch (error) {
+        console.error('[PostAnalytics] TrackEngagement error:', error);
+        return { tracked: true };
+      }
     }),
 
   /**
@@ -76,16 +99,27 @@ export const postAnalyticsRouter = createTRPCRouter({
   trackScrollDepth: publicProcedure
     .input(trackScrollDepthSchema)
     .mutation(async ({ input, ctx }) => {
-      const context = {
-        session: ctx.session,
-        deviceType: ctx.req?.headers['x-device-type'] as string,
-        browser: ctx.req?.headers['x-browser'] as string,
-        os: ctx.req?.headers['x-os'] as string,
-        ipAddress: ctx.req?.headers['x-forwarded-for'] as string || ctx.req?.ip,
-        userAgent: ctx.req?.headers['user-agent'],
-      };
+      try {
+        const context = {
+          session: ctx.session
+            ? {
+                userId: ctx.session.user.id,
+                role: ctx.session.user.role,
+                email: ctx.session.user.email,
+              }
+            : undefined,
+          deviceType: ctx.req?.headers?.get('x-device-type') || undefined,
+          browser: ctx.req?.headers?.get('x-browser') || undefined,
+          os: ctx.req?.headers?.get('x-os') || undefined,
+          ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
+          userAgent: ctx.req?.headers?.get('user-agent') || undefined,
+        };
 
-      return postAnalyticsService.trackScrollDepth(input, context);
+        return await postAnalyticsService.trackScrollDepth(input, context);
+      } catch (error) {
+        console.error('[PostAnalytics] TrackScrollDepth error:', error);
+        return { tracked: true };
+      }
     }),
 
   /**
@@ -94,16 +128,27 @@ export const postAnalyticsRouter = createTRPCRouter({
   trackCtaClick: publicProcedure
     .input(trackCtaClickSchema)
     .mutation(async ({ input, ctx }) => {
-      const context = {
-        session: ctx.session,
-        deviceType: ctx.req?.headers['x-device-type'] as string,
-        browser: ctx.req?.headers['x-browser'] as string,
-        os: ctx.req?.headers['x-os'] as string,
-        ipAddress: ctx.req?.headers['x-forwarded-for'] as string || ctx.req?.ip,
-        userAgent: ctx.req?.headers['user-agent'],
-      };
+      try {
+        const context = {
+          session: ctx.session
+            ? {
+                userId: ctx.session.user.id,
+                role: ctx.session.user.role,
+                email: ctx.session.user.email,
+              }
+            : undefined,
+          deviceType: ctx.req?.headers?.get('x-device-type') || undefined,
+          browser: ctx.req?.headers?.get('x-browser') || undefined,
+          os: ctx.req?.headers?.get('x-os') || undefined,
+          ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
+          userAgent: ctx.req?.headers?.get('user-agent') || undefined,
+        };
 
-      return postAnalyticsService.trackCtaClick(input, context);
+        return await postAnalyticsService.trackCtaClick(input, context);
+      } catch (error) {
+        console.error('[PostAnalytics] TrackCtaClick error:', error);
+        return { tracked: true };
+      }
     }),
 
   // ========================================
@@ -131,8 +176,8 @@ export const postAnalyticsRouter = createTRPCRouter({
 
       // Only author, admins, or if public post can view analytics
       if (
-        post.authorId !== ctx.session.userId &&
-        ctx.session.role !== 'ADMIN' &&
+        post.authorId !== ctx.session.user.id &&
+        ctx.session.user.role !== 'ADMIN' &&
         post.status !== 'PUBLISHED'
       ) {
         throw new TRPCError({
@@ -164,8 +209,8 @@ export const postAnalyticsRouter = createTRPCRouter({
       }
 
       if (
-        post.authorId !== ctx.session.userId &&
-        ctx.session.role !== 'ADMIN'
+        post.authorId !== ctx.session.user.id &&
+        ctx.session.user.role !== 'ADMIN'
       ) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -196,8 +241,8 @@ export const postAnalyticsRouter = createTRPCRouter({
       }
 
       if (
-        post.authorId !== ctx.session.userId &&
-        ctx.session.role !== 'ADMIN'
+        post.authorId !== ctx.session.user.id &&
+        ctx.session.user.role !== 'ADMIN'
       ) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -229,7 +274,7 @@ export const postAnalyticsRouter = createTRPCRouter({
 
       // Check if user can access all posts
       const unauthorized = posts.some(
-        post => post.authorId !== ctx.session.userId && ctx.session.role !== 'ADMIN'
+        post => post.authorId !== ctx.session.user.id && ctx.session.user.role !== 'ADMIN'
       );
 
       if (unauthorized) {
@@ -244,6 +289,8 @@ export const postAnalyticsRouter = createTRPCRouter({
         input.postIds.map(async (postId) => {
           const analytics = await postAnalyticsService.getPostAnalytics({
             postId,
+            granularity: 'day',
+            includeExperiments: false,
             dateRange: input.dateRange,
           });
 
@@ -288,7 +335,7 @@ export const postAnalyticsRouter = createTRPCRouter({
       });
 
       const unauthorized = posts.some(
-        post => post.authorId !== ctx.session.userId && ctx.session.role !== 'ADMIN'
+        post => post.authorId !== ctx.session.user.id && ctx.session.user.role !== 'ADMIN'
       );
 
       if (unauthorized) {
@@ -298,7 +345,7 @@ export const postAnalyticsRouter = createTRPCRouter({
         });
       }
 
-      return postExperimentService.createExperiment(input, ctx.session.userId);
+      return postExperimentService.createExperiment(input, ctx.session.user.id);
     }),
 
   /**
@@ -307,7 +354,7 @@ export const postAnalyticsRouter = createTRPCRouter({
   updateExperiment: protectedProcedure
     .input(updateExperimentSchema)
     .mutation(async ({ input, ctx }) => {
-      return postExperimentService.updateExperiment(input, ctx.session.userId);
+      return postExperimentService.updateExperiment(input, ctx.session.user.id);
     }),
 
   /**
@@ -330,8 +377,8 @@ export const postAnalyticsRouter = createTRPCRouter({
       }
 
       if (
-        experiment.createdBy !== ctx.session.userId &&
-        ctx.session.role !== 'ADMIN'
+        experiment.createdBy !== ctx.session.user.id &&
+        ctx.session.user.role !== 'ADMIN'
       ) {
         throw new TRPCError({
           code: 'FORBIDDEN',
@@ -371,7 +418,7 @@ export const postAnalyticsRouter = createTRPCRouter({
     .query(async ({ input, ctx }) => {
       const experiments = await prisma.postExperiment.findMany({
         where: {
-          createdBy: ctx.session.userId,
+          createdBy: ctx.session.user.id,
           ...(input.status && { status: input.status }),
         },
         include: {
@@ -436,7 +483,7 @@ export const postAnalyticsRouter = createTRPCRouter({
       // Get user's published posts
       const posts = await prisma.post.findMany({
         where: {
-          authorId: ctx.session.userId,
+          authorId: ctx.session.user.id,
           status: 'PUBLISHED',
           publishedAt: { lte: new Date(end) },
         },

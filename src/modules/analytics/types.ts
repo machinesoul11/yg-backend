@@ -4,6 +4,30 @@
  */
 
 /**
+ * Request Context for Event Tracking
+ */
+export interface RequestContext {
+  session?: {
+    userId: string;
+    role: string;
+    email?: string;
+  };
+  deviceType?: string;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+/**
+ * Event Creation Response
+ */
+export interface EventCreated {
+  eventId: string | null;
+  tracked: boolean;
+}
+
+/**
  * Common Types
  */
 export interface DateRange {
