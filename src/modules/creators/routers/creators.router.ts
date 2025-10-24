@@ -411,10 +411,10 @@ export const creatorsRouter = createTRPCRouter({
       industry: z.array(z.string()).optional(),
       category: z.array(z.string()).optional(),
       availabilityStatus: z.enum(['available', 'limited', 'unavailable']).optional(),
-      sortBy: z.enum(['relevance', 'created_at', 'verified_at', 'total_collaborations', 'total_revenue', 'average_rating']).default('relevance'),
-      sortOrder: z.enum(['asc', 'desc']).default('desc'),
-      page: z.number().int().positive().default(1),
-      pageSize: z.number().int().positive().max(100).default(20),
+      sortBy: z.enum(['relevance', 'created_at', 'verified_at', 'total_collaborations', 'total_revenue', 'average_rating']).optional().default('relevance'),
+      sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+      page: z.number().int().positive().optional().default(1),
+      pageSize: z.number().int().positive().max(100).optional().default(20),
     }))
     .query(async ({ input, ctx }) => {
       try {
@@ -733,7 +733,7 @@ export const creatorsRouter = createTRPCRouter({
     .input(z.object({
       query: z.string().max(200).optional(),
       verificationStatus: z.array(z.enum(['pending', 'approved', 'rejected'])).optional(),
-    }))
+    }).optional().default({}))
     .query(async ({ input, ctx }) => {
       try {
         const requestingUserRole = ctx.session?.user?.role;
