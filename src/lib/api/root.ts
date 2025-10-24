@@ -18,7 +18,7 @@ import { taxComplianceRouter } from '@/modules/tax-compliance/router';
 import { reportsRouter } from '@/modules/reports/router';
 import { blogRouter, blogSEORouter, contentOptimizationRouter } from '@/modules/blog';
 import { seoManagementRouter } from '@/modules/seo';
-import { postAnalyticsRouter, platformAnalyticsRouter } from '@/modules/analytics';
+import { postAnalyticsRouter, platformAnalyticsRouter, eventIngestionRouter } from '@/modules/analytics';
 import { searchRouter } from '@/modules/search';
 import { creatorsRouter } from '@/modules/creators/routers/creators.router';
 import { creatorAnalyticsRouter } from '@/modules/creators/routers/creator-analytics.router';
@@ -59,6 +59,9 @@ export const appRouter = createTRPCRouter({
   creatorAnalytics: creatorAnalyticsRouter,
   brands: brandsRouter,
   brandAnalytics: brandAnalyticsRouter,
+  analytics: createTRPCRouter({
+    eventIngestion: eventIngestionRouter,
+  }),
 });
 
 // export type definition of API

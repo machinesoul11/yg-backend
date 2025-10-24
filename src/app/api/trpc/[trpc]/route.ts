@@ -3,8 +3,33 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { appRouter } from '@/lib/api/root';
 import { createTRPCContext } from '@/lib/trpc';
 
-const handler = (req: NextRequest) =>
-  fetchRequestHandler({
+// CORS helper to get allowed origin
+const getAllowedOrigin = (origin: string | null): string => {
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
+    process.env.NEXT_PUBLIC_APP_URL || 'https://ops.yesgoddess.agency',
+  ];
+
+  // Normalize origins by removing trailing slashes for comparison
+  const normalizedOrigin = origin?.replace(/\/$/, '') || '';
+  const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ''));
+  const isAllowedOrigin = normalizedAllowedOrigins.includes(normalizedOrigin);
+
+  return isAllowedOrigin && origin ? origin : allowedOrigins[0];
+};
+
+// CORS headers generator
+const getCorsHeaders = (origin: string | null) => ({
+  'Access-Control-Allow-Origin': getAllowedOrigin(origin),
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-trpc-source',
+  'Access-Control-Allow-Credentials': 'true',
+});
+
+const handler = async (req: NextRequest) => {
+  const origin = req.headers.get('origin');
+  
+  const response = await fetchRequestHandler({
     endpoint: '/api/trpc',
     req,
     router: appRouter,
@@ -19,26 +44,30 @@ const handler = (req: NextRequest) =>
         : undefined,
   });
 
+  // Clone the response to add CORS headers
+  const newResponse = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  });
+
+  // Add CORS headers to the response
+  const corsHeaders = getCorsHeaders(origin);
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    newResponse.headers.set(key, value);
+  });
+
+  return newResponse;
+};
+
 // Handle CORS preflight requests
 const handleOptions = (req: NextRequest) => {
-  const origin = req.headers.get('origin') || '';
-  const allowedOrigins = [
-    process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
-    process.env.NEXT_PUBLIC_APP_URL || 'https://ops.yesgoddess.agency',
-  ];
-
-  // Normalize origins by removing trailing slashes for comparison
-  const normalizedOrigin = origin.replace(/\/$/, '');
-  const normalizedAllowedOrigins = allowedOrigins.map(o => o.replace(/\/$/, ''));
-  const isAllowedOrigin = normalizedAllowedOrigins.includes(normalizedOrigin);
+  const origin = req.headers.get('origin');
 
   return new NextResponse(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': isAllowedOrigin ? origin : allowedOrigins[0],
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-trpc-source',
-      'Access-Control-Allow-Credentials': 'true',
+      ...getCorsHeaders(origin),
       'Access-Control-Max-Age': '86400', // 24 hours
     },
   });
