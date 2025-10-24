@@ -1,6 +1,9 @@
 /**
  * Redis Client Configuration
  * Centralized Redis connection for caching, rate limiting, and job queues
+ * 
+ * NOTE: For Upstash in serverless, we use a singleton pattern with manual connection management
+ * to avoid connection storms during cold starts
  */
 import Redis from 'ioredis';
 
@@ -10,111 +13,95 @@ if (!redisUrl) {
   throw new Error('REDIS_URL environment variable is not defined');
 }
 
-// Create Redis client for general use with Upstash-optimized settings
-export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 3, // Reduced from 5 for faster failover
-  retryStrategy(times) {
-    if (times > 3) return null; // Stop retrying after 3 attempts
-    const delay = Math.min(times * 50, 2000); // Faster initial retries
-    return delay;
-  },
-  enableReadyCheck: false, // Disable for serverless
-  enableOfflineQueue: true,
-  lazyConnect: true,
-  connectTimeout: 5000, // Reduced from 10000
-  commandTimeout: 3000, // Reduced from 5000
-  keepAlive: 30000,
-  family: 4, // Force IPv4
-  reconnectOnError(err) {
-    // Reconnect on specific errors
-    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
-    return targetErrors.some(targetError => err.message.includes(targetError));
-  },
-});
+// Track connection state globally
+let redisInstance: Redis | null = null;
+let redisConnectionInstance: Redis | null = null;
+let isConnecting = false;
+let isConnectionConnecting = false;
 
-// Create separate Redis connection for BullMQ with fallback handling
-export const redisConnection = new Redis(redisUrl, {
-  maxRetriesPerRequest: null, // BullMQ requires this to be null
-  retryStrategy(times) {
-    if (times > 5) return null; // Stop retrying after 5 attempts
-    const delay = Math.min(times * 100, 2000); // Faster retries
-    return delay;
-  },
-  enableReadyCheck: false,
-  enableOfflineQueue: false,
-  lazyConnect: true,
-  connectTimeout: 10000,
-  commandTimeout: 5000,
-  keepAlive: 30000,
-  family: 4, // Force IPv4
-  reconnectOnError(err) {
-    // Reconnect on specific errors
-    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'];
-    return targetErrors.some(targetError => err.message.includes(targetError));
-  },
-});
+/**
+ * Get or create Redis client with connection pooling
+ * This prevents multiple connections during serverless cold starts
+ */
+function getRedisClient(): Redis {
+  if (!redisInstance) {
+    redisInstance = new Redis(redisUrl!, {
+      maxRetriesPerRequest: 3,
+      retryStrategy(times) {
+        if (times > 3) return null;
+        const delay = Math.min(times * 100, 2000);
+        return delay;
+      },
+      enableReadyCheck: false,
+      enableOfflineQueue: true,
+      lazyConnect: true, // Don't connect immediately
+      connectTimeout: 5000,
+      commandTimeout: 3000,
+      keepAlive: 0, // Disable keep-alive for serverless
+      family: 4,
+      // Disable automatic reconnection to prevent connection storms
+      reconnectOnError: () => false,
+    });
 
-// Handle connection events with better logging
-redis.on('error', (error) => {
-  // Filter out noisy errors during startup
-  if (!error.message.includes('ECONNRESET') || redis.status === 'ready') {
-    console.error('[Redis] Connection error:', error.message);
-  }
-  // Don't crash on Redis errors - authentication should still work
-});
-
-redis.on('connect', () => {
-  console.log('[Redis] Connected successfully');
-});
-
-redis.on('ready', () => {
-  console.log('[Redis] Ready to accept commands');
-});
-
-redis.on('reconnecting', (delay: number) => {
-  console.log(`[Redis] Reconnecting in ${delay}ms...`);
-});
-
-redis.on('close', () => {
-  console.log('[Redis] Connection closed');
-});
-
-redisConnection.on('error', (error) => {
-  // Filter out noisy errors
-  if (!error.message.includes('ECONNRESET') || redisConnection.status === 'ready') {
-    console.error('[Redis BullMQ] Connection error:', error.message);
-  }
-});
-
-redisConnection.on('connect', () => {
-  console.log('[Redis BullMQ] Connected successfully');
-});
-
-redisConnection.on('reconnecting', (delay: number) => {
-  console.log(`[Redis BullMQ] Reconnecting in ${delay}ms...`);
-});
-
-// Attempt initial connection with error handling
-(async () => {
-  try {
-    await redis.connect();
-  } catch (error) {
-    console.warn('[Redis] Initial connection failed, will retry on first use:', 
-      error instanceof Error ? error.message : 'Unknown error');
+    // Only log critical errors
+    redisInstance.on('error', (error) => {
+      if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
+        console.error('[Redis] Critical error:', error.message);
+      }
+    });
   }
   
-  try {
-    await redisConnection.connect();
-  } catch (error) {
-    console.warn('[Redis BullMQ] Initial connection failed, will retry on first use:', 
-      error instanceof Error ? error.message : 'Unknown error');
+  return redisInstance;
+}
+
+/**
+ * Get or create BullMQ Redis connection
+ */
+function getBullMQConnection(): Redis {
+  if (!redisConnectionInstance) {
+    redisConnectionInstance = new Redis(redisUrl!, {
+      maxRetriesPerRequest: null,
+      retryStrategy(times) {
+        if (times > 5) return null;
+        const delay = Math.min(times * 200, 3000);
+        return delay;
+      },
+      enableReadyCheck: false,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      connectTimeout: 10000,
+      commandTimeout: 5000,
+      keepAlive: 0, // Disable keep-alive for serverless
+      family: 4,
+      reconnectOnError: () => false,
+    });
+
+    // Only log critical errors
+    redisConnectionInstance.on('error', (error) => {
+      if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
+        console.error('[Redis BullMQ] Critical error:', error.message);
+      }
+    });
   }
-})();
+  
+  return redisConnectionInstance;
+}
+
+// Export lazy-initialized instances
+export const redis = getRedisClient();
+export const redisConnection = getBullMQConnection();
+
+// DON'T automatically connect - let connections happen on-demand
+// This prevents connection storms in serverless environments
 
 // Add graceful shutdown handling
 process.on('SIGINT', () => {
-  redis.disconnect();
-  redisConnection.disconnect();
+  if (redisInstance && redisInstance.status !== 'end') {
+    redisInstance.disconnect();
+  }
+  if (redisConnectionInstance && redisConnectionInstance.status !== 'end') {
+    redisConnectionInstance.disconnect();
+  }
 });
 
 /**
@@ -137,9 +124,16 @@ export async function rateLimiter(
   const windowStart = now - windowMs;
 
   try {
-    // Check Redis connection status
+    // Check Redis connection status - if not ready, fail open
+    if (redis.status !== 'ready' && redis.status !== 'connecting') {
+      // Try to connect lazily
+      await redis.connect().catch(() => {
+        // Ignore connection errors, fail open
+      });
+    }
+    
+    // Double-check status after connection attempt
     if (redis.status !== 'ready') {
-      console.warn('Redis not ready, failing open on rate limiter');
       return {
         allowed: true,
         remaining: limit,
@@ -165,7 +159,7 @@ export async function rateLimiter(
     
     const results = await Promise.race([
       pipeline.exec(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 3000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis timeout')), 2000))
     ]);
     
     // Get count from zcard result

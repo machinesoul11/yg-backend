@@ -5,20 +5,18 @@ const redisConfig = {
   maxRetriesPerRequest: 3,
   enableReadyCheck: false, // Upstash doesn't support PING command
   retryStrategy: (times: number) => {
-    // Exponential backoff with max delay of 1 second
-    const delay = Math.min(times * 100, 1000);
+    if (times > 3) return null; // Stop after 3 attempts
+    // Exponential backoff with max delay of 2 seconds
+    const delay = Math.min(times * 100, 2000);
     return delay;
   },
-  reconnectOnError: (err: Error) => {
-    const targetErrors = ['READONLY', 'ETIMEDOUT'];
-    return targetErrors.some((target) => err.message.includes(target));
-  },
-  lazyConnect: false, // Connect immediately for serverless
-  connectTimeout: 5000, // Shorter timeout for serverless
+  reconnectOnError: () => false, // Disable auto-reconnect to prevent storms
+  lazyConnect: true, // CHANGED: Don't connect immediately - let it connect on first command
+  connectTimeout: 5000,
   commandTimeout: 3000,
-  enableOfflineQueue: false, // Don't queue commands when disconnected
+  enableOfflineQueue: true, // Queue commands until connected
   keepAlive: 0, // Disable keep-alive in serverless
-  family: 6, // Use IPv6 (Upstash supports it)
+  family: 4, // Use IPv4 for better compatibility
   // Disable automatic reconnection in serverless - let each invocation create fresh connections
   autoResubscribe: false,
   autoResendUnfulfilledCommands: false,
@@ -32,16 +30,10 @@ const createRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, redisConfig);
 
-  // Event listeners for monitoring (reduced logging for production)
-  if (process.env.NODE_ENV === 'development') {
-    client.on('connect', () => {
-      console.log('[Redis] Connected');
-    });
-  }
-
+  // Minimal error logging - filter out noise
   client.on('error', (err) => {
-    // Only log non-connection-reset errors in production
-    if (err.message && !err.message.includes('ECONNRESET')) {
+    // Only log critical errors, not connection resets or EPIPE
+    if (err.message && !err.message.includes('ECONNRESET') && !err.message.includes('EPIPE')) {
       console.error('[Redis] Error:', err.message);
     }
   });
@@ -54,19 +46,17 @@ const bullmqRedisConfig = {
   maxRetriesPerRequest: null, // BullMQ handles retries
   enableReadyCheck: false,
   retryStrategy: (times: number) => {
-    const delay = Math.min(times * 100, 1000);
+    if (times > 5) return null; // Stop after 5 attempts
+    const delay = Math.min(times * 200, 3000);
     return delay;
   },
-  reconnectOnError: (err: Error) => {
-    const targetErrors = ['READONLY', 'ETIMEDOUT'];
-    return targetErrors.some((target) => err.message.includes(target));
-  },
-  lazyConnect: false,
-  connectTimeout: 5000,
-  commandTimeout: 3000,
+  reconnectOnError: () => false, // Disable auto-reconnect
+  lazyConnect: true, // CHANGED: Lazy connect for BullMQ too
+  connectTimeout: 10000,
+  commandTimeout: 5000,
   enableOfflineQueue: false,
   keepAlive: 0,
-  family: 6,
+  family: 4,
   autoResubscribe: false,
   autoResendUnfulfilledCommands: false,
 };
@@ -79,16 +69,10 @@ const createBullMQRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, bullmqRedisConfig);
 
-  // Event listeners for monitoring (reduced logging for production)
-  if (process.env.NODE_ENV === 'development') {
-    client.on('connect', () => {
-      console.log('[Redis:BullMQ] Connected');
-    });
-  }
-
+  // Minimal error logging
   client.on('error', (err) => {
-    // Only log non-connection-reset errors in production
-    if (err.message && !err.message.includes('ECONNRESET')) {
+    // Only log critical errors
+    if (err.message && !err.message.includes('ECONNRESET') && !err.message.includes('EPIPE')) {
       console.error('[Redis:BullMQ] Error:', err.message);
     }
   });
