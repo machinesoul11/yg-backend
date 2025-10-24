@@ -8,7 +8,7 @@ import type { Redis } from 'ioredis';
 import type { Queue } from 'bullmq';
 import { TRPCError } from '@trpc/server';
 import type { TrackEventInput } from '@/lib/schemas/analytics.schema';
-import type { RequestContext, EventCreated } from '../types';
+import type { RequestContext, EventCreated } from '../types/index';
 import { EVENT_TYPES, EVENT_SOURCES, ACTOR_TYPES } from '@/lib/constants/event-types';
 import { createHash } from 'crypto';
 
@@ -57,6 +57,13 @@ export class EventIngestionService {
   private batchTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private shutdownRequested = false;
+  
+  // Circuit breaker for Redis failures
+  private redisFailureCount = 0;
+  private redisCircuitOpen = false;
+  private lastRedisFailure = 0;
+  private readonly REDIS_CIRCUIT_THRESHOLD = 5;
+  private readonly REDIS_CIRCUIT_RESET_MS = 30000; // 30 seconds
 
   private readonly config: EventIngestionConfig = {
     batchSize: 100,
@@ -96,27 +103,35 @@ export class EventIngestionService {
       // Step 2: Business logic validation
       const validationErrors = await this.validateEvent(input, context);
       if (validationErrors.length > 0) {
-        console.error('[EventIngestion] Validation failed:', validationErrors);
+        // Only log validation errors in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[EventIngestion] Validation failed:', validationErrors);
+        }
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `Event validation failed: ${validationErrors.map(e => e.message).join(', ')}`,
         });
       }
 
-      // Step 3: Deduplication check
-      if (this.config.enableDeduplication) {
+      // Step 3: Deduplication check (with circuit breaker)
+      if (this.config.enableDeduplication && !this.redisCircuitOpen) {
         const fingerprint = this.generateFingerprint(input, context);
         const isDuplicate = await this.checkDuplicate(fingerprint);
         if (isDuplicate) {
-          console.log('[EventIngestion] Duplicate event detected, skipping');
+          // Only log in development to reduce noise
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[EventIngestion] Duplicate event detected, skipping');
+          }
           return { eventId: null, tracked: false };
         }
-        // Store fingerprint in Redis
-        await this.storeFingerprintAsync(fingerprint);
+        // Store fingerprint in Redis (non-blocking)
+        this.storeFingerprintAsync(fingerprint).catch(() => {
+          // Silently ignore storage failures
+        });
       }
 
       // Step 4: Idempotency key check (if provided)
-      if (input.idempotencyKey) {
+      if (input.idempotencyKey && !this.redisCircuitOpen) {
         const existingResult = await this.checkIdempotency(input.idempotencyKey);
         if (existingResult) {
           return existingResult;
@@ -137,8 +152,18 @@ export class EventIngestionService {
       // Return success (actual DB write happens in batch)
       return { eventId: null, tracked: true };
     } catch (error) {
-      // Log error but don't throw - analytics failures shouldn't break user actions
-      console.error('[EventIngestion] Error ingesting event:', error);
+      // Only log unexpected errors, not TRPCErrors which are validation failures
+      if (!(error instanceof TRPCError)) {
+        console.error('[EventIngestion] Unexpected error ingesting event:', 
+          error instanceof Error ? error.message : error);
+      }
+      
+      // Re-throw TRPCErrors so the client gets proper validation feedback
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+      
+      // For other errors, fail gracefully
       return { eventId: null, tracked: false };
     }
   }
@@ -318,63 +343,158 @@ export class EventIngestionService {
 
   /**
    * Check if event fingerprint exists (is duplicate)
+   * With circuit breaker and timeout protection
    */
   private async checkDuplicate(fingerprint: string): Promise<boolean> {
+    // Check circuit breaker
+    if (this.redisCircuitOpen) {
+      const now = Date.now();
+      if (now - this.lastRedisFailure > this.REDIS_CIRCUIT_RESET_MS) {
+        // Reset circuit breaker after timeout
+        this.redisCircuitOpen = false;
+        this.redisFailureCount = 0;
+      } else {
+        // Circuit is open, skip deduplication check
+        return false;
+      }
+    }
+
     try {
-      const exists = await this.redis.exists(`event:fingerprint:${fingerprint}`);
-      return exists === 1;
+      // Add timeout wrapper to prevent hanging
+      const result = await Promise.race([
+        this.redis.exists(`event:fingerprint:${fingerprint}`),
+        new Promise<number>((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 2000)
+        )
+      ]);
+      
+      // Reset failure count on success
+      this.redisFailureCount = 0;
+      return result === 1;
     } catch (error) {
-      console.error('[EventIngestion] Error checking duplicate:', error);
-      return false; // Fail open
+      // Track failure for circuit breaker
+      this.redisFailureCount++;
+      this.lastRedisFailure = Date.now();
+      
+      if (this.redisFailureCount >= this.REDIS_CIRCUIT_THRESHOLD) {
+        this.redisCircuitOpen = true;
+        console.warn('[EventIngestion] Redis circuit breaker opened after multiple failures');
+      } else {
+        // Only log every 5th error to reduce noise
+        if (this.redisFailureCount % 5 === 0) {
+          console.error('[EventIngestion] Redis deduplication check failed:', 
+            error instanceof Error ? error.message : 'Unknown error');
+        }
+      }
+      
+      return false; // Fail open - allow event through
     }
   }
 
   /**
    * Store fingerprint in Redis (async, non-blocking)
+   * With timeout protection
    */
   private async storeFingerprintAsync(fingerprint: string): Promise<void> {
+    // Skip if circuit breaker is open
+    if (this.redisCircuitOpen) {
+      return;
+    }
+
     try {
-      await this.redis.setex(
-        `event:fingerprint:${fingerprint}`,
-        this.config.deduplicationTtlSeconds,
-        '1'
-      );
+      // Add timeout wrapper
+      await Promise.race([
+        this.redis.setex(
+          `event:fingerprint:${fingerprint}`,
+          this.config.deduplicationTtlSeconds,
+          '1'
+        ),
+        new Promise<void>((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 2000)
+        )
+      ]);
+      
+      // Reset failure count on success
+      this.redisFailureCount = 0;
     } catch (error) {
-      console.error('[EventIngestion] Error storing fingerprint:', error);
+      // Track failure but don't log excessively
+      this.redisFailureCount++;
+      this.lastRedisFailure = Date.now();
+      
+      if (this.redisFailureCount >= this.REDIS_CIRCUIT_THRESHOLD) {
+        this.redisCircuitOpen = true;
+      }
+      // Silently fail - fingerprint storage is not critical
     }
   }
 
   /**
    * Check idempotency key
+   * With timeout protection
    */
   private async checkIdempotency(key: string): Promise<EventCreated | null> {
+    // Skip if circuit breaker is open
+    if (this.redisCircuitOpen) {
+      return null;
+    }
+
     try {
-      const cached = await this.redis.get(`event:idempotency:${key}`);
+      const cached = await Promise.race([
+        this.redis.get(`event:idempotency:${key}`),
+        new Promise<string | null>((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 2000)
+        )
+      ]);
+      
       if (cached) {
         return JSON.parse(cached);
       }
       return null;
     } catch (error) {
-      console.error('[EventIngestion] Error checking idempotency:', error);
+      this.redisFailureCount++;
+      this.lastRedisFailure = Date.now();
+      
+      if (this.redisFailureCount >= this.REDIS_CIRCUIT_THRESHOLD) {
+        this.redisCircuitOpen = true;
+      }
       return null;
     }
   }
 
   /**
    * Store idempotency result
+   * With timeout protection
    */
   private async storeIdempotency(
     key: string,
     result: EventCreated
   ): Promise<void> {
+    // Skip if circuit breaker is open
+    if (this.redisCircuitOpen) {
+      return;
+    }
+
     try {
-      await this.redis.setex(
-        `event:idempotency:${key}`,
-        3600, // 1 hour
-        JSON.stringify(result)
-      );
+      await Promise.race([
+        this.redis.setex(
+          `event:idempotency:${key}`,
+          3600, // 1 hour
+          JSON.stringify(result)
+        ),
+        new Promise<void>((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), 2000)
+        )
+      ]);
+      
+      this.redisFailureCount = 0;
     } catch (error) {
-      console.error('[EventIngestion] Error storing idempotency:', error);
+      this.redisFailureCount++;
+      this.lastRedisFailure = Date.now();
+      
+      if (this.redisFailureCount >= this.REDIS_CIRCUIT_THRESHOLD) {
+        this.redisCircuitOpen = true;
+      }
+      // Silently fail
     }
   }
 
@@ -566,6 +686,11 @@ export class EventIngestionService {
       bufferSize: this.eventBuffer.length,
       isProcessing: this.isProcessing,
       config: this.config,
+      circuitBreaker: {
+        open: this.redisCircuitOpen,
+        failureCount: this.redisFailureCount,
+        lastFailure: this.lastRedisFailure ? new Date(this.lastRedisFailure).toISOString() : null,
+      },
     };
   }
 }
