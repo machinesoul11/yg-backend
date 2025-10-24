@@ -416,7 +416,26 @@ export const creatorsRouter = createTRPCRouter({
       page: z.number().int().positive().optional().default(1),
       pageSize: z.number().int().positive().max(100).optional().default(20),
     }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input = {
+      sortBy: 'relevance' as const,
+      sortOrder: 'desc' as const,
+      page: 1,
+      pageSize: 20,
+    }, ctx }) => {
+      // Apply defaults
+      const {
+        query: searchQuery,
+        verificationStatus: verificationStatusFilter,
+        specialties: specialtiesFilter,
+        industry: industryFilter,
+        category: categoryFilter,
+        availabilityStatus: availabilityStatusFilter,
+        sortBy = 'relevance',
+        sortOrder = 'desc',
+        page = 1,
+        pageSize = 20,
+      } = input;
+
       try {
         const requestingUserId = ctx.session?.user?.id;
         const requestingUserRole = ctx.session?.user?.role;
@@ -427,10 +446,10 @@ export const creatorsRouter = createTRPCRouter({
         };
 
       // Text search across name and bio
-      if (input.query && input.query.trim().length >= 2) {
+      if (searchQuery && searchQuery.trim().length >= 2) {
         where.OR = [
-          { stageName: { contains: input.query.trim(), mode: 'insensitive' } },
-          { bio: { contains: input.query.trim(), mode: 'insensitive' } },
+          { stageName: { contains: searchQuery.trim(), mode: 'insensitive' } },
+          { bio: { contains: searchQuery.trim(), mode: 'insensitive' } },
         ];
       }
 
@@ -438,8 +457,8 @@ export const creatorsRouter = createTRPCRouter({
       // Public users and brands should only see approved creators
       // Admins can see all
       if (requestingUserRole === 'ADMIN') {
-        if (input.verificationStatus && input.verificationStatus.length > 0) {
-          where.verificationStatus = { in: input.verificationStatus };
+        if (verificationStatusFilter && verificationStatusFilter.length > 0) {
+          where.verificationStatus = { in: verificationStatusFilter };
         }
       } else {
         // Non-admins only see approved creators
@@ -447,33 +466,33 @@ export const creatorsRouter = createTRPCRouter({
       }
 
       // Specialties filter (JSONB array contains)
-      if (input.specialties && input.specialties.length > 0) {
+      if (specialtiesFilter && specialtiesFilter.length > 0) {
         where.specialties = {
           path: '$',
-          array_contains: input.specialties,
+          array_contains: specialtiesFilter,
         };
       }
 
       // Industry/category filter
-      if (input.industry && input.industry.length > 0) {
+      if (industryFilter && industryFilter.length > 0) {
         where.specialties = {
           path: '$',
-          array_contains: input.industry,
+          array_contains: industryFilter,
         };
       }
 
-      if (input.category && input.category.length > 0) {
+      if (categoryFilter && categoryFilter.length > 0) {
         where.specialties = {
           path: '$',
-          array_contains: input.category,
+          array_contains: categoryFilter,
         };
       }
 
       // Availability filter (JSONB)
-      if (input.availabilityStatus) {
+      if (availabilityStatusFilter) {
         where.availability = {
           path: ['status'],
-          equals: input.availabilityStatus,
+          equals: availabilityStatusFilter,
         };
       }
 
@@ -489,61 +508,61 @@ export const creatorsRouter = createTRPCRouter({
         // Apply basic filtering to mock data
         let filteredMocks = mockCreators;
         
-        if (input.query) {
-          const query = input.query.toLowerCase();
+        if (searchQuery) {
+          const queryLower = searchQuery.toLowerCase();
           filteredMocks = mockCreators.filter(c => 
-            c.stageName.toLowerCase().includes(query) ||
-            c.bio.toLowerCase().includes(query) ||
-            c.specialties.some(s => s.toLowerCase().includes(query))
+            c.stageName.toLowerCase().includes(queryLower) ||
+            c.bio.toLowerCase().includes(queryLower) ||
+            c.specialties.some(s => s.toLowerCase().includes(queryLower))
           );
         }
         
-        if (input.specialties && input.specialties.length > 0) {
+        if (specialtiesFilter && specialtiesFilter.length > 0) {
           filteredMocks = filteredMocks.filter(c =>
-            input.specialties!.some(s => c.specialties.includes(s))
+            specialtiesFilter.some(s => c.specialties.includes(s))
           );
         }
         
-        if (input.availabilityStatus) {
+        if (availabilityStatusFilter) {
           filteredMocks = filteredMocks.filter(c =>
-            c.availability.status === input.availabilityStatus
+            c.availability.status === availabilityStatusFilter
           );
         }
         
         // Sort mock data
-        if (input.sortBy === 'total_collaborations') {
+        if (sortBy === 'total_collaborations') {
           filteredMocks.sort((a, b) =>
-            input.sortOrder === 'asc'
+            sortOrder === 'asc'
               ? a.performanceMetrics.totalCollaborations - b.performanceMetrics.totalCollaborations
               : b.performanceMetrics.totalCollaborations - a.performanceMetrics.totalCollaborations
           );
-        } else if (input.sortBy === 'total_revenue') {
+        } else if (sortBy === 'total_revenue') {
           filteredMocks.sort((a, b) =>
-            input.sortOrder === 'asc'
+            sortOrder === 'asc'
               ? a.performanceMetrics.totalRevenue - b.performanceMetrics.totalRevenue
               : b.performanceMetrics.totalRevenue - a.performanceMetrics.totalRevenue
           );
-        } else if (input.sortBy === 'average_rating') {
+        } else if (sortBy === 'average_rating') {
           filteredMocks.sort((a, b) =>
-            input.sortOrder === 'asc'
+            sortOrder === 'asc'
               ? a.performanceMetrics.averageRating - b.performanceMetrics.averageRating
               : b.performanceMetrics.averageRating - a.performanceMetrics.averageRating
           );
         }
         
         // Apply pagination to mock data
-        const skip = (input.page - 1) * input.pageSize;
-        const paginatedMocks = filteredMocks.slice(skip, skip + input.pageSize);
+        const skip = (page - 1) * pageSize;
+        const paginatedMocks = filteredMocks.slice(skip, skip + pageSize);
         
         return {
           results: paginatedMocks,
           pagination: {
-            page: input.page,
-            pageSize: input.pageSize,
+            page,
+            pageSize,
             total: filteredMocks.length,
-            totalPages: Math.ceil(filteredMocks.length / input.pageSize),
-            hasNextPage: input.page * input.pageSize < filteredMocks.length,
-            hasPreviousPage: input.page > 1,
+            totalPages: Math.ceil(filteredMocks.length / pageSize),
+            hasNextPage: page * pageSize < filteredMocks.length,
+            hasPreviousPage: page > 1,
           },
           _mockData: true, // Flag to indicate this is sample data
         };
@@ -552,21 +571,21 @@ export const creatorsRouter = createTRPCRouter({
       // Build orderBy based on sortBy
       let orderBy: any = {};
       
-      if (input.sortBy === 'relevance' && input.query) {
+      if (sortBy === 'relevance' && searchQuery) {
         // For relevance, we'll sort by created date and filter in application
         orderBy = { createdAt: 'desc' };
-      } else if (input.sortBy === 'verified_at') {
-        orderBy = { verifiedAt: input.sortOrder };
-      } else if (input.sortBy === 'created_at') {
-        orderBy = { createdAt: input.sortOrder };
+      } else if (sortBy === 'verified_at') {
+        orderBy = { verifiedAt: sortOrder };
+      } else if (sortBy === 'created_at') {
+        orderBy = { createdAt: sortOrder };
       } else {
         // Default to created date for metric-based sorts (will be sorted in application)
         orderBy = { createdAt: 'desc' };
       }
 
       // Fetch creators with pagination
-      const skip = (input.page - 1) * input.pageSize;
-      const take = input.pageSize;
+      const skip = (page - 1) * pageSize;
+      const take = pageSize;
 
       let creators = await prisma.creator.findMany({
         where,
@@ -595,7 +614,7 @@ export const creatorsRouter = createTRPCRouter({
       });
 
       // Sort by performance metrics if needed
-      if (['total_collaborations', 'total_revenue', 'average_rating'].includes(input.sortBy)) {
+      if (['total_collaborations', 'total_revenue', 'average_rating'].includes(sortBy)) {
         creators = creators.sort((a, b) => {
           const aMetrics = (a.performanceMetrics as any) || {};
           const bMetrics = (b.performanceMetrics as any) || {};
@@ -603,18 +622,18 @@ export const creatorsRouter = createTRPCRouter({
           let aValue = 0;
           let bValue = 0;
 
-          if (input.sortBy === 'total_collaborations') {
+          if (sortBy === 'total_collaborations') {
             aValue = aMetrics.totalCollaborations || 0;
             bValue = bMetrics.totalCollaborations || 0;
-          } else if (input.sortBy === 'total_revenue') {
+          } else if (sortBy === 'total_revenue') {
             aValue = aMetrics.totalRevenue || 0;
             bValue = bMetrics.totalRevenue || 0;
-          } else if (input.sortBy === 'average_rating') {
+          } else if (sortBy === 'average_rating') {
             aValue = aMetrics.averageRating || 0;
             bValue = bMetrics.averageRating || 0;
           }
 
-          return input.sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
         });
       }
 
@@ -638,12 +657,12 @@ export const creatorsRouter = createTRPCRouter({
       return {
         results,
         pagination: {
-          page: input.page,
-          pageSize: input.pageSize,
+          page,
+          pageSize,
           total,
-          totalPages: Math.ceil(total / input.pageSize),
-          hasNextPage: input.page * input.pageSize < total,
-          hasPreviousPage: input.page > 1,
+          totalPages: Math.ceil(total / pageSize),
+          hasNextPage: page * pageSize < total,
+          hasPreviousPage: page > 1,
         },
       };
     } catch (error) {
@@ -661,64 +680,64 @@ export const creatorsRouter = createTRPCRouter({
       // For public users, return mock data as fallback
       const mockCreators = getMockCreators();
       
-      // Apply basic filtering to mock data
+      // Apply basic filtering to mock data (using destructured variables from above)
       let filteredMocks = mockCreators;
       
-      if (input.query) {
-        const query = input.query.toLowerCase();
+      if (searchQuery) {
+        const queryLower = searchQuery.toLowerCase();
         filteredMocks = mockCreators.filter(c => 
-          c.stageName.toLowerCase().includes(query) ||
-          c.bio.toLowerCase().includes(query) ||
-          c.specialties.some(s => s.toLowerCase().includes(query))
+          c.stageName.toLowerCase().includes(queryLower) ||
+          c.bio.toLowerCase().includes(queryLower) ||
+          c.specialties.some(s => s.toLowerCase().includes(queryLower))
         );
       }
       
-      if (input.specialties && input.specialties.length > 0) {
+      if (specialtiesFilter && specialtiesFilter.length > 0) {
         filteredMocks = filteredMocks.filter(c =>
-          input.specialties!.some(s => c.specialties.includes(s))
+          specialtiesFilter.some((s: string) => c.specialties.includes(s))
         );
       }
       
-      if (input.availabilityStatus) {
+      if (availabilityStatusFilter) {
         filteredMocks = filteredMocks.filter(c =>
-          c.availability.status === input.availabilityStatus
+          c.availability.status === availabilityStatusFilter
         );
       }
       
       // Sort mock data
-      if (input.sortBy === 'total_collaborations') {
+      if (sortBy === 'total_collaborations') {
         filteredMocks.sort((a, b) =>
-          input.sortOrder === 'asc'
+          sortOrder === 'asc'
             ? a.performanceMetrics.totalCollaborations - b.performanceMetrics.totalCollaborations
             : b.performanceMetrics.totalCollaborations - a.performanceMetrics.totalCollaborations
         );
-      } else if (input.sortBy === 'total_revenue') {
+      } else if (sortBy === 'total_revenue') {
         filteredMocks.sort((a, b) =>
-          input.sortOrder === 'asc'
+          sortOrder === 'asc'
             ? a.performanceMetrics.totalRevenue - b.performanceMetrics.totalRevenue
             : b.performanceMetrics.totalRevenue - a.performanceMetrics.totalRevenue
         );
-      } else if (input.sortBy === 'average_rating') {
+      } else if (sortBy === 'average_rating') {
         filteredMocks.sort((a, b) =>
-          input.sortOrder === 'asc'
+          sortOrder === 'asc'
             ? a.performanceMetrics.averageRating - b.performanceMetrics.averageRating
             : b.performanceMetrics.averageRating - a.performanceMetrics.averageRating
         );
       }
       
       // Apply pagination to mock data
-      const skip = (input.page - 1) * input.pageSize;
-      const paginatedMocks = filteredMocks.slice(skip, skip + input.pageSize);
+      const skip = (page - 1) * pageSize;
+      const paginatedMocks = filteredMocks.slice(skip, skip + pageSize);
       
       return {
         results: paginatedMocks,
         pagination: {
-          page: input.page,
-          pageSize: input.pageSize,
+          page,
+          pageSize,
           total: filteredMocks.length,
-          totalPages: Math.ceil(filteredMocks.length / input.pageSize),
-          hasNextPage: input.page * input.pageSize < filteredMocks.length,
-          hasPreviousPage: input.page > 1,
+          totalPages: Math.ceil(filteredMocks.length / pageSize),
+          hasNextPage: page * pageSize < filteredMocks.length,
+          hasPreviousPage: page > 1,
         },
         _mockData: true,
         _errorFallback: true, // Indicates this is fallback data due to an error
@@ -733,8 +752,8 @@ export const creatorsRouter = createTRPCRouter({
     .input(z.object({
       query: z.string().max(200).optional(),
       verificationStatus: z.array(z.enum(['pending', 'approved', 'rejected'])).optional(),
-    }).optional().default({}))
-    .query(async ({ input, ctx }) => {
+    }).optional())
+    .query(async ({ input = {}, ctx }) => {
       try {
         const requestingUserRole = ctx.session?.user?.role;
 
