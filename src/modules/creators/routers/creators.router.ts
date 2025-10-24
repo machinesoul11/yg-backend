@@ -44,6 +44,135 @@ function getRequestContext(ctx: any) {
 }
 
 /**
+ * Generate mock/sample creators for public discovery when database is empty
+ * Only used for public-facing pages, never for admin/portal
+ */
+function getMockCreators() {
+  return [
+    {
+      id: 'mock-creator-1',
+      userId: 'mock-user-1',
+      stageName: 'Sophia Martinez',
+      bio: 'Award-winning vocalist and songwriter specializing in R&B, soul, and contemporary pop. Featured on multiple Billboard charts with over 500M streams.',
+      specialties: ['Vocalist', 'Songwriter', 'R&B', 'Soul', 'Pop'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/sophia',
+      availability: { status: 'available', hoursPerWeek: 20 },
+      performanceMetrics: {
+        totalCollaborations: 47,
+        totalRevenue: 250000,
+        averageRating: 4.9,
+        responseTimeHours: 2,
+      },
+      avatar: null,
+      verifiedAt: new Date('2024-01-15'),
+      createdAt: new Date('2023-11-01'),
+      updatedAt: new Date('2024-10-01'),
+    },
+    {
+      id: 'mock-creator-2',
+      userId: 'mock-user-2',
+      stageName: 'Marcus Chen',
+      bio: 'Producer and mixing engineer with 15+ years experience. Specialized in hip-hop, trap, and electronic music production. Credits include major label artists.',
+      specialties: ['Producer', 'Audio Engineer', 'Hip-Hop', 'Trap', 'Electronic'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/marcus',
+      availability: { status: 'limited', hoursPerWeek: 10 },
+      performanceMetrics: {
+        totalCollaborations: 89,
+        totalRevenue: 480000,
+        averageRating: 4.8,
+        responseTimeHours: 4,
+      },
+      avatar: null,
+      verifiedAt: new Date('2023-12-10'),
+      createdAt: new Date('2023-10-15'),
+      updatedAt: new Date('2024-09-28'),
+    },
+    {
+      id: 'mock-creator-3',
+      userId: 'mock-user-3',
+      stageName: 'Luna Rose',
+      bio: 'Multi-instrumentalist and composer creating ethereal soundscapes. Specializing in film scores, ambient music, and experimental compositions.',
+      specialties: ['Composer', 'Multi-Instrumentalist', 'Film Score', 'Ambient', 'Experimental'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/luna',
+      availability: { status: 'available', hoursPerWeek: 30 },
+      performanceMetrics: {
+        totalCollaborations: 34,
+        totalRevenue: 180000,
+        averageRating: 5.0,
+        responseTimeHours: 1,
+      },
+      avatar: null,
+      verifiedAt: new Date('2024-02-20'),
+      createdAt: new Date('2024-01-05'),
+      updatedAt: new Date('2024-10-15'),
+    },
+    {
+      id: 'mock-creator-4',
+      userId: 'mock-user-4',
+      stageName: 'DJ Apex',
+      bio: 'Electronic music producer and DJ known for high-energy festival sets. Expertise in EDM, house, and techno with releases on major electronic labels.',
+      specialties: ['DJ', 'Producer', 'EDM', 'House', 'Techno'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/djapex',
+      availability: { status: 'limited', hoursPerWeek: 15 },
+      performanceMetrics: {
+        totalCollaborations: 56,
+        totalRevenue: 320000,
+        averageRating: 4.7,
+        responseTimeHours: 6,
+      },
+      avatar: null,
+      verifiedAt: new Date('2024-03-05'),
+      createdAt: new Date('2023-12-20'),
+      updatedAt: new Date('2024-10-10'),
+    },
+    {
+      id: 'mock-creator-5',
+      userId: 'mock-user-5',
+      stageName: 'Amara Johnson',
+      bio: 'Session guitarist and music director with expertise in jazz, funk, and fusion. Toured internationally with Grammy-winning artists.',
+      specialties: ['Guitarist', 'Music Director', 'Jazz', 'Funk', 'Fusion'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/amara',
+      availability: { status: 'available', hoursPerWeek: 25 },
+      performanceMetrics: {
+        totalCollaborations: 71,
+        totalRevenue: 290000,
+        averageRating: 4.9,
+        responseTimeHours: 3,
+      },
+      avatar: null,
+      verifiedAt: new Date('2023-11-30'),
+      createdAt: new Date('2023-09-15'),
+      updatedAt: new Date('2024-10-12'),
+    },
+    {
+      id: 'mock-creator-6',
+      userId: 'mock-user-6',
+      stageName: 'Phoenix Beats',
+      bio: 'Beatmaker and sound designer pushing boundaries in lo-fi, boom bap, and experimental hip-hop. Featured in Spotify editorial playlists.',
+      specialties: ['Beatmaker', 'Sound Designer', 'Lo-Fi', 'Boom Bap', 'Hip-Hop'],
+      verificationStatus: 'approved' as const,
+      portfolioUrl: 'https://example.com/phoenix',
+      availability: { status: 'available', hoursPerWeek: 35 },
+      performanceMetrics: {
+        totalCollaborations: 42,
+        totalRevenue: 195000,
+        averageRating: 4.8,
+        responseTimeHours: 2,
+      },
+      avatar: null,
+      verifiedAt: new Date('2024-01-25'),
+      createdAt: new Date('2023-11-10'),
+      updatedAt: new Date('2024-10-08'),
+    },
+  ];
+}
+
+/**
  * Creators Router
  */
 export const creatorsRouter = createTRPCRouter({
@@ -349,6 +478,75 @@ export const creatorsRouter = createTRPCRouter({
 
       // Count total matching creators
       const total = await prisma.creator.count({ where });
+
+      // If no creators found and user is not admin, return mock data for public discovery
+      // This allows the public-facing pages to show examples even when database is empty
+      // Admins and portal users will always see real data only
+      if (total === 0 && requestingUserRole !== 'ADMIN') {
+        const mockCreators = getMockCreators();
+        
+        // Apply basic filtering to mock data
+        let filteredMocks = mockCreators;
+        
+        if (input.query) {
+          const query = input.query.toLowerCase();
+          filteredMocks = mockCreators.filter(c => 
+            c.stageName.toLowerCase().includes(query) ||
+            c.bio.toLowerCase().includes(query) ||
+            c.specialties.some(s => s.toLowerCase().includes(query))
+          );
+        }
+        
+        if (input.specialties && input.specialties.length > 0) {
+          filteredMocks = filteredMocks.filter(c =>
+            input.specialties!.some(s => c.specialties.includes(s))
+          );
+        }
+        
+        if (input.availabilityStatus) {
+          filteredMocks = filteredMocks.filter(c =>
+            c.availability.status === input.availabilityStatus
+          );
+        }
+        
+        // Sort mock data
+        if (input.sortBy === 'total_collaborations') {
+          filteredMocks.sort((a, b) =>
+            input.sortOrder === 'asc'
+              ? a.performanceMetrics.totalCollaborations - b.performanceMetrics.totalCollaborations
+              : b.performanceMetrics.totalCollaborations - a.performanceMetrics.totalCollaborations
+          );
+        } else if (input.sortBy === 'total_revenue') {
+          filteredMocks.sort((a, b) =>
+            input.sortOrder === 'asc'
+              ? a.performanceMetrics.totalRevenue - b.performanceMetrics.totalRevenue
+              : b.performanceMetrics.totalRevenue - a.performanceMetrics.totalRevenue
+          );
+        } else if (input.sortBy === 'average_rating') {
+          filteredMocks.sort((a, b) =>
+            input.sortOrder === 'asc'
+              ? a.performanceMetrics.averageRating - b.performanceMetrics.averageRating
+              : b.performanceMetrics.averageRating - a.performanceMetrics.averageRating
+          );
+        }
+        
+        // Apply pagination to mock data
+        const skip = (input.page - 1) * input.pageSize;
+        const paginatedMocks = filteredMocks.slice(skip, skip + input.pageSize);
+        
+        return {
+          results: paginatedMocks,
+          pagination: {
+            page: input.page,
+            pageSize: input.pageSize,
+            total: filteredMocks.length,
+            totalPages: Math.ceil(filteredMocks.length / input.pageSize),
+            hasNextPage: input.page * input.pageSize < filteredMocks.length,
+            hasPreviousPage: input.page > 1,
+          },
+          _mockData: true, // Flag to indicate this is sample data
+        };
+      }
 
       // Build orderBy based on sortBy
       let orderBy: any = {};
