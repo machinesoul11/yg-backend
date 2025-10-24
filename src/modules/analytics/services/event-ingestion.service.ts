@@ -169,7 +169,9 @@ export class EventIngestionService {
   }
 
   /**
-   * Validate event data with business logic and referential integrity
+   * Validate event data with business logic
+   * Note: We keep validation minimal to avoid blocking analytics events
+   * Invalid references will be caught during data processing/aggregation
    */
   private async validateEvent(
     input: TrackEventInput,
@@ -177,145 +179,37 @@ export class EventIngestionService {
   ): Promise<ValidationError[]> {
     const errors: ValidationError[] = [];
 
-    // Validate occurred_at (if provided in props)
+    // Only validate occurred_at if provided and is obviously invalid
     const occurredAt = (input.props as any)?.occurred_at;
     if (occurredAt) {
       const timestamp = new Date(occurredAt);
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+      const oneHourFuture = new Date(now.getTime() + 60 * 60 * 1000);
 
-      if (timestamp > now) {
+      // Only reject if timestamp is wildly off (more than 1 hour in future or 1 year old)
+      if (timestamp > oneHourFuture) {
         errors.push({
           field: 'occurred_at',
-          message: 'Event timestamp cannot be in the future',
+          message: 'Event timestamp is too far in the future',
           value: occurredAt,
         });
       }
 
-      if (timestamp < thirtyDaysAgo) {
+      if (timestamp < oneYearAgo) {
         errors.push({
           field: 'occurred_at',
-          message: 'Event timestamp is too old (>30 days)',
+          message: 'Event timestamp is too old (>1 year)',
           value: occurredAt,
         });
       }
     }
 
-    // Validate event_type is recognized
-    const validEventTypes = Object.values(EVENT_TYPES);
-    if (!validEventTypes.includes(input.eventType as any)) {
-      console.warn(`[EventIngestion] Unknown event type: ${input.eventType}`);
-    }
-
-    // Validate foreign key references (if provided)
-    if (input.entityId && input.entityType) {
-      const exists = await this.validateEntityReference(input.entityId, input.entityType);
-      if (!exists) {
-        errors.push({
-          field: 'entityId',
-          message: `Referenced ${input.entityType} with ID ${input.entityId} does not exist`,
-          value: input.entityId,
-        });
-      }
-    }
-
-    // Validate actor_id from context
-    if (context.session?.userId) {
-      const userExists = await this.validateUserReference(context.session.userId);
-      if (!userExists) {
-        errors.push({
-          field: 'actorId',
-          message: `User with ID ${context.session.userId} does not exist`,
-          value: context.session.userId,
-        });
-      }
-    }
-
-    // Validate props_json based on event_type
-    const propsValidation = this.validateEventProps(input.eventType, input.props);
-    errors.push(...propsValidation);
-
-    return errors;
-  }
-
-  /**
-   * Validate entity reference exists in database
-   */
-  private async validateEntityReference(
-    entityId: string,
-    entityType: string
-  ): Promise<boolean> {
-    try {
-      const entityMap: Record<string, string> = {
-        project: 'project',
-        asset: 'ipAsset',
-        license: 'license',
-        post: 'post',
-      };
-
-      const modelName = entityMap[entityType];
-      if (!modelName) return true; // Skip validation for unknown types
-
-      const result = await (this.prisma as any)[modelName].findUnique({
-        where: { id: entityId },
-        select: { id: true },
-      });
-
-      return result !== null;
-    } catch (error) {
-      console.error('[EventIngestion] Error validating entity reference:', error);
-      return true; // Fail open to avoid blocking events
-    }
-  }
-
-  /**
-   * Validate user reference exists
-   */
-  private async validateUserReference(userId: string): Promise<boolean> {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, deleted_at: true },
-      });
-
-      return user !== null && user.deleted_at === null;
-    } catch (error) {
-      console.error('[EventIngestion] Error validating user reference:', error);
-      return true; // Fail open
-    }
-  }
-
-  /**
-   * Validate props_json structure based on event_type
-   */
-  private validateEventProps(
-    eventType: string,
-    props?: Record<string, any>
-  ): ValidationError[] {
-    const errors: ValidationError[] = [];
-
-    if (!props) return errors;
-
-    // Define required props for specific event types
-    const eventPropsMap: Record<string, string[]> = {
-      [EVENT_TYPES.ASSET_VIEWED]: ['view_duration_ms'],
-      [EVENT_TYPES.LICENSE_SIGNED]: ['license_id'],
-      [EVENT_TYPES.PAYOUT_COMPLETED]: ['amount_cents', 'payment_method'],
-      [EVENT_TYPES.POST_VIEWED]: ['post_id'],
-      [EVENT_TYPES.POST_CTA_CLICKED]: ['cta_type', 'cta_url'],
-    };
-
-    const requiredProps = eventPropsMap[eventType];
-    if (requiredProps) {
-      for (const prop of requiredProps) {
-        if (!(prop in props)) {
-          errors.push({
-            field: `props.${prop}`,
-            message: `Required property '${prop}' missing for event type '${eventType}'`,
-          });
-        }
-      }
-    }
+    // Note: We intentionally do NOT validate:
+    // - Event type (we accept custom event types)
+    // - Entity references (entities might be created asynchronously)
+    // - User existence (user might be deleted but we still track events)
+    // This makes the analytics system more resilient and performant
 
     return errors;
   }
