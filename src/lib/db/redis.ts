@@ -12,62 +12,104 @@ if (!redisUrl) {
 
 // Create Redis client for general use with Upstash-optimized settings
 export const redis = new Redis(redisUrl, {
-  maxRetriesPerRequest: 5,
+  maxRetriesPerRequest: 3, // Reduced from 5 for faster failover
   retryStrategy(times) {
-    const delay = Math.min(times * 100, 5000);
+    if (times > 3) return null; // Stop retrying after 3 attempts
+    const delay = Math.min(times * 50, 2000); // Faster initial retries
     return delay;
   },
   enableReadyCheck: false, // Disable for serverless
   enableOfflineQueue: true,
   lazyConnect: true,
-  connectTimeout: 10000,
-  commandTimeout: 5000,
+  connectTimeout: 5000, // Reduced from 10000
+  commandTimeout: 3000, // Reduced from 5000
   keepAlive: 30000,
   family: 4, // Force IPv4
+  reconnectOnError(err) {
+    // Reconnect on specific errors
+    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT'];
+    return targetErrors.some(targetError => err.message.includes(targetError));
+  },
 });
 
 // Create separate Redis connection for BullMQ with fallback handling
 export const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null, // BullMQ requires this to be null
   retryStrategy(times) {
-    if (times > 10) return null; // Stop retrying after 10 attempts
-    const delay = Math.min(times * 200, 3000);
+    if (times > 5) return null; // Stop retrying after 5 attempts
+    const delay = Math.min(times * 100, 2000); // Faster retries
     return delay;
   },
   enableReadyCheck: false,
   enableOfflineQueue: false,
   lazyConnect: true,
-  connectTimeout: 15000,
-  commandTimeout: 8000,
+  connectTimeout: 10000,
+  commandTimeout: 5000,
   keepAlive: 30000,
   family: 4, // Force IPv4
+  reconnectOnError(err) {
+    // Reconnect on specific errors
+    const targetErrors = ['READONLY', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'];
+    return targetErrors.some(targetError => err.message.includes(targetError));
+  },
 });
 
 // Handle connection events with better logging
 redis.on('error', (error) => {
-  console.error('Redis connection error:', error.message);
+  // Filter out noisy errors during startup
+  if (!error.message.includes('ECONNRESET') || redis.status === 'ready') {
+    console.error('[Redis] Connection error:', error.message);
+  }
   // Don't crash on Redis errors - authentication should still work
 });
 
 redis.on('connect', () => {
-  console.log('Redis connected successfully');
+  console.log('[Redis] Connected successfully');
 });
 
 redis.on('ready', () => {
-  console.log('Redis is ready to accept commands');
+  console.log('[Redis] Ready to accept commands');
 });
 
-redis.on('reconnecting', () => {
-  console.log('Redis reconnecting...');
+redis.on('reconnecting', (delay: number) => {
+  console.log(`[Redis] Reconnecting in ${delay}ms...`);
+});
+
+redis.on('close', () => {
+  console.log('[Redis] Connection closed');
 });
 
 redisConnection.on('error', (error) => {
-  console.error('Redis (BullMQ) connection error:', error.message);
+  // Filter out noisy errors
+  if (!error.message.includes('ECONNRESET') || redisConnection.status === 'ready') {
+    console.error('[Redis BullMQ] Connection error:', error.message);
+  }
 });
 
 redisConnection.on('connect', () => {
-  console.log('Redis (BullMQ) connected successfully');
+  console.log('[Redis BullMQ] Connected successfully');
 });
+
+redisConnection.on('reconnecting', (delay: number) => {
+  console.log(`[Redis BullMQ] Reconnecting in ${delay}ms...`);
+});
+
+// Attempt initial connection with error handling
+(async () => {
+  try {
+    await redis.connect();
+  } catch (error) {
+    console.warn('[Redis] Initial connection failed, will retry on first use:', 
+      error instanceof Error ? error.message : 'Unknown error');
+  }
+  
+  try {
+    await redisConnection.connect();
+  } catch (error) {
+    console.warn('[Redis BullMQ] Initial connection failed, will retry on first use:', 
+      error instanceof Error ? error.message : 'Unknown error');
+  }
+})();
 
 // Add graceful shutdown handling
 process.on('SIGINT', () => {
