@@ -47,7 +47,7 @@ export const eventIngestionRouter = createTRPCRouter({
       // Silently fail for analytics - don't block the request
       try {
         // Quick status check - don't try to connect if not ready
-        if (redis.status !== 'ready') {
+        if (!redis || redis.status !== 'ready') {
           // Return success immediately without trying to connect
           return {
             id: `skipped-${Date.now()}`,
@@ -55,6 +55,11 @@ export const eventIngestionRouter = createTRPCRouter({
             status: 'queued' as const,
           };
         }
+
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analytics ingestion timeout')), 3000)
+        );
 
         const ingestionService = getIngestionService(ctx.db);
 
@@ -71,7 +76,13 @@ export const eventIngestionRouter = createTRPCRouter({
           ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
         };
 
-        return await ingestionService.ingest(input, requestContext);
+        // Race between ingestion and timeout
+        const result = await Promise.race([
+          ingestionService.ingest(input, requestContext),
+          timeoutPromise
+        ]);
+
+        return result as any;
       } catch (error) {
         // Log error but return success to prevent client-side errors
         console.error('[EventIngestion] Track error:', error instanceof Error ? error.message : 'Unknown error');
@@ -100,7 +111,7 @@ export const eventIngestionRouter = createTRPCRouter({
       // Silently fail for analytics - don't block the request
       try {
         // Quick status check - don't try to connect if not ready
-        if (redis.status !== 'ready') {
+        if (!redis || redis.status !== 'ready') {
           // Return success immediately without trying to connect
           return {
             total: input.events.length,
@@ -134,10 +145,20 @@ export const eventIngestionRouter = createTRPCRouter({
           ipAddress: ctx.req?.headers?.get('x-forwarded-for') || ctx.req?.headers?.get('x-real-ip') || undefined,
         };
 
-        // Process all events
-        const results = await Promise.allSettled(
+        // Add timeout to prevent hanging (5 seconds for batch)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Analytics batch ingestion timeout')), 5000)
+        );
+
+        // Process all events with timeout
+        const processingPromise = Promise.allSettled(
           input.events.map((event) => ingestionService.ingest(event, requestContext))
         );
+
+        const results = await Promise.race([
+          processingPromise,
+          timeoutPromise
+        ]) as PromiseSettledResult<any>[];
 
         // Count successes and failures
         const successful = results.filter((r) => r.status === 'fulfilled').length;

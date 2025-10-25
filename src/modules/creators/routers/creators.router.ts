@@ -393,11 +393,40 @@ export const creatorsRouter = createTRPCRouter({
       sortOrder: true,
     }))
     .query(async ({ input }) => {
-      // Only show approved creators to public
-      return await creatorService.listCreators({
-        ...input,
-        verificationStatus: 'approved',
-      });
+      try {
+        // Only show approved creators to public
+        const result = await creatorService.listCreators({
+          ...input,
+          verificationStatus: 'approved',
+        });
+        
+        // Ensure result has proper structure
+        if (!result || !result.data) {
+          return {
+            data: [],
+            meta: {
+              page: input.page || 1,
+              pageSize: input.pageSize || 20,
+              total: 0,
+              totalPages: 0,
+            },
+          };
+        }
+        
+        return result;
+      } catch (error) {
+        console.error('[BrowseCreators] Error:', error);
+        // Return empty results instead of throwing
+        return {
+          data: [],
+          meta: {
+            page: input.page || 1,
+            pageSize: input.pageSize || 20,
+            total: 0,
+            totalPages: 0,
+          },
+        };
+      }
     }),
 
   /**
@@ -555,7 +584,7 @@ export const creatorsRouter = createTRPCRouter({
         const paginatedMocks = filteredMocks.slice(skip, skip + pageSize);
         
         return {
-          results: paginatedMocks,
+          results: paginatedMocks || [],
           pagination: {
             page,
             pageSize,
@@ -637,31 +666,36 @@ export const creatorsRouter = createTRPCRouter({
         });
       }
 
-      // Format results
-      const results = creators.map(creator => ({
+      // Format results with null safety
+      const results = (creators || []).map(creator => ({
         id: creator.id,
         userId: creator.userId,
-        stageName: creator.stageName,
+        stageName: creator.stageName || '',
         bio: creator.bio ? (creator.bio.length > 200 ? creator.bio.substring(0, 200) + '...' : creator.bio) : null,
-        specialties: creator.specialties as any || [],
+        specialties: Array.isArray(creator.specialties) ? creator.specialties : [],
         verificationStatus: creator.verificationStatus,
-        portfolioUrl: creator.portfolioUrl,
-        availability: creator.availability as any,
-        performanceMetrics: creator.performanceMetrics as any,
-        avatar: creator.user.avatar,
-        verifiedAt: creator.verifiedAt,
+        portfolioUrl: creator.portfolioUrl || null,
+        availability: creator.availability || { status: 'unavailable', hoursPerWeek: 0 },
+        performanceMetrics: creator.performanceMetrics || {
+          totalCollaborations: 0,
+          totalRevenue: 0,
+          averageRating: 0,
+          responseTimeHours: 0,
+        },
+        avatar: creator.user?.avatar || null,
+        verifiedAt: creator.verifiedAt || null,
         createdAt: creator.createdAt,
         updatedAt: creator.updatedAt,
       }));
 
       return {
-        results,
+        results: results || [],
         pagination: {
           page,
           pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-          hasNextPage: page * pageSize < total,
+          total: total || 0,
+          totalPages: Math.ceil((total || 0) / pageSize),
+          hasNextPage: page * pageSize < (total || 0),
           hasPreviousPage: page > 1,
         },
       };
@@ -730,7 +764,7 @@ export const creatorsRouter = createTRPCRouter({
       const paginatedMocks = filteredMocks.slice(skip, skip + pageSize);
       
       return {
-        results: paginatedMocks,
+        results: paginatedMocks || [],
         pagination: {
           page,
           pageSize,
