@@ -44,27 +44,13 @@ export const eventIngestionRouter = createTRPCRouter({
   track: publicProcedure
     .input(trackEventSchema)
     .mutation(async ({ input, ctx }) => {
+      // Silently fail for analytics - don't block the request
       try {
-        // Ensure Redis connection is ready before proceeding
-        if (redis.status !== 'ready' && redis.status !== 'connecting') {
-          console.log('[EventIngestion] Redis not ready, attempting connection...');
-          try {
-            await redis.connect();
-          } catch (connError) {
-            console.error('[EventIngestion] Redis connection failed:', connError);
-            // Silently fail - don't block the request
-            return {
-              id: `offline-${Date.now()}`,
-              eventType: input.eventType,
-              status: 'queued' as const,
-            };
-          }
-        } else if (redis.status === 'connecting') {
-          // If already connecting, wait a bit then check again
-          console.log('[EventIngestion] Redis already connecting, waiting...');
-          // Don't wait - just return success to avoid blocking
+        // Quick status check - don't try to connect if not ready
+        if (redis.status !== 'ready') {
+          // Return success immediately without trying to connect
           return {
-            id: `connecting-${Date.now()}`,
+            id: `skipped-${Date.now()}`,
             eventType: input.eventType,
             status: 'queued' as const,
           };
@@ -111,34 +97,11 @@ export const eventIngestionRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Silently fail for analytics - don't block the request
       try {
-        // Ensure Redis connection is ready before proceeding
-        if (redis.status !== 'ready' && redis.status !== 'connecting') {
-          console.log('[EventIngestion] Redis not ready for batch, attempting connection...');
-          try {
-            await redis.connect();
-          } catch (connError) {
-            console.error('[EventIngestion] Redis connection failed for batch:', connError);
-            // Return degraded response - silently fail
-            return {
-              total: input.events.length,
-              successful: input.events.length, // Pretend success to avoid client retries
-              failed: 0,
-              results: input.events.map((_, i) => ({
-                index: i,
-                status: 'fulfilled' as const,
-                data: {
-                  id: `offline-batch-${Date.now()}-${i}`,
-                  eventType: input.events[i].eventType,
-                  status: 'queued' as const,
-                },
-                error: null,
-              })),
-            };
-          }
-        } else if (redis.status === 'connecting') {
-          // If already connecting, return success immediately
-          console.log('[EventIngestion] Redis connecting for batch, returning success...');
+        // Quick status check - don't try to connect if not ready
+        if (redis.status !== 'ready') {
+          // Return success immediately without trying to connect
           return {
             total: input.events.length,
             successful: input.events.length,
@@ -147,7 +110,7 @@ export const eventIngestionRouter = createTRPCRouter({
               index: i,
               status: 'fulfilled' as const,
               data: {
-                id: `connecting-batch-${Date.now()}-${i}`,
+                id: `skipped-batch-${Date.now()}-${i}`,
                 eventType: input.events[i].eventType,
                 status: 'queued' as const,
               },
