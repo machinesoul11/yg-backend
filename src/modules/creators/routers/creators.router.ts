@@ -413,9 +413,9 @@ export const creatorsRouter = createTRPCRouter({
       availabilityStatus: z.enum(['available', 'limited', 'unavailable']).optional(),
       sortBy: z.enum(['relevance', 'created_at', 'verified_at', 'total_collaborations', 'total_revenue', 'average_rating']).optional().default('relevance'),
       sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
-      page: z.number().int().positive().optional().default(1),
-      pageSize: z.number().int().positive().max(100).optional().default(20),
-    }))
+      page: z.coerce.number().int().positive().optional().default(1),
+      pageSize: z.coerce.number().int().positive().max(100).optional().default(20),
+    }).optional())
     .query(async ({ input = {
       sortBy: 'relevance' as const,
       sortOrder: 'desc' as const,
