@@ -154,6 +154,28 @@ export const rejectCreatorSchema = z.object({
 export type RejectCreatorInput = z.infer<typeof rejectCreatorSchema>;
 
 /**
+ * Verify Creator Schema
+ */
+export const verifyCreatorSchema = z.object({
+  id: z.string().cuid('Invalid creator ID'),
+  notes: z.string().max(1000, 'Verification notes must be at most 1000 characters').optional(),
+});
+
+export type VerifyCreatorInput = z.infer<typeof verifyCreatorSchema>;
+
+/**
+ * Request Additional Info Schema
+ */
+export const requestCreatorInfoSchema = z.object({
+  id: z.string().cuid('Invalid creator ID'),
+  requestedInfo: z.array(z.string()).min(1, 'At least one information item must be requested'),
+  message: z.string().min(20, 'Message must be at least 20 characters').max(1000, 'Message must be at most 1000 characters'),
+  deadline: z.string().datetime().optional(),
+});
+
+export type RequestCreatorInfoInput = z.infer<typeof requestCreatorInfoSchema>;
+
+/**
  * Confirm Profile Image Upload Schema
  */
 export const confirmProfileImageUploadSchema = z.object({

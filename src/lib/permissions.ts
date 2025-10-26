@@ -19,6 +19,39 @@ export {
   type Permission,
 } from './constants/permissions';
 
+// Role Templates
+export {
+  ROLE_TEMPLATES,
+  getRoleTemplate,
+  applyRoleTemplate,
+  getRestrictedPermissions,
+  isPermissionAllowed,
+  isPermissionRestricted,
+  getRoleDescription,
+  listAllRoleTemplates,
+  compareRoleTemplates,
+  type RoleTemplate,
+  type RoleTemplateDepartment,
+  type RoleTemplateSeniority,
+} from '../permissions/roleTemplates';
+
+// Approval Rules and Requirements
+export {
+  REQUIRES_SENIOR_APPROVAL,
+  PAYOUT_APPROVAL_THRESHOLD,
+  ROYALTY_RETROACTIVE_THRESHOLD_DAYS,
+  requiresApproval,
+  canApprove,
+  createApprovalRequest,
+  getPendingApprovalsForUser,
+  approveRequest,
+  rejectRequest,
+  getApprovalRequest,
+  getApprovalStatistics,
+  type ApprovalRequirement,
+  type ApprovalRequest,
+} from '../permissions/approvalRules';
+
 // Permission service
 export {
   PermissionService,

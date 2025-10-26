@@ -23,6 +23,10 @@ export const RedisKeys = {
     license: (licenseId: string) => `cache:license:${licenseId}`,
     royaltyStatement: (statementId: string) => `cache:royalty:${statementId}`,
     analytics: (key: string) => `cache:analytics:${key}`,
+    // Permission caching
+    permissions: (userId: string) => `permissions:${userId}`,
+    adminRole: (userId: string) => `cache:admin-role:${userId}`,
+    rolePermissions: (roleId: string) => `cache:role-permissions:${roleId}`,
     // Composite keys for related entities
     creatorAssets: (creatorId: string) => `cache:creator:${creatorId}:assets`,
     brandLicenses: (brandId: string) => `cache:brand:${brandId}:licenses`,
@@ -98,6 +102,8 @@ export const RedisTTL = {
   CREATOR_PROFILE: 3600, // 1 hour
   BRAND_PROFILE: 3600, // 1 hour
   PROJECT: 1800, // 30 minutes
+  PERMISSIONS: 900, // 15 minutes - permission cache TTL
+  ADMIN_ROLE: 900, // 15 minutes - admin role cache TTL
   ASSET: 1800, // 30 minutes
   LICENSE: 900, // 15 minutes
   ROYALTY_STATEMENT: 1800, // 30 minutes

@@ -10,6 +10,9 @@ import { prisma } from '@/lib/db';
 import { EmailService } from '@/lib/services/email/email.service';
 import { AuditService } from '@/lib/services/audit.service';
 import { storageProvider } from '@/lib/storage';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireSenior } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { BrandService } from '../services/brand.service';
 import {
   createBrandSchema,
@@ -22,6 +25,7 @@ import {
   updateGuidelinesSchema,
   verifyBrandSchema,
   rejectBrandSchema,
+  requestBrandInfoSchema,
   deleteBrandSchema,
 } from '../schemas/brand.schema';
 
@@ -173,8 +177,11 @@ export const brandsRouter = createTRPCRouter({
 
   /**
    * ADMIN - Verify brand
+   * Requires brand:verify permission and senior-level access
    */
   verify: adminProcedure
+    .use(requirePermission(PERMISSIONS.BRAND_APPLICATION_VERIFY))
+    .use(requireSenior('Brand verification requires senior-level authorization'))
     .input(verifyBrandSchema)
     .mutation(async ({ ctx, input }) => {
       const brand = await brandService.verifyBrand(
@@ -190,6 +197,7 @@ export const brandsRouter = createTRPCRouter({
    * ADMIN - Reject brand
    */
   reject: adminProcedure
+    .use(requirePermission(PERMISSIONS.BRAND_APPLICATION_REJECT))
     .input(rejectBrandSchema)
     .mutation(async ({ ctx, input }) => {
       const brand = await brandService.rejectBrand(
@@ -200,6 +208,24 @@ export const brandsRouter = createTRPCRouter({
       );
       
       return { data: brand };
+    }),
+
+  /**
+   * ADMIN - Request additional information from brand
+   */
+  requestInfo: adminProcedure
+    .use(requirePermission(PERMISSIONS.BRAND_APPLICATION_REQUEST_INFO))
+    .input(requestBrandInfoSchema)
+    .mutation(async ({ ctx, input }) => {
+      await brandService.requestBrandInfo(
+        input.id,
+        input.requestedInfo,
+        input.message,
+        ctx.user.id,
+        input.deadline
+      );
+      
+      return { data: { success: true } };
     }),
 
   /**
@@ -215,7 +241,28 @@ export const brandsRouter = createTRPCRouter({
         input.reason
       );
       
+      
       return { data: { success: true, deletedAt: new Date().toISOString() } };
+    }),
+
+  /**
+   * ADMIN - List all brands for review
+   */
+  listForReview: adminProcedure
+    .use(requirePermission(PERMISSIONS.BRAND_APPLICATION_REVIEW))
+    .input(listBrandsSchema)
+    .query(async ({ ctx, input }) => {
+      const result = await brandService.listBrands(
+        input.page,
+        input.limit,
+        input.filters,
+        input.sortBy,
+        input.sortOrder,
+        ctx.user.id,
+        'ADMIN' // Force admin role for full access
+      );
+      
+      return { data: result };
     }),
 
   /**
@@ -227,3 +274,4 @@ export const brandsRouter = createTRPCRouter({
       return { data: stats };
     }),
 });
+

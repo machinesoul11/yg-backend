@@ -10,6 +10,9 @@ import { NotificationType } from '@prisma/client';
 import { createTRPCRouter, protectedProcedure, adminProcedure } from '@/lib/trpc';
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireSenior } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { IdempotencyService } from './services/idempotency.service';
 import { FeatureFlagService } from './services/feature-flag.service';
 import { NotificationService } from './services/notification.service';
@@ -488,4 +491,180 @@ export const systemRouter = createTRPCRouter({
         }
       }),
   }),
+
+  // ===========================
+  // System Administration
+  // ===========================
+
+  /**
+   * Get system configuration
+   * Requires system:settings permission
+   * Super Admin or Operations role required
+   */
+  getSystemConfig: adminProcedure
+    .use(requirePermission(PERMISSIONS.SYSTEM_SETTINGS_MANAGE))
+    .query(async () => {
+      try {
+        // Return system configuration
+        // This could be extended to read from a config table or environment
+        return {
+          data: {
+            appVersion: process.env.APP_VERSION || '1.0.0',
+            environment: process.env.NODE_ENV || 'development',
+            maintenance: {
+              enabled: false,
+              message: null,
+            },
+            features: {
+              registrationOpen: true,
+              creatorApplicationsOpen: true,
+              brandApplicationsOpen: true,
+            },
+          },
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch system configuration',
+        });
+      }
+    }),
+
+  /**
+   * Update system configuration
+   * Requires system:settings permission and senior-level access
+   * Super Admin or Operations role required
+   */
+  updateSystemConfig: adminProcedure
+    .use(requirePermission(PERMISSIONS.SYSTEM_SETTINGS_MANAGE))
+    .use(requireSenior('System configuration changes require senior-level authorization'))
+    .input(z.object({
+      maintenance: z.object({
+        enabled: z.boolean(),
+        message: z.string().optional(),
+      }).optional(),
+      features: z.object({
+        registrationOpen: z.boolean().optional(),
+        creatorApplicationsOpen: z.boolean().optional(),
+        brandApplicationsOpen: z.boolean().optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // Store configuration in Redis or database
+        // For now, we'll use Redis
+        if (input.maintenance) {
+          await redis.set(
+            'system:config:maintenance',
+            JSON.stringify(input.maintenance),
+            'EX',
+            60 * 60 * 24 * 365 // 1 year
+          );
+        }
+
+        if (input.features) {
+          await redis.set(
+            'system:config:features',
+            JSON.stringify(input.features),
+            'EX',
+            60 * 60 * 24 * 365 // 1 year
+          );
+        }
+
+        return {
+          success: true,
+          message: 'System configuration updated successfully',
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update system configuration',
+        });
+      }
+    }),
+
+  /**
+   * Trigger deployment (placeholder)
+   * Requires system:deploy permission and senior-level access
+   * Super Admin or Operations role required
+   */
+  triggerDeployment: adminProcedure
+    .use(requirePermission(PERMISSIONS.SYSTEM_DEPLOY))
+    .use(requireSenior('Deployment actions require senior-level authorization'))
+    .input(z.object({
+      environment: z.enum(['staging', 'production']),
+      version: z.string().optional(),
+      rollback: z.boolean().default(false),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // This is a placeholder for deployment triggering
+        // In a real implementation, this would:
+        // 1. Trigger a CI/CD pipeline
+        // 2. Create a deployment record
+        // 3. Send notifications to team
+        
+        return {
+          success: true,
+          message: `Deployment to ${input.environment} ${input.rollback ? 'rollback' : 'initiated'}`,
+          data: {
+            environment: input.environment,
+            version: input.version || 'latest',
+            rollback: input.rollback,
+            triggeredAt: new Date(),
+          },
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to trigger deployment',
+        });
+      }
+    }),
+
+  /**
+   * Clear system cache
+   * Requires system:settings permission
+   * Super Admin or Operations role required
+   */
+  clearCache: adminProcedure
+    .use(requirePermission(PERMISSIONS.SYSTEM_SETTINGS_MANAGE))
+    .input(z.object({
+      pattern: z.string().optional(), // Redis key pattern, e.g., "user:*"
+      full: z.boolean().default(false), // Clear entire Redis cache
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        if (input.full) {
+          await redis.flushdb();
+          return {
+            success: true,
+            message: 'Full cache cleared successfully',
+            keysCleared: 'all',
+          };
+        }
+
+        if (input.pattern) {
+          const keys = await redis.keys(input.pattern);
+          if (keys.length > 0) {
+            await redis.del(...keys);
+          }
+          return {
+            success: true,
+            message: `Cache cleared for pattern: ${input.pattern}`,
+            keysCleared: keys.length,
+          };
+        }
+
+        return {
+          success: false,
+          message: 'No pattern specified',
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to clear cache',
+        });
+      }
+    }),
 });

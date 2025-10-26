@@ -15,6 +15,9 @@ import RoleChanged from '../../../../emails/templates/RoleChanged';
 import MonthlyNewsletter from '../../../../emails/templates/MonthlyNewsletter';
 import TransactionReceipt from '../../../../emails/templates/TransactionReceipt';
 import ProjectInvitation from '../../../../emails/templates/ProjectInvitation';
+import ContractorExpirationWarning from '../../../../emails/templates/ContractorExpirationWarning';
+import ContractorExpirationAdminWarning from '../../../../emails/templates/ContractorExpirationAdminWarning';
+import ContractorExpired from '../../../../emails/templates/ContractorExpired';
 
 export type TemplateVariables = Record<string, any>;
 
@@ -36,6 +39,9 @@ export const EMAIL_TEMPLATES = {
   'monthly-newsletter': MonthlyNewsletter,
   'transaction-receipt': TransactionReceipt,
   'project-invitation': ProjectInvitation,
+  'contractor-expiration-warning': ContractorExpirationWarning,
+  'contractor-expiration-admin-warning': ContractorExpirationAdminWarning,
+  'contractor-expired': ContractorExpired,
 } as const;
 
 export type TemplateKey = keyof typeof EMAIL_TEMPLATES;
@@ -73,6 +79,9 @@ export function getCategoryFromTemplate(template: string): string {
     'brand-verification-rejected': 'system',
     'brand-team-invitation': 'system',
     'role-changed': 'system',
+    'contractor-expiration-warning': 'system',
+    'contractor-expiration-admin-warning': 'system',
+    'contractor-expired': 'system',
   };
   return mapping[template] || 'other';
 }

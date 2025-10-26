@@ -242,3 +242,18 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
 
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))  } ${  sizes[i]}`;
 }
+
+/**
+ * Export permission helper utilities
+ */
+export {
+  permitIf,
+  permitAny,
+  permitAll,
+  permitIfAny,
+  permitIfAll,
+  permitSeniorIf,
+  permitSeniorOrPermission,
+  permitSeniorAndPermission,
+} from './permission-helpers';
+

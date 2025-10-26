@@ -237,6 +237,18 @@ export const rejectBrandSchema = z.object({
 export type RejectBrandInput = z.infer<typeof rejectBrandSchema>;
 
 /**
+ * Request Additional Info from Brand Schema (Admin Only)
+ */
+export const requestBrandInfoSchema = z.object({
+  id: z.string().cuid('Invalid brand ID'),
+  requestedInfo: z.array(z.string()).min(1, 'At least one information item must be requested'),
+  message: z.string().min(20, 'Message must be at least 20 characters').max(1000, 'Message must be at most 1000 characters'),
+  deadline: z.string().datetime().optional(),
+});
+
+export type RequestBrandInfoInput = z.infer<typeof requestBrandInfoSchema>;
+
+/**
  * List Brands Schema
  */
 export const listBrandsSchema = z.object({

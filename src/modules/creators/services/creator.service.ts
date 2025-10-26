@@ -403,6 +403,114 @@ export class CreatorService {
   }
 
   /**
+   * Verify creator credentials (admin only)
+   * Marks creator credentials as verified without changing approval status
+   */
+  async verifyCreator(
+    creatorId: string,
+    adminUserId: string,
+    notes?: string,
+    context?: { ipAddress?: string; userAgent?: string }
+  ): Promise<void> {
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: creatorId },
+    });
+
+    if (!creator || creator.deletedAt) {
+      throw new CreatorNotFoundError(creatorId);
+    }
+
+    // Update creator with verification notes
+    await this.prisma.creator.update({
+      where: { id: creatorId },
+      data: {
+        // Store verification notes in preferences or a dedicated field
+        preferences: {
+          ...(creator.preferences as any || {}),
+          verificationNotes: notes,
+          verifiedBy: adminUserId,
+          verifiedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    // Invalidate cache
+    await this.invalidateCache(creatorId);
+
+    // Log audit event
+    await this.auditService.log({
+      userId: adminUserId,
+      action: 'creator.credentials_verified',
+      entityType: 'creator',
+      entityId: creatorId,
+      metadata: { notes },
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+  }
+
+  /**
+   * Request additional information from creator (admin only)
+   */
+  async requestCreatorInfo(
+    creatorId: string,
+    requestedInfo: string[],
+    message: string,
+    adminUserId: string,
+    deadline?: string,
+    context?: { ipAddress?: string; userAgent?: string }
+  ): Promise<void> {
+    const creator = await this.prisma.creator.findUnique({
+      where: { id: creatorId },
+      include: { user: true },
+    });
+
+    if (!creator || creator.deletedAt) {
+      throw new CreatorNotFoundError(creatorId);
+    }
+
+    // Update creator status to indicate info is requested
+    await this.prisma.creator.update({
+      where: { id: creatorId },
+      data: {
+        verificationStatus: 'pending',
+        preferences: {
+          ...(creator.preferences as any || {}),
+          infoRequested: {
+            requestedBy: adminUserId,
+            requestedAt: new Date().toISOString(),
+            requestedInfo,
+            message,
+            deadline,
+          },
+        },
+      },
+    });
+
+    // Invalidate cache
+    await this.invalidateCache(creatorId);
+
+    // Log audit event
+    await this.auditService.log({
+      userId: adminUserId,
+      action: 'creator.info_requested',
+      entityType: 'creator',
+      entityId: creatorId,
+      metadata: {
+        requestedInfo,
+        message,
+        deadline,
+        userEmail: creator.user.email,
+      },
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
+
+    // TODO: Send notification to creator via email/notification service
+    // await creatorNotificationsService.sendInfoRequestEmail(creatorId, requestedInfo, message, deadline);
+  }
+
+  /**
    * Update performance metrics
    */
   async updatePerformanceMetrics(creatorId: string): Promise<void> {

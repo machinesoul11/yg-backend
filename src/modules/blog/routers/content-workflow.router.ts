@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import { createTRPCRouter, adminProcedure, protectedProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { prisma } from '@/lib/db';
 import { RevisionComparisonService } from '../services/revision-comparison.service';
 import { ContentCalendarService } from '../services/content-calendar.service';
@@ -73,9 +75,11 @@ export const contentWorkflowRouter = createTRPCRouter({
   revisions: createTRPCRouter({
     /**
      * Create a new revision for a post
+     * Requires content:edit permission
      */
     create: protectedProcedure
       .input(createRevisionSchema)
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           return await revisionService.createRevision({
@@ -92,6 +96,7 @@ export const contentWorkflowRouter = createTRPCRouter({
 
     /**
      * Get all revisions for a post
+     * Requires content:read permission
      */
     list: protectedProcedure
       .input(z.object({
@@ -99,6 +104,7 @@ export const contentWorkflowRouter = createTRPCRouter({
         page: z.number().int().min(1).optional(),
         limit: z.number().int().min(1).max(100).optional()
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_READ))
       .query(async ({ input }) => {
         try {
           return await revisionService.getPostRevisions(input.postId, {
@@ -115,9 +121,11 @@ export const contentWorkflowRouter = createTRPCRouter({
 
     /**
      * Compare two revisions
+     * Requires content:read permission
      */
     compare: protectedProcedure
       .input(compareRevisionsSchema)
+      .use(requirePermission(PERMISSIONS.CONTENT_READ))
       .query(async ({ input }) => {
         try {
           return await revisionService.compareRevisions(
@@ -135,12 +143,14 @@ export const contentWorkflowRouter = createTRPCRouter({
 
     /**
      * Compare revision with current content
+     * Requires content:read permission
      */
     compareWithCurrent: protectedProcedure
       .input(z.object({
         postId: z.string().cuid(),
         revisionId: z.string().cuid()
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_READ))
       .query(async ({ input }) => {
         try {
           return await revisionService.compareWithCurrent(
@@ -157,9 +167,11 @@ export const contentWorkflowRouter = createTRPCRouter({
 
     /**
      * Restore a post to a previous revision
+     * Requires content:edit permission
      */
     restore: protectedProcedure
       .input(restoreRevisionSchema)
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           return await revisionService.restoreRevision({
@@ -182,9 +194,11 @@ export const contentWorkflowRouter = createTRPCRouter({
   calendar: createTRPCRouter({
     /**
      * Schedule a post for publication
+     * Requires content:edit permission
      */
     schedulePost: protectedProcedure
       .input(schedulePostSchema)
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           return await calendarService.schedulePost({

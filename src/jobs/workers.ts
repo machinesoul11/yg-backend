@@ -13,6 +13,10 @@ import { scheduledBlogPublishingWorker, setupScheduledPublishingJob, getSchedule
 import { scheduleNotificationDigests } from './notification-digest.job';
 import { schedulePeriodicReindex } from './search-index-update.job';
 import { initializeQueueSystem, getQueueSystemHealth } from '@/lib/queue';
+import { initializeAuditLogWorker, shutdownAuditLogWorker } from './audit-log.job';
+import { initializeArchivalWorker, shutdownArchivalWorker, scheduleMonthlyArchival } from './audit-log-archival.job';
+import { initializeIntegrityCheckWorker, shutdownIntegrityCheckWorker, scheduleWeeklyIntegrityCheck } from './audit-log-integrity.job';
+import { initializePermissionCacheCleanupJobs, shutdownCleanupWorker } from './permission-cache-cleanup.job';
 
 /**
  * Initialize all workers
@@ -45,6 +49,22 @@ export async function initializeAllWorkers(): Promise<void> {
 
     // Set up periodic search reindex (weekly)
     await schedulePeriodicReindex();
+
+    // Initialize audit log workers
+    initializeAuditLogWorker();
+    initializeArchivalWorker();
+    initializeIntegrityCheckWorker();
+
+    // Schedule audit log maintenance jobs
+    await scheduleMonthlyArchival();
+    await scheduleWeeklyIntegrityCheck();
+
+    // Initialize contractor role expiration jobs
+    const { initializeContractorExpirationJobs } = await import('./contractor-role-expiration.job');
+    await initializeContractorExpirationJobs();
+
+    // Initialize permission cache cleanup jobs
+    await initializePermissionCacheCleanupJobs();
 
     // Set up graceful shutdown handlers
     process.on('SIGTERM', async () => {
@@ -80,6 +100,10 @@ export async function shutdownAllWorkers(): Promise<void> {
 
   const shutdownPromises = [
     shutdownEmailWorkers(),
+    shutdownAuditLogWorker(),
+    shutdownArchivalWorker(),
+    shutdownIntegrityCheckWorker(),
+    shutdownCleanupWorker(),
     scheduledBlogPublishingWorker?.close(),
     notificationDeliveryWorker?.close(),
     notificationDigestWorker?.close(),

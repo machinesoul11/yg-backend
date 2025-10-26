@@ -7,6 +7,10 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireApprovalOrExecute } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
+import { Department } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { IpOwnershipService } from '../services/ip-ownership.service';
 import {
@@ -59,9 +63,22 @@ function handleOwnershipError(error: unknown): never {
 export const ipOwnershipRouter = createTRPCRouter({
   /**
    * Set complete ownership split for an asset (atomic operation)
+   * Requires licensing:modify_ownership permission and senior approval
    */
   setOwnership: protectedProcedure
     .input(setAssetOwnershipSchema)
+    .use(requirePermission(PERMISSIONS.LICENSING_MODIFY_OWNERSHIP))
+    .use(requireApprovalOrExecute({
+      actionType: PERMISSIONS.LICENSING_MODIFY_OWNERSHIP,
+      getDepartment: () => Department.FINANCE_LICENSING,
+      getDataPayload: (input) => ({
+        ipAssetId: input.ipAssetId,
+        ownerships: input.ownerships,
+        effectiveDate: input.effectiveDate,
+        action: 'set_ownership',
+      }),
+      approvalRequiredMessage: 'Ownership modifications require senior finance/licensing approval',
+    }))
     .mutation(async ({ ctx, input }) => {
       try {
         const userId = ctx.session.user.id;
@@ -171,9 +188,22 @@ export const ipOwnershipRouter = createTRPCRouter({
 
   /**
    * Transfer ownership between creators
+   * Requires licensing:modify_ownership permission and senior approval
    */
   transferOwnership: protectedProcedure
     .input(transferOwnershipSchema)
+    .use(requirePermission(PERMISSIONS.LICENSING_MODIFY_OWNERSHIP))
+    .use(requireApprovalOrExecute({
+      actionType: PERMISSIONS.LICENSING_MODIFY_OWNERSHIP,
+      getDepartment: () => Department.FINANCE_LICENSING,
+      getDataPayload: (input) => ({
+        ipAssetId: input.ipAssetId,
+        toCreatorId: input.toCreatorId,
+        shareBps: input.shareBps,
+        action: 'transfer_ownership',
+      }),
+      approvalRequiredMessage: 'Ownership transfers require senior finance/licensing approval',
+    }))
     .mutation(async ({ ctx, input }) => {
       try {
         const userId = ctx.session.user.id;

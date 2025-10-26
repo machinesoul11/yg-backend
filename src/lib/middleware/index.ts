@@ -42,6 +42,28 @@ export {
 } from './authorization.middleware';
 
 // ============================================================================
+// Admin Role Authorization Middleware
+// ============================================================================
+
+export {
+  checkAdminRolePermission,
+  checkAnyAdminRolePermission,
+  checkAdminDepartment,
+  checkSuperAdmin,
+  requireAdminPermission,
+  requireDepartment,
+  requireSuperAdmin,
+  withAdminPermission,
+  withDepartment,
+  withSuperAdmin,
+  createAdminRoleError,
+  requireAdminPermissionTRPC,
+  requireDepartmentTRPC,
+  requireSuperAdminTRPC,
+  type AdminRoleAuthResult,
+} from './admin-role.middleware';
+
+// ============================================================================
 // Resource Ownership Middleware
 // ============================================================================
 
@@ -127,3 +149,47 @@ export {
   requireAnyPermission,
   requireAllPermissions,
 } from './permissions';
+
+// ============================================================================
+// Approval Workflow Middleware for tRPC
+// ============================================================================
+
+export {
+  requireApprovalOrExecute,
+  requireSenior,
+  isApprovalRequired,
+  permissionService as approvalPermissionService,
+  type ApprovalOrExecuteConfig,
+  type ApprovalRequiredResponse,
+} from './approval.middleware';
+
+// ============================================================================
+// Admin Rate Limiting
+// ============================================================================
+
+export {
+  withAdminRateLimit,
+  withRoleManagementRateLimit,
+  withApprovalActionRateLimit,
+  withReadOperationRateLimit,
+} from './admin-rate-limit.middleware';
+
+// ============================================================================
+// Admin Session Security
+// ============================================================================
+
+export {
+  checkAdminSessionTimeout,
+  requireRecent2FA,
+} from './admin-session-timeout.middleware';
+
+// ============================================================================
+// Security Monitoring
+// ============================================================================
+
+export {
+  withSecurityMonitoring,
+  logApprovalAction,
+  logPermissionEscalation,
+  securityMonitoringService,
+} from './security-monitoring.middleware';

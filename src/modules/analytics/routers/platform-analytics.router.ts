@@ -6,6 +6,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, adminProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { PlatformAnalyticsService } from '@/modules/analytics/services/platform-analytics.service';
 import { RevenueAnalyticsService } from '@/modules/analytics/services/revenue-analytics.service';
 import { prisma } from '@/lib/db';
@@ -74,10 +76,11 @@ export const platformAnalyticsRouter = createTRPCRouter({
   /**
    * GET /analytics/platform/revenue
    * Get MRR, ARR, and revenue growth metrics
-   * Admin only
+   * Admin only - Requires finance:view_reports permission
    */
   getRevenue: adminProcedure
     .input(getPlatformRevenueAnalyticsSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ input }) => {
       const startDate = input.startDate ? new Date(input.startDate) : undefined;
       const endDate = input.endDate ? new Date(input.endDate) : undefined;
@@ -92,10 +95,11 @@ export const platformAnalyticsRouter = createTRPCRouter({
   /**
    * GET /analytics/platform/transactions
    * Get transaction volume and value analytics
-   * Admin only
+   * Admin only - Requires finance:view_reports permission
    */
   getTransactions: adminProcedure
     .input(getPlatformTransactionAnalyticsSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ input }) => {
       const startDate = input.startDate ? new Date(input.startDate) : undefined;
       const endDate = input.endDate ? new Date(input.endDate) : undefined;
@@ -111,10 +115,11 @@ export const platformAnalyticsRouter = createTRPCRouter({
   /**
    * GET /analytics/platform/ltv
    * Get customer lifetime value analytics
-   * Admin only
+   * Admin only - Requires finance:view_reports permission
    */
   getLTV: adminProcedure
     .input(getPlatformLTVAnalyticsSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ input }) => {
       const startDate = input.startDate ? new Date(input.startDate) : undefined;
       const endDate = input.endDate ? new Date(input.endDate) : undefined;

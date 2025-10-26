@@ -12,6 +12,9 @@ import { StripeConnectService } from '../services/stripe-connect.service';
 import { CreatorAssetsService } from '../services/creator-assets.service';
 import { CreatorNotificationsService } from '../services/creator-notifications.service';
 import { AuditService } from '@/lib/services/audit.service';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireSenior } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import {
   createCreatorSchema,
   updateCreatorSchema,
@@ -19,6 +22,8 @@ import {
   getCreatorByIdSchema,
   approveCreatorSchema,
   rejectCreatorSchema,
+  verifyCreatorSchema,
+  requestCreatorInfoSchema,
   confirmProfileImageUploadSchema,
   updatePerformanceMetricsSchema,
   CreatorSpecialtyEnum,
@@ -927,6 +932,7 @@ export const creatorsRouter = createTRPCRouter({
    * List all creators (admin only)
    */
   listCreators: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_REVIEW))
     .input(listCreatorsSchema)
     .query(async ({ input }) => {
       return await creatorService.listCreators(input);
@@ -936,6 +942,7 @@ export const creatorsRouter = createTRPCRouter({
    * Get creator by ID (admin - full details)
    */
   getCreatorByIdAdmin: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_REVIEW))
     .input(getCreatorByIdSchema)
     .query(async ({ input }) => {
       const creator = await creatorService.getProfileById(input.id);
@@ -946,8 +953,11 @@ export const creatorsRouter = createTRPCRouter({
 
   /**
    * Approve creator verification
+   * Requires creator:approve permission and senior-level access
    */
   approveCreator: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_APPROVE))
+    .use(requireSenior('Creator approval requires senior-level authorization'))
     .input(approveCreatorSchema)
     .mutation(async ({ input, ctx }) => {
       const adminUserId = ctx.session?.user?.id;
@@ -968,6 +978,7 @@ export const creatorsRouter = createTRPCRouter({
    * Reject creator verification
    */
   rejectCreator: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_REJECT))
     .input(rejectCreatorSchema)
     .mutation(async ({ input, ctx }) => {
       const adminUserId = ctx.session?.user?.id;
@@ -980,6 +991,49 @@ export const creatorsRouter = createTRPCRouter({
 
       // Send rejection email with reason
       await creatorNotificationsService.sendVerificationRejectedEmail(input.id, input.reason);
+
+      return { success: true };
+    }),
+
+  /**
+   * Verify creator credentials
+   */
+  verifyCreator: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_VERIFY))
+    .input(verifyCreatorSchema)
+    .mutation(async ({ input, ctx }) => {
+      const adminUserId = ctx.session?.user?.id;
+      if (!adminUserId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' });
+      }
+
+      const context = getRequestContext(ctx);
+      await creatorService.verifyCreator(input.id, adminUserId, input.notes, context);
+
+      return { success: true };
+    }),
+
+  /**
+   * Request additional information from creator
+   */
+  requestCreatorInfo: adminProcedure
+    .use(requirePermission(PERMISSIONS.CREATOR_APPLICATION_REQUEST_INFO))
+    .input(requestCreatorInfoSchema)
+    .mutation(async ({ input, ctx }) => {
+      const adminUserId = ctx.session?.user?.id;
+      if (!adminUserId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' });
+      }
+
+      const context = getRequestContext(ctx);
+      await creatorService.requestCreatorInfo(
+        input.id,
+        input.requestedInfo,
+        input.message,
+        adminUserId,
+        input.deadline,
+        context
+      );
 
       return { success: true };
     }),

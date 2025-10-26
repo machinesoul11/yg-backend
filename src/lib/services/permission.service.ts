@@ -2,11 +2,15 @@
  * Permission Service
  * Handles permission checking with caching for performance
  * Supports role-based, resource-level, and field-level permissions
+ * 
+ * Integrates AdminRole system for granular admin permissions
+ * with caching and cache invalidation
  */
 
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, AdminRole as PrismaAdminRole, Department } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { redis } from '@/lib/redis';
+import { RedisKeys, RedisTTL } from '@/lib/redis/keys';
 import {
   Permission,
   getRolePermissions,
@@ -14,8 +18,16 @@ import {
   roleHasAnyPermission,
   roleHasAllPermissions,
   PERMISSIONS,
+  DEPARTMENT_PERMISSIONS,
 } from '@/lib/constants/permissions';
 import { AuditService } from './audit.service';
+import { permissionCacheService } from './permission-cache.service';
+import { 
+  PermissionDeniedError, 
+  RoleNotFoundError,
+  PermissionErrors,
+  isPermissionError
+} from '@/lib/errors/permission.errors';
 
 /**
  * Resource action types
@@ -38,8 +50,19 @@ interface PermissionCheckContext {
   cache: Map<string, boolean>;
 }
 
+/**
+ * Admin Role with permissions merged from template and custom
+ */
+interface MergedAdminRole {
+  id: string;
+  userId: string;
+  department: Department;
+  permissions: Permission[];
+  isActive: boolean;
+}
+
 export class PermissionService {
-  private readonly CACHE_TTL = 300; // 5 minutes
+  private readonly CACHE_TTL = RedisTTL.PERMISSIONS; // 15 minutes
   private readonly CACHE_PREFIX = 'permissions:user:';
   private readonly RESOURCE_CACHE_PREFIX = 'permissions:resource:';
   
@@ -213,24 +236,284 @@ export class PermissionService {
 
   /**
    * Get all permissions for a user
+   * Integrates AdminRole permissions with base role permissions
+   * Uses Redis cache with 15-minute TTL
    * @param userId - User ID
    * @returns Promise<Permission[]>
    */
   async getUserPermissions(userId: string): Promise<Permission[]> {
-    // Check cache first
-    const cached = await this.getCachedPermissions(userId);
-    if (cached) return cached;
+    try {
+      // Check Redis cache first
+      const cached = await permissionCacheService.get(userId);
+      if (cached) {
+        return cached;
+      }
 
-    // Fetch user role from database
+      // Cache miss - load from database
+      const permissions = await this.loadUserPermissions(userId);
+
+      // Cache the result
+      await permissionCacheService.set(userId, permissions);
+
+      return permissions;
+    } catch (error) {
+      console.error('[PermissionService] Error getting user permissions:', error);
+      // Gracefully fallback to base role permissions if cache/loading fails
+      const role = await this.getUserRole(userId);
+      return role ? getRolePermissions(role) : [];
+    }
+  }
+
+  /**
+   * Load user permissions from database (bypassing cache)
+   * Merges base UserRole permissions with AdminRole permissions
+   * @private
+   * @param userId - User ID
+   * @returns Promise<Permission[]>
+   */
+  private async loadUserPermissions(userId: string): Promise<Permission[]> {
+    // Get user's base role
     const role = await this.getUserRole(userId);
-    if (!role) return [];
+    if (!role) {
+      throw PermissionErrors.USER_ROLE_NOT_FOUND(userId);
+    }
 
-    const permissions = getRolePermissions(role);
+    // Get base role permissions
+    const basePermissions = getRolePermissions(role);
 
-    // Cache the result
-    await this.cachePermissions(userId, permissions);
+    // For non-admin users, return base permissions only
+    if (role !== 'ADMIN') {
+      return basePermissions;
+    }
 
-    return permissions;
+    // For ADMIN users, merge with AdminRole permissions
+    const adminRoles = await this.getActiveAdminRoles(userId);
+    
+    if (adminRoles.length === 0) {
+      // Admin with no AdminRole assignments gets base ADMIN permissions
+      return basePermissions;
+    }
+
+    // Merge permissions from all active admin roles
+    const mergedPermissions = this.mergeAdminRolePermissions(
+      basePermissions,
+      adminRoles
+    );
+
+    return mergedPermissions;
+  }
+
+  /**
+   * Get active AdminRole assignments for a user
+   * Uses caching for performance
+   * @private
+   * @param userId - User ID
+   * @returns Promise<MergedAdminRole[]>
+   */
+  private async getActiveAdminRoles(userId: string): Promise<MergedAdminRole[]> {
+    try {
+      // Check cache for admin roles
+      const cacheKey = RedisKeys.cache.adminRole(userId);
+      const cached = await redis.get(cacheKey);
+      
+      if (cached) {
+        return JSON.parse(cached) as MergedAdminRole[];
+      }
+
+      // Load from database
+      const adminRoles = await this.prisma.adminRole.findMany({
+        where: {
+          userId,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      // Transform to MergedAdminRole with department template permissions
+      const mergedRoles: MergedAdminRole[] = adminRoles.map(role => {
+        // Get template permissions for department
+        const templatePermissions = DEPARTMENT_PERMISSIONS[role.department] || [];
+        
+        // Get custom permissions from JSON field
+        const customPermissions = Array.isArray(role.permissions) 
+          ? (role.permissions as Permission[])
+          : [];
+
+        // Merge template and custom permissions (custom take precedence)
+        const allPermissions = this.mergePermissions(
+          templatePermissions,
+          customPermissions
+        );
+
+        return {
+          id: role.id,
+          userId: role.userId,
+          department: role.department,
+          permissions: allPermissions,
+          isActive: role.isActive
+        };
+      });
+
+      // Cache for 15 minutes
+      await redis.setex(
+        cacheKey,
+        RedisTTL.ADMIN_ROLE,
+        JSON.stringify(mergedRoles)
+      );
+
+      return mergedRoles;
+    } catch (error) {
+      console.error('[PermissionService] Error loading admin roles:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Merge permissions from multiple admin roles
+   * Union-based: user has permission if ANY role grants it
+   * @private
+   * @param basePermissions - Base permissions from UserRole
+   * @param adminRoles - Active admin role assignments
+   * @returns Merged permission array
+   */
+  private mergeAdminRolePermissions(
+    basePermissions: Permission[],
+    adminRoles: MergedAdminRole[]
+  ): Permission[] {
+    // Start with base permissions
+    const permissionSet = new Set<Permission>(basePermissions);
+
+    // Add permissions from each admin role
+    for (const role of adminRoles) {
+      for (const permission of role.permissions) {
+        permissionSet.add(permission);
+      }
+    }
+
+    return Array.from(permissionSet);
+  }
+
+  /**
+   * Merge two permission arrays
+   * Later array takes precedence for conflicts
+   * @private
+   */
+  private mergePermissions(
+    templatePermissions: Permission[],
+    customPermissions: Permission[]
+  ): Permission[] {
+    const permissionSet = new Set<Permission>();
+
+    // Add template permissions
+    for (const perm of templatePermissions) {
+      permissionSet.add(perm);
+    }
+
+    // Add/override with custom permissions
+    for (const perm of customPermissions) {
+      permissionSet.add(perm);
+    }
+
+    return Array.from(permissionSet);
+  }
+
+  /**
+   * Invalidate permission cache for a user
+   * Call this when user roles or admin roles change
+   * @param userId - User ID
+   */
+  async invalidateUserPermissions(userId: string): Promise<void> {
+    try {
+      await permissionCacheService.invalidate(userId);
+      
+      // Log cache invalidation for audit purposes
+      await this.auditService.log({
+        action: 'PERMISSION_CACHE_INVALIDATED',
+        entityType: 'user',
+        entityId: userId,
+        userId,
+        metadata: { timestamp: new Date().toISOString() }
+      });
+    } catch (error) {
+      console.error('[PermissionService] Error invalidating permissions:', error);
+      // Don't throw - cache invalidation failure shouldn't break the flow
+    }
+  }
+
+  /**
+   * Invalidate permission cache for multiple users
+   * Use when batch updating roles
+   * @param userIds - Array of user IDs
+   */
+  async invalidateManyUserPermissions(userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+
+    try {
+      await permissionCacheService.invalidateMany(userIds);
+      
+      // Log bulk cache invalidation
+      await this.auditService.log({
+        action: 'PERMISSION_CACHE_BULK_INVALIDATED',
+        entityType: 'system',
+        entityId: 'permission-cache',
+        metadata: { 
+          userCount: userIds.length,
+          timestamp: new Date().toISOString() 
+        }
+      });
+    } catch (error) {
+      console.error('[PermissionService] Error invalidating multiple permissions:', error);
+    }
+  }
+
+  /**
+   * Warm permission cache for frequently accessed users
+   * Call this periodically or during low-traffic periods
+   * @param userIds - Optional specific user IDs to warm, otherwise loads frequent users
+   */
+  async warmPermissionCache(userIds?: string[]): Promise<number> {
+    try {
+      const targetUsers = userIds || await permissionCacheService.getFrequentUsers(100);
+      let warmedCount = 0;
+
+      for (const userId of targetUsers) {
+        try {
+          // Check if already cached
+          const exists = await permissionCacheService.exists(userId);
+          if (exists) {
+            continue; // Skip if already cached
+          }
+
+          // Load and cache permissions
+          const permissions = await this.loadUserPermissions(userId);
+          await permissionCacheService.set(userId, permissions);
+          warmedCount++;
+        } catch (error) {
+          console.error(`[PermissionService] Error warming cache for user ${userId}:`, error);
+          // Continue with next user
+        }
+      }
+
+      console.log(`[PermissionService] Warmed permission cache for ${warmedCount} users`);
+      return warmedCount;
+    } catch (error) {
+      console.error('[PermissionService] Error warming permission cache:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get permission cache metrics
+   * Useful for monitoring cache performance
+   */
+  async getPermissionCacheMetrics() {
+    return await permissionCacheService.getMetrics();
   }
 
   /**
@@ -329,19 +612,6 @@ export class PermissionService {
   }
 
   /**
-   * Invalidate cached permissions for a user
-   * Call this when user's role changes
-   */
-  async invalidateUserPermissions(userId: string): Promise<void> {
-    try {
-      const cacheKey = `${this.CACHE_PREFIX}${userId}`;
-      await redis.del(cacheKey);
-    } catch (error) {
-      console.error('Failed to invalidate permission cache:', error);
-    }
-  }
-
-  /**
    * Invalidate resource permission cache for a specific resource
    * Call this when ownership or relationships change
    */
@@ -412,9 +682,11 @@ export class PermissionService {
 
   /**
    * Get user's role from database
-   * @private
+   * Retrieves the user's base UserRole (ADMIN, CREATOR, BRAND, VIEWER)
+   * @param userId - User ID
+   * @returns Promise<UserRole | null>
    */
-  private async getUserRole(userId: string): Promise<UserRole | null> {
+  async getUserRole(userId: string): Promise<UserRole | null> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -425,6 +697,189 @@ export class PermissionService {
       console.error('Failed to fetch user role:', error);
       return null;
     }
+  }
+
+  /**
+   * Check if user has senior level seniority
+   * This checks the user's AdminRole seniority level if they have one
+   * @param userId - User ID
+   * @returns Promise<boolean> - True if user has SENIOR seniority in any active admin role
+   */
+  async isSenior(userId: string): Promise<boolean> {
+    try {
+      // Check cache first
+      const cacheKey = `${this.CACHE_PREFIX}${userId}:seniority`;
+      const cached = await redis.get(cacheKey);
+      
+      if (cached !== null) {
+        return cached === 'true';
+      }
+
+      // Query for active, non-expired admin roles with SENIOR seniority
+      const seniorRole = await this.prisma.adminRole.findFirst({
+        where: {
+          userId,
+          isActive: true,
+          seniority: 'SENIOR',
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const isSenior = !!seniorRole;
+
+      // Cache the result
+      await redis.setex(cacheKey, this.CACHE_TTL, isSenior ? 'true' : 'false');
+
+      return isSenior;
+    } catch (error) {
+      console.error('Failed to check seniority:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user can approve a specific approval request
+   * Validates:
+   * - User has approval permissions for the department
+   * - User is not the creator of the approval request
+   * - Approval request is in an approvable state (PENDING)
+   * - User's seniority level is appropriate (SENIOR users can approve all, JUNIOR users cannot approve if senior-level approval is required)
+   * 
+   * @param userId - User ID
+   * @param approvalRequestId - Approval Request ID
+   * @returns Promise<boolean> - True if user can approve the request
+   */
+  async canApprove(userId: string, approvalRequestId: string): Promise<boolean> {
+    try {
+      // Retrieve the approval request
+      const approvalRequest = await this.prisma.approvalRequest.findUnique({
+        where: { id: approvalRequestId },
+        select: {
+          id: true,
+          requestedBy: true,
+          department: true,
+          status: true,
+          actionType: true,
+          metadata: true,
+        },
+      });
+
+      // If approval request doesn't exist, return false
+      if (!approvalRequest) {
+        console.warn(`Approval request ${approvalRequestId} not found`);
+        return false;
+      }
+
+      // Cannot approve your own request
+      if (approvalRequest.requestedBy === userId) {
+        return false;
+      }
+
+      // Can only approve pending requests
+      if (approvalRequest.status !== 'PENDING') {
+        return false;
+      }
+
+      // Check if user has an active admin role in the same department as the approval request
+      const userAdminRole = await this.prisma.adminRole.findFirst({
+        where: {
+          userId,
+          department: approvalRequest.department,
+          isActive: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+        select: {
+          id: true,
+          seniority: true,
+          permissions: true,
+          department: true,
+        },
+      });
+
+      // User must have an admin role in the department
+      if (!userAdminRole) {
+        return false;
+      }
+
+      // Check if the approval request requires senior approval
+      const metadata = approvalRequest.metadata as any;
+      const requiresSeniorApproval = metadata?.requiresSeniorApproval === true;
+
+      // If senior approval is required, user must have SENIOR seniority
+      if (requiresSeniorApproval && userAdminRole.seniority !== 'SENIOR') {
+        return false;
+      }
+
+      // Check if user has approval permissions
+      // Users in the department with an active role implicitly have approval permissions
+      // for standard approvals. Additional permission checks can be added here if needed.
+      const permissions = userAdminRole.permissions as string[];
+      
+      // Super admins (or users with wildcard permissions) can approve anything
+      if (permissions.includes('*:*')) {
+        return true;
+      }
+
+      // Check for specific approval-related permissions based on department
+      const hasApprovalPermission = this.hasApprovalPermissionForDepartment(
+        permissions,
+        approvalRequest.department,
+        approvalRequest.actionType
+      );
+
+      return hasApprovalPermission;
+    } catch (error) {
+      console.error('Failed to check approval capability:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if user has approval permission for a specific department and action type
+   * @private
+   */
+  private hasApprovalPermissionForDepartment(
+    permissions: string[],
+    department: string,
+    actionType: string
+  ): boolean {
+    // Department-specific approval permission mapping
+    const departmentPermissionMap: Record<string, string[]> = {
+      CREATOR_APPLICATIONS: [
+        PERMISSIONS.APPLICATIONS_APPROVE,
+        PERMISSIONS.CREATORS_APPROVE,
+      ],
+      BRAND_APPLICATIONS: [
+        PERMISSIONS.APPLICATIONS_APPROVE,
+        PERMISSIONS.BRANDS_VERIFY,
+      ],
+      FINANCE_LICENSING: [
+        PERMISSIONS.FINANCE_APPROVE_TRANSACTIONS,
+        PERMISSIONS.LICENSING_APPROVE,
+        PERMISSIONS.PAYOUTS_APPROVE,
+      ],
+      CONTENT_MANAGER: [
+        PERMISSIONS.CONTENT_APPROVE,
+        PERMISSIONS.CONTENT_MODERATE,
+      ],
+      OPERATIONS: [
+        PERMISSIONS.APPLICATIONS_MANAGE_WORKFLOW,
+      ],
+    };
+
+    const requiredPermissions = departmentPermissionMap[department] || [];
+
+    // Check if user has any of the required permissions
+    return requiredPermissions.some((perm) => permissions.includes(perm));
   }
 
   /**

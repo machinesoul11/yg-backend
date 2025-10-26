@@ -6,6 +6,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure, adminProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { prisma } from '@/lib/db';
 import { redisConnection } from '@/lib/db/redis';
 import { BrandAnalyticsService } from '../services/brand-analytics.service';
@@ -28,9 +30,11 @@ export const brandAnalyticsRouter = createTRPCRouter({
    * Get campaign performance analytics for a brand
    * 
    * Access: Brand owners, team members with analytics permission, and admins
+   * Requires finance:view_reports permission for financial metrics
    */
   getCampaignAnalytics: protectedProcedure
     .input(getCampaignAnalyticsSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ ctx, input }) => {
       // Verify user has access to this brand's analytics
       await verifyBrandAccess(ctx.session.user.id, ctx.session.user.role, input.id);
@@ -44,9 +48,11 @@ export const brandAnalyticsRouter = createTRPCRouter({
    * Get ROI analysis for a brand
    * 
    * Access: Brand owners, team members with analytics permission, and admins
+   * Requires finance:view_reports permission
    */
   getROIAnalysis: protectedProcedure
     .input(getROIAnalysisSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ ctx, input }) => {
       // Verify user has access to this brand's analytics
       await verifyBrandAccess(ctx.session.user.id, ctx.session.user.role, input.id);
@@ -92,9 +98,11 @@ export const brandAnalyticsRouter = createTRPCRouter({
    * Get comprehensive spend analysis for a brand
    * 
    * Access: Brand owners, team members with analytics permission, and admins
+   * Requires finance:view_reports permission
    */
   getSpendAnalysis: protectedProcedure
     .input(getSpendAnalysisSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ ctx, input }) => {
       // Verify user has access to this brand's analytics
       await verifyBrandAccess(ctx.session.user.id, ctx.session.user.role, input.id);
@@ -108,9 +116,11 @@ export const brandAnalyticsRouter = createTRPCRouter({
    * Get budget utilization analysis for a brand
    * 
    * Access: Brand owners, team members with analytics permission, and admins
+   * Requires finance:view_reports permission
    */
   getBudgetUtilization: protectedProcedure
     .input(getBudgetUtilizationSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ ctx, input }) => {
       // Verify user has access to this brand's analytics
       await verifyBrandAccess(ctx.session.user.id, ctx.session.user.role, input.id);
@@ -124,9 +134,11 @@ export const brandAnalyticsRouter = createTRPCRouter({
    * Get cost-per-metric efficiency analysis for a brand
    * 
    * Access: Brand owners, team members with analytics permission, and admins
+   * Requires finance:view_reports permission
    */
   getCostPerMetric: protectedProcedure
     .input(getCostPerMetricSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_VIEW_REPORTS))
     .query(async ({ ctx, input }) => {
       // Verify user has access to this brand's analytics
       await verifyBrandAccess(ctx.session.user.id, ctx.session.user.role, input.id);

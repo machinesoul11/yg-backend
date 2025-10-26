@@ -78,6 +78,8 @@ export {
   getCreatorByIdSchema,
   approveCreatorSchema,
   rejectCreatorSchema,
+  verifyCreatorSchema,
+  requestCreatorInfoSchema,
   CreatorSpecialtyEnum,
   VerificationStatusEnum,
   OnboardingStatusEnum,
@@ -90,6 +92,8 @@ export type {
   GetCreatorByIdInput,
   ApproveCreatorInput,
   RejectCreatorInput,
+  VerifyCreatorInput,
+  RequestCreatorInfoInput,
 } from './schemas/creator.schema';
 
 // Analytics Schemas

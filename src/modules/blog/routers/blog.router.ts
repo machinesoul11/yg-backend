@@ -5,6 +5,10 @@
 
 import { z } from 'zod';
 import { createTRPCRouter, adminProcedure, protectedProcedure, publicProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireApprovalOrExecute } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
+import { Department } from '@prisma/client';
 import { BlogService } from '../services/blog.service';
 import { prisma } from '@/lib/db';
 import {
@@ -229,8 +233,10 @@ export const blogRouter = createTRPCRouter({
   posts: createTRPCRouter({
     /**
      * Create a new post
+     * Requires content:create permission
      */
     create: protectedProcedure
+      .use(requirePermission(PERMISSIONS.CONTENT_CREATE))
       .input(createPostSchema)
       .mutation(async ({ input, ctx }) => {
         try {
@@ -248,8 +254,10 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Update a post
+     * Requires content:edit permission
      */
     update: protectedProcedure
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .input(z.object({
         id: z.string().cuid(),
         data: updatePostSchema,
@@ -337,10 +345,21 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Delete a post (soft delete)
+     * Requires content:delete permission and approval workflow
      */
     delete: protectedProcedure
       .input(z.object({
         id: z.string().cuid(),
+      }))
+      .use(requirePermission(PERMISSIONS.CONTENT_DELETE))
+      .use(requireApprovalOrExecute({
+        actionType: PERMISSIONS.CONTENT_DELETE,
+        getDepartment: () => Department.CONTENT_MANAGER,
+        getDataPayload: (input) => ({
+          postId: input.id,
+          action: 'delete_post',
+        }),
+        approvalRequiredMessage: 'Content deletion requires approval from senior content manager',
       }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -353,11 +372,15 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Restore a deleted post
+    /**
+     * Restore a deleted post
+     * Requires content:edit permission
      */
     restore: protectedProcedure
       .input(z.object({
         id: z.string().cuid(),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           return await blogService.restorePost(input.id, ctx.session.user.id);
@@ -368,6 +391,7 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Duplicate a post
+     * Requires content:create permission
      */
     duplicate: protectedProcedure
       .input(z.object({
@@ -385,6 +409,7 @@ export const blogRouter = createTRPCRouter({
           seoKeywords: z.string().max(255).optional(),
         }).optional(),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_CREATE))
       .mutation(async ({ input, ctx }) => {
         try {
           // Transform string dates to Date objects in overrides
@@ -400,6 +425,7 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Upload featured image for a post
+     * Requires content:edit permission
      */
     uploadFeaturedImage: protectedProcedure
       .input(z.object({
@@ -411,6 +437,7 @@ export const blogRouter = createTRPCRouter({
           size: z.number(),
         }),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           return await blogService.uploadFeaturedImage(
@@ -425,11 +452,13 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Remove featured image from a post
+     * Requires content:edit permission
      */
     removeFeaturedImage: protectedProcedure
       .input(z.object({
         postId: z.string().cuid(),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           await blogService.removeFeaturedImage(input.postId, ctx.session.user.id);
@@ -441,12 +470,14 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Publish a draft or scheduled post
+     * Requires content:edit permission
      */
     publish: protectedProcedure
       .input(z.object({
         id: z.string().cuid(),
         publishedAt: z.string().datetime().optional(),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           const publishedAt = input.publishedAt ? new Date(input.publishedAt) : undefined;
@@ -458,12 +489,14 @@ export const blogRouter = createTRPCRouter({
 
     /**
      * Schedule a post for future publication
+     * Requires content:edit permission
      */
     schedule: protectedProcedure
       .input(z.object({
         id: z.string().cuid(),
         scheduledFor: z.string().datetime(),
       }))
+      .use(requirePermission(PERMISSIONS.CONTENT_EDIT))
       .mutation(async ({ input, ctx }) => {
         try {
           const scheduledFor = new Date(input.scheduledFor);

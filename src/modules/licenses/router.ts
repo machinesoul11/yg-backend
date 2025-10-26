@@ -6,6 +6,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, protectedProcedure, adminProcedure } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { PERMISSIONS } from '@/lib/constants/permissions';
 import { licenseService } from './service';
 import type { LicenseResponse, LicenseScope } from './types';
 
@@ -247,9 +249,11 @@ function canAccessLicense(user: any, license: any): boolean {
 export const licensesRouter = createTRPCRouter({
   /**
    * CREATE: Brand proposes a license
+   * Requires licensing:create permission
    */
   create: protectedProcedure
     .input(CreateLicenseSchema)
+    .use(requirePermission(PERMISSIONS.LICENSING_CREATE))
     .mutation(async ({ ctx, input }) => {
       try {
         // Verify user is brand owner or admin

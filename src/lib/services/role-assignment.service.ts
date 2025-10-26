@@ -7,6 +7,7 @@ import { PrismaClient, UserRole } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { AuditService, AUDIT_ACTIONS } from './audit.service';
 import { EmailService } from './email/email.service';
+import { permissionCacheService } from './permission-cache.service';
 import {
   ROLES,
   isValidRole,
@@ -154,6 +155,15 @@ export class RoleAssignmentService {
           },
         });
       });
+
+      // Invalidate permission cache for the user
+      try {
+        await permissionCacheService.invalidate(userId);
+        console.log(`[RoleAssignment] Invalidated permission cache for user ${userId}`);
+      } catch (cacheError) {
+        // Log but don't fail the operation
+        console.error('[RoleAssignment] Failed to invalidate permission cache:', cacheError);
+      }
 
       // Send email notification to user
       await this.sendRoleChangeNotification(
@@ -352,6 +362,16 @@ export class RoleAssignmentService {
           userId,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
+      }
+    }
+
+    // Invalidate permission cache for all successful assignments
+    if (successful.length > 0) {
+      try {
+        await permissionCacheService.invalidateMany(successful);
+        console.log(`[RoleAssignment] Bulk invalidated permission cache for ${successful.length} users`);
+      } catch (cacheError) {
+        console.error('[RoleAssignment] Failed to bulk invalidate permission cache:', cacheError);
       }
     }
 

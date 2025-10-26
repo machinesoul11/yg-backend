@@ -23,32 +23,34 @@ model User {
   failed_login_count           Int                        @default(0)
   last_failed_login            DateTime?
   lastLoginAt                  DateTime?
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
+  phone_number                 String?
+  phone_verified               Boolean                    @default(false)
+  preferred_2fa_method         TwoFactorMethod?
+  two_factor_enabled           Boolean                    @default(false)
+  two_factor_secret            String?
+  two_factor_verified_at       DateTime?
   captcha_required_at          DateTime?
   total_failed_attempts        Int                        @default(0)
   last_login_ip                String?
   last_login_location          String?
   known_locations              String[]
   known_devices                String[]
-  two_factor_enabled           Boolean                    @default(false)
-  two_factor_secret            String?
-  two_factor_verified_at       DateTime?
-  preferred_2fa_method         TwoFactorMethod?
-  two_factor_required          Boolean                    @default(false) @map("two_factor_required")
-  two_factor_grace_period_ends DateTime?                  @map("two_factor_grace_period_ends")
-  two_factor_last_reset_by     String?                    @map("two_factor_last_reset_by")
-  two_factor_last_reset_at     DateTime?                  @map("two_factor_last_reset_at")
-  phone_number                 String?
-  phone_verified               Boolean                    @default(false)
-  maxConcurrentSessions        Int                        @default(5) @map("max_concurrent_sessions")
   autoLogoutAfterHours         Int                        @default(24) @map("auto_logout_after_hours")
-  createdAt                    DateTime                   @default(now())
-  updatedAt                    DateTime                   @updatedAt
+  maxConcurrentSessions        Int                        @default(5) @map("max_concurrent_sessions")
+  two_factor_grace_period_ends DateTime?                  @map("two_factor_grace_period_ends")
+  two_factor_last_reset_at     DateTime?                  @map("two_factor_last_reset_at")
+  two_factor_last_reset_by     String?                    @map("two_factor_last_reset_by")
+  two_factor_required          Boolean                    @default(false) @map("two_factor_required")
   accounts                     Account[]
+  adminRoles                   AdminRole[]
   auditEvents                  AuditEvent[]
   blogRedirectsCreated         BlogRedirect[]             @relation("BlogRedirectsCreatedBy")
   brand                        Brand?
   campaignRecipients           CampaignRecipient[]
   creator                      Creator?
+  customMetricDefinitions      CustomMetricDefinition[]   @relation("CustomMetricCreator")
   campaignsCreated             EmailCampaign[]            @relation("CampaignCreatedBy")
   emailEvents                  EmailEvent[]
   emailPreferences             EmailPreferences?
@@ -63,6 +65,7 @@ model User {
   extensionsApproved           LicenseExtension[]         @relation("ExtensionApprover")
   extensionsRequested          LicenseExtension[]         @relation("ExtensionRequester")
   statusHistoryEntries         LicenseStatusHistory[]
+  loginAttempts                LoginAttempt[]
   receivedMessages             Message[]                  @relation("ReceivedMessages")
   sentMessages                 Message[]                  @relation("SentMessages")
   notifications                Notification[]
@@ -80,31 +83,23 @@ model User {
   reportDownloads              ReportDownload[]           @relation("ReportDownloads")
   robotsConfigCreated          RobotsConfig[]             @relation("RobotsConfigCreatedBy")
   royaltyRunsCreated           RoyaltyRun[]               @relation("RoyaltyRunCreatedBy")
+  savedSearches                SavedSearch[]              @relation("SavedSearches")
   scheduledEmails              ScheduledEmail[]
   scheduledReportsCreated      ScheduledReport[]          @relation("ScheduledReportsCreated")
   searchAnalyticsEvents        SearchAnalyticsEvent[]     @relation("SearchAnalyticsEvents")
-  savedSearches                SavedSearch[]              @relation("SavedSearches")
-  customMetricDefinitions      CustomMetricDefinition[]   @relation("CustomMetricCreator")
   sessions                     Session[]
+  smsVerificationCodes         SmsVerificationCode[]
   talent                       Talent?
   taxFormJobsCreated           TaxFormJob[]
   taxWithholdingsCreated       TaxWithholding[]
-  verificationTokens           VerificationToken[]
   twoFactorBackupCodes         TwoFactorBackupCode[]
-  smsVerificationCodes         SmsVerificationCode[]
-  temporaryAuthTokens          TemporaryAuthToken[]
-  trustedDevices               TrustedDevice[]
-  loginAttempts                LoginAttempt[]
-  stepUpTokens                 StepUpToken[]
-  sensitiveActionLogs          SensitiveActionLog[]
+  verificationTokens           VerificationToken[]
 
   @@index([email])
   @@index([role])
   @@index([deleted_at])
   @@index([locked_until])
   @@index([two_factor_enabled])
-  @@index([two_factor_required])
-  @@index([two_factor_grace_period_ends])
   @@index([captcha_required_at])
   @@index([last_login_ip])
   @@map("users")
@@ -134,21 +129,18 @@ model Session {
   sessionToken      String    @unique
   userId            String
   expires           DateTime
-  ipAddress         String?   @map("ip_address")
-  userAgent         String?   @map("user_agent")
-  deviceName        String?   @map("device_name")
-  deviceFingerprint String?   @map("device_fingerprint")
-  lastActivityAt    DateTime  @default(now()) @map("last_activity_at")
   createdAt         DateTime  @default(now()) @map("created_at")
+  deviceFingerprint String?   @map("device_fingerprint")
+  deviceName        String?   @map("device_name")
+  ipAddress         String?   @map("ip_address")
+  lastActivityAt    DateTime  @default(now()) @map("last_activity_at")
   revokedAt         DateTime? @map("revoked_at")
   revokedReason     String?   @map("revoked_reason")
+  userAgent         String?   @map("user_agent")
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expires])
-  @@index([userId, lastActivityAt(sort: Desc)])
-  @@index([lastActivityAt])
-  @@index([deviceFingerprint])
   @@map("sessions")
 }
 
@@ -256,7 +248,6 @@ model TemporaryAuthToken {
   ipAddress     String?   @map("ip_address")
   userAgent     String?   @map("user_agent")
   createdAt     DateTime  @default(now()) @map("created_at")
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tokenHash])
   @@index([userId])
@@ -276,7 +267,6 @@ model TrustedDevice {
   lastUsedAt        DateTime? @map("last_used_at")
   expiresAt         DateTime  @map("expires_at")
   createdAt         DateTime  @default(now()) @map("created_at")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tokenHash])
   @@index([userId])
@@ -309,7 +299,6 @@ model LoginAttempt {
   @@index([email, timestamp(sort: Desc)])
   @@index([ipAddress, timestamp(sort: Desc)])
   @@index([success, timestamp(sort: Desc)])
-  @@index([isAnomalous])
   @@index([timestamp(sort: Desc)])
   @@index([deviceFingerprint])
   @@map("login_attempts")
@@ -327,7 +316,6 @@ model StepUpToken {
   ipAddress           String?   @map("ip_address")
   userAgent           String?   @map("user_agent")
   createdAt           DateTime  @default(now()) @map("created_at")
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([tokenHash])
@@ -349,12 +337,40 @@ model SensitiveActionLog {
   success            Boolean
   failureReason      String?  @map("failure_reason")
   createdAt          DateTime @default(now()) @map("created_at")
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([actionType, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@map("sensitive_action_logs")
+}
+
+model AdminRole {
+  id              String     @id @default(cuid())
+  userId          String     @map("user_id")
+  department      Department
+  seniority       Seniority
+  permissions     Json       @default("[]")
+  isActive        Boolean    @default(true) @map("is_active")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdBy       String     @map("created_by")
+  expiresAt       DateTime?  @map("expires_at")
+  deletedAt       DateTime?  @map("deleted_at")
+  deletedBy       String?    @map("deleted_by")
+  deletionReason  String?    @map("deletion_reason")
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, department])
+  @@index([userId])
+  @@index([department])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([createdBy])
+  @@index([userId, isActive])
+  @@index([department, isActive])
+  @@index([deletedAt])
+  @@index([userId, deletedAt])
+  @@map("admin_roles")
 }
 
 model TwoFactorPolicy {
@@ -394,6 +410,30 @@ model AdminEmergencyCode {
   @@map("admin_emergency_codes")
 }
 
+model ApprovalRequest {
+  id             String         @id @default(cuid())
+  actionType     String         @map("action_type")
+  requestedBy    String         @map("requested_by")
+  department     Department
+  dataPayload    Json           @map("data_payload")
+  status         ApprovalStatus @default(PENDING)
+  reviewedBy     String?        @map("reviewed_by")
+  reviewedAt     DateTime?      @map("reviewed_at")
+  reviewComments String?        @map("review_comments")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  metadata       Json?
+
+  @@index([actionType])
+  @@index([requestedBy])
+  @@index([department])
+  @@index([status])
+  @@index([reviewedBy])
+  @@index([createdAt(sort: Desc)])
+  @@index([status, department])
+  @@index([actionType, createdAt(sort: Desc)])
+  @@map("approval_requests")
+}
+
 model TwoFactorSecurityLog {
   id              String   @id @default(cuid())
   userId          String   @map("user_id")
@@ -419,28 +459,89 @@ model TwoFactorSecurityLog {
 }
 
 model AuditEvent {
-  id         String   @id @default(cuid())
-  timestamp  DateTime @default(now()) @db.Timestamptz(6)
-  userId     String?
-  email      String?
-  entityType String
-  entityId   String
-  action     String
-  beforeJson Json?
-  afterJson  Json?
-  ipAddress  String?
-  userAgent  String?
-  requestId  String?
-  user       User?    @relation(fields: [userId], references: [id])
+  id                String        @id @default(cuid())
+  timestamp         DateTime      @default(now()) @db.Timestamptz(6)
+  email             String?
+  action            String
+  afterJson         Json?         @map("after_json")
+  afterState        Json?         @map("after_state")
+  beforeJson        Json?         @map("before_json")
+  beforeState       Json?         @map("before_state")
+  entityId          String        @default("") @map("entity_id")
+  entityType        String        @default("") @map("entity_type")
+  ipAddress         String?       @map("ip_address")
+  metadata          Json?
+  permission        String?
+  previousLogHash   String?       @map("previous_log_hash")
+  requestId         String?       @map("request_id")
+  resourceId        String?       @map("resource_id")
+  resourceType      ResourceType? @map("resource_type")
+  sessionId         String?       @map("session_id")
+  userAgent         String?       @map("user_agent")
+  userId            String?       @map("user_id")
+  
+  // Security enhancements
+  encryptedMetadata String?       @map("encrypted_metadata") // Encrypted sensitive PII/financial data
+  entryHash         String?       @map("entry_hash")         // SHA-256 hash of this entry for integrity
+  
+  // Archival tracking
+  archived          Boolean       @default(false)
+  archivedAt        DateTime?     @map("archived_at")
+  
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([userId, timestamp])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([resourceType, resourceId, timestamp(sort: Desc)])
   @@index([entityType, entityId])
-  @@index([action, timestamp])
-  @@index([requestId])
+  @@index([action, timestamp(sort: Desc)])
+  @@index([sessionId, timestamp(sort: Desc)])
   @@index([email])
+  @@index([requestId])
+  @@index([timestamp(sort: Desc)])
+  @@index([archived, timestamp(sort: Desc)])
+  @@index([entryHash])
   @@map("audit_events")
 }
 
+model AuditEventArchive {
+  id                String        @id @default(cuid())
+  timestamp         DateTime      @db.Timestamptz(6)
+  email             String?
+  action            String
+  afterJson         Json?         @map("after_json")
+  afterState        Json?         @map("after_state")
+  beforeJson        Json?         @map("before_json")
+  beforeState       Json?         @map("before_state")
+  entityId          String        @default("") @map("entity_id")
+  entityType        String        @default("") @map("entity_type")
+  ipAddress         String?       @map("ip_address")
+  metadata          Json?
+  permission        String?
+  previousLogHash   String?       @map("previous_log_hash")
+  requestId         String?       @map("request_id")
+  resourceId        String?       @map("resource_id")
+  resourceType      ResourceType? @map("resource_type")
+  sessionId         String?       @map("session_id")
+  userAgent         String?       @map("user_agent")
+  userId            String?       @map("user_id")
+  encryptedMetadata String?       @map("encrypted_metadata")
+  entryHash         String?       @map("entry_hash")
+  
+  // Archive metadata
+  archivedAt        DateTime      @default(now()) @map("archived_at")
+  originalId        String        @map("original_id") // Original ID from audit_events
+  
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([resourceType, resourceId, timestamp(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([action, timestamp(sort: Desc)])
+  @@index([timestamp(sort: Desc)])
+  @@index([archivedAt(sort: Desc)])
+  @@index([originalId])
+  @@map("audit_events_archive")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model Creator {
   id                        String                     @id @default(cuid())
   userId                    String                     @unique
@@ -621,14 +722,14 @@ model Project {
   updatedAt      DateTime        @updatedAt
   deletedAt      DateTime?
   dailyMetrics   DailyMetric[]
-  weeklyMetrics  WeeklyMetric[]
-  monthlyMetrics MonthlyMetric[]
   events         Event[]
   ipAssets       IpAsset[]
   licenses       License[]
+  monthlyMetrics MonthlyMetric[]
   brand          Brand           @relation(fields: [brandId], references: [id])
   creatorUser    User            @relation("ProjectCreatedBy", fields: [createdBy], references: [id])
   updaterUser    User?           @relation("ProjectUpdatedBy", fields: [updatedBy], references: [id])
+  weeklyMetrics  WeeklyMetric[]
 
   @@index([brandId, status])
   @@index([createdAt])
@@ -791,8 +892,6 @@ model License {
   totalUsageEvents      Int                          @default(0) @map("total_usage_events")
   commissions           CommissionTracking[]         @relation("LicenseCommissions")
   dailyMetrics          DailyMetric[]
-  weeklyMetrics         WeeklyMetric[]
-  monthlyMetrics        MonthlyMetric[]
   events                Event[]
   amendments            LicenseAmendment[]
   extensions            LicenseExtension[]
@@ -807,7 +906,9 @@ model License {
   parentLicense         License?                     @relation("LicenseRenewals", fields: [parentLicenseId], references: [id])
   renewals              License[]                    @relation("LicenseRenewals")
   project               Project?                     @relation(fields: [projectId], references: [id])
+  monthlyMetrics        MonthlyMetric[]
   royaltyLines          RoyaltyLine[]
+  weeklyMetrics         WeeklyMetric[]
 
   @@index([ipAssetId, status, endDate])
   @@index([brandId, status])
@@ -1349,6 +1450,7 @@ model EmailCampaignReport {
   @@map("email_campaign_reports")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model IpAsset {
   id                  String             @id @default(cuid())
   projectId           String?            @map("project_id")
@@ -1372,8 +1474,6 @@ model IpAsset {
   updatedAt           DateTime           @updatedAt @map("updated_at")
   deletedAt           DateTime?          @map("deleted_at")
   dailyMetrics        DailyMetric[]
-  weeklyMetrics       WeeklyMetric[]
-  monthlyMetrics      MonthlyMetric[]
   events              Event[]
   sourceRelationships FileRelationship[] @relation("SourceRelationships")
   targetRelationships FileRelationship[] @relation("TargetRelationships")
@@ -1384,7 +1484,9 @@ model IpAsset {
   updater             User?              @relation("AssetUpdater", fields: [updatedBy], references: [id])
   ownerships          IpOwnership[]
   licenses            License[]
+  monthlyMetrics      MonthlyMetric[]
   royaltyLines        RoyaltyLine[]
+  weeklyMetrics       WeeklyMetric[]
 
   @@index([projectId, status])
   @@index([createdBy, status])
@@ -2536,7 +2638,7 @@ model SearchAnalyticsEvent {
   clickedResultPosition   Int?     @map("clicked_result_position")
   clickedResultEntityType String?  @map("clicked_result_entity_type")
   createdAt               DateTime @default(now()) @map("created_at")
-  user                    User?    @relation("SearchAnalyticsEvents", fields: [userId], references: [id], onDelete: SetNull)
+  user                    User?    @relation("SearchAnalyticsEvents", fields: [userId], references: [id])
 
   @@index([query])
   @@index([userId])
@@ -2562,6 +2664,346 @@ model SavedSearch {
   @@map("saved_searches")
 }
 
+model WeeklyMetric {
+  id                       String   @id @default(cuid())
+  weekStartDate            DateTime @map("week_start_date") @db.Date
+  weekEndDate              DateTime @map("week_end_date") @db.Date
+  projectId                String?  @map("project_id")
+  ipAssetId                String?  @map("ip_asset_id")
+  licenseId                String?  @map("license_id")
+  totalViews               Int      @default(0) @map("total_views")
+  totalClicks              Int      @default(0) @map("total_clicks")
+  totalConversions         Int      @default(0) @map("total_conversions")
+  totalRevenueCents        Int      @default(0) @map("total_revenue_cents")
+  uniqueVisitors           Int      @default(0) @map("unique_visitors")
+  totalEngagementTime      Int      @default(0) @map("total_engagement_time")
+  viewsGrowthPercent       Decimal? @map("views_growth_percent") @db.Decimal(10, 2)
+  clicksGrowthPercent      Decimal? @map("clicks_growth_percent") @db.Decimal(10, 2)
+  conversionsGrowthPercent Decimal? @map("conversions_growth_percent") @db.Decimal(10, 2)
+  revenueGrowthPercent     Decimal? @map("revenue_growth_percent") @db.Decimal(10, 2)
+  avgDailyViews            Decimal? @map("avg_daily_views") @db.Decimal(10, 2)
+  avgDailyClicks           Decimal? @map("avg_daily_clicks") @db.Decimal(10, 2)
+  avgDailyConversions      Decimal? @map("avg_daily_conversions") @db.Decimal(10, 2)
+  avgDailyRevenueCents     Decimal? @map("avg_daily_revenue_cents") @db.Decimal(10, 2)
+  daysInPeriod             Int      @default(7) @map("days_in_period")
+  aggregationVersion       String   @default("1.0") @map("aggregation_version") @db.VarChar(20)
+  metadata                 Json     @default("{}")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+  ipAsset                  IpAsset? @relation(fields: [ipAssetId], references: [id], onDelete: Cascade)
+  license                  License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  project                  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([weekStartDate, projectId, ipAssetId, licenseId], name: "unique_weekly_metric")
+  @@index([weekStartDate(sort: Desc)])
+  @@index([projectId, weekStartDate(sort: Desc)])
+  @@index([ipAssetId, weekStartDate(sort: Desc)])
+  @@index([licenseId, weekStartDate(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("weekly_metrics")
+}
+
+model MonthlyMetric {
+  id                       String   @id @default(cuid())
+  monthStartDate           DateTime @map("month_start_date") @db.Date
+  monthEndDate             DateTime @map("month_end_date") @db.Date
+  year                     Int
+  month                    Int
+  projectId                String?  @map("project_id")
+  ipAssetId                String?  @map("ip_asset_id")
+  licenseId                String?  @map("license_id")
+  totalViews               Int      @default(0) @map("total_views")
+  totalClicks              Int      @default(0) @map("total_clicks")
+  totalConversions         Int      @default(0) @map("total_conversions")
+  totalRevenueCents        Int      @default(0) @map("total_revenue_cents")
+  uniqueVisitors           Int      @default(0) @map("unique_visitors")
+  totalEngagementTime      Int      @default(0) @map("total_engagement_time")
+  viewsGrowthPercent       Decimal? @map("views_growth_percent") @db.Decimal(10, 2)
+  clicksGrowthPercent      Decimal? @map("clicks_growth_percent") @db.Decimal(10, 2)
+  conversionsGrowthPercent Decimal? @map("conversions_growth_percent") @db.Decimal(10, 2)
+  revenueGrowthPercent     Decimal? @map("revenue_growth_percent") @db.Decimal(10, 2)
+  avgDailyViews            Decimal? @map("avg_daily_views") @db.Decimal(10, 2)
+  avgDailyClicks           Decimal? @map("avg_daily_clicks") @db.Decimal(10, 2)
+  avgDailyConversions      Decimal? @map("avg_daily_conversions") @db.Decimal(10, 2)
+  avgDailyRevenueCents     Decimal? @map("avg_daily_revenue_cents") @db.Decimal(10, 2)
+  weeksInMonth             Int?     @map("weeks_in_month")
+  weeklyBreakdown          Json     @default("[]") @map("weekly_breakdown")
+  daysInPeriod             Int      @map("days_in_period")
+  aggregationVersion       String   @default("1.0") @map("aggregation_version") @db.VarChar(20)
+  metadata                 Json     @default("{}")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+  ipAsset                  IpAsset? @relation(fields: [ipAssetId], references: [id], onDelete: Cascade)
+  license                  License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  project                  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([year, month, projectId, ipAssetId, licenseId], name: "unique_monthly_metric")
+  @@index([year(sort: Desc), month(sort: Desc)])
+  @@index([monthStartDate(sort: Desc)])
+  @@index([projectId, year(sort: Desc), month(sort: Desc)])
+  @@index([ipAssetId, year(sort: Desc), month(sort: Desc)])
+  @@index([licenseId, year(sort: Desc), month(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("monthly_metrics")
+}
+
+model CustomMetricDefinition {
+  id                  String                   @id @default(cuid())
+  name                String                   @db.VarChar(255)
+  description         String?
+  metricType          MetricType               @map("metric_type")
+  dataSource          String                   @map("data_source") @db.VarChar(100)
+  calculationFormula  String                   @map("calculation_formula")
+  dimensions          Json                     @default("[]")
+  filters             Json                     @default("{}")
+  aggregationMethod   String                   @map("aggregation_method") @db.VarChar(50)
+  createdBy           String                   @map("created_by")
+  visibility          MetricVisibility         @default(PRIVATE)
+  allowedRoles        Json                     @default("[\"ADMIN\"]") @map("allowed_roles")
+  isValidated         Boolean                  @default(false) @map("is_validated")
+  validationErrors    Json?                    @map("validation_errors")
+  estimatedCost       String?                  @map("estimated_cost")
+  queryTimeoutSeconds Int                      @default(30) @map("query_timeout_seconds")
+  version             Int                      @default(1)
+  isActive            Boolean                  @default(true) @map("is_active")
+  parentMetricId      String?                  @map("parent_metric_id")
+  usageCount          Int                      @default(0) @map("usage_count")
+  lastCalculatedAt    DateTime?                @map("last_calculated_at")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  deletedAt           DateTime?                @map("deleted_at")
+  creator             User                     @relation("CustomMetricCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  parentMetric        CustomMetricDefinition?  @relation("MetricVersions", fields: [parentMetricId], references: [id])
+  childMetrics        CustomMetricDefinition[] @relation("MetricVersions")
+  values              CustomMetricValue[]
+
+  @@unique([name, deletedAt], name: "unique_active_metric_name")
+  @@index([name])
+  @@index([createdBy])
+  @@index([isActive])
+  @@index([metricType])
+  @@index([lastCalculatedAt(sort: Desc)])
+  @@index([usageCount(sort: Desc)])
+  @@map("custom_metric_definitions")
+}
+
+model CustomMetricValue {
+  id                    String                 @id @default(cuid())
+  metricDefinitionId    String                 @map("metric_definition_id")
+  periodType            MetricPeriodType       @map("period_type")
+  periodStartDate       DateTime               @map("period_start_date") @db.Date
+  periodEndDate         DateTime               @map("period_end_date") @db.Date
+  dimensionValues       Json                   @default("{}") @map("dimension_values")
+  metricValue           Decimal                @map("metric_value") @db.Decimal(20, 4)
+  metricValueString     String?                @map("metric_value_string")
+  calculationTimestamp  DateTime               @default(now()) @map("calculation_timestamp")
+  calculationDurationMs Int?                   @map("calculation_duration_ms")
+  recordCount           Int?                   @map("record_count")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  metricDefinition      CustomMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([metricDefinitionId, periodStartDate, periodEndDate, dimensionValues], name: "unique_custom_metric_value")
+  @@index([metricDefinitionId, periodStartDate(sort: Desc)])
+  @@index([periodStartDate(sort: Desc), periodEndDate(sort: Desc)])
+  @@index([calculationTimestamp(sort: Desc)])
+  @@map("custom_metric_values")
+}
+
+model RealtimeMetricsCache {
+  id                     String             @id @default(cuid())
+  metricKey              String             @unique @map("metric_key") @db.VarChar(255)
+  metricType             RealtimeMetricType @map("metric_type")
+  currentValue           Decimal            @map("current_value") @db.Decimal(20, 4)
+  previousValue          Decimal?           @map("previous_value") @db.Decimal(20, 4)
+  dimensions             Json               @default("{}")
+  unit                   String?            @db.VarChar(50)
+  windowSizeSeconds      Int?               @map("window_size_seconds")
+  windowData             Json               @default("[]") @map("window_data")
+  lastUpdatedAt          DateTime           @default(now()) @map("last_updated_at")
+  updateCount            Int                @default(1) @map("update_count")
+  expiresAt              DateTime?          @map("expires_at")
+  refreshIntervalSeconds Int                @default(60) @map("refresh_interval_seconds")
+  createdAt              DateTime           @default(now()) @map("created_at")
+
+  @@index([metricKey])
+  @@index([metricType])
+  @@index([lastUpdatedAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("realtime_metrics_cache")
+}
+
+model MetricsAggregationJobsLog {
+  id               String               @id @default(cuid())
+  jobType          String               @map("job_type") @db.VarChar(50)
+  periodStartDate  DateTime             @map("period_start_date") @db.Date
+  periodEndDate    DateTime             @map("period_end_date") @db.Date
+  startedAt        DateTime             @map("started_at")
+  completedAt      DateTime?            @map("completed_at")
+  status           AggregationJobStatus
+  recordsProcessed Int                  @default(0) @map("records_processed")
+  recordsCreated   Int                  @default(0) @map("records_created")
+  recordsUpdated   Int                  @default(0) @map("records_updated")
+  errorsCount      Int                  @default(0) @map("errors_count")
+  durationSeconds  Decimal?             @map("duration_seconds") @db.Decimal(10, 2)
+  memoryUsedMb     Int?                 @map("memory_used_mb")
+  errorMessage     String?              @map("error_message")
+  errorStack       String?              @map("error_stack")
+  metadata         Json                 @default("{}")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  @@index([jobType, periodStartDate(sort: Desc)])
+  @@index([status, startedAt(sort: Desc)])
+  @@index([startedAt(sort: Desc)])
+  @@map("metrics_aggregation_jobs_log")
+}
+
+model TwoFactorComplianceMetrics {
+  id                      String   @id @default(cuid())
+  periodStart             DateTime @map("period_start")
+  periodEnd               DateTime @map("period_end")
+  periodType              String   @map("period_type")
+  totalUsers              Int      @map("total_users")
+  usersWithTwoFactor      Int      @map("users_with_two_factor")
+  adoptionRate            Decimal  @map("adoption_rate") @db.Decimal(5, 2)
+  adminTotal              Int      @map("admin_total")
+  adminEnabled            Int      @map("admin_enabled")
+  creatorTotal            Int      @map("creator_total")
+  creatorEnabled          Int      @map("creator_enabled")
+  brandTotal              Int      @map("brand_total")
+  brandEnabled            Int      @map("brand_enabled")
+  talentTotal             Int      @map("talent_total")
+  talentEnabled           Int      @map("talent_enabled")
+  viewerTotal             Int      @map("viewer_total")
+  viewerEnabled           Int      @map("viewer_enabled")
+  totalAuthAttempts       Int      @map("total_auth_attempts")
+  successfulAuths         Int      @map("successful_auths")
+  failedAuths             Int      @map("failed_auths")
+  failureRate             Decimal  @map("failure_rate") @db.Decimal(5, 2)
+  totpAttempts            Int      @map("totp_attempts")
+  smsAttempts             Int      @map("sms_attempts")
+  backupCodeAttempts      Int      @map("backup_code_attempts")
+  accountLockouts         Int      @map("account_lockouts")
+  suspiciousActivities    Int      @map("suspicious_activities")
+  emergencyCodesGenerated Int      @map("emergency_codes_generated")
+  adminResets             Int      @map("admin_resets")
+  backupCodesRegenerated  Int      @map("backup_codes_regenerated")
+  usersWithLowBackupCodes Int      @map("users_with_low_backup_codes")
+  backupCodesUsed         Int      @map("backup_codes_used")
+  adoptionRateChange      Decimal? @map("adoption_rate_change") @db.Decimal(5, 2)
+  failureRateChange       Decimal? @map("failure_rate_change") @db.Decimal(5, 2)
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@unique([periodStart, periodEnd, periodType])
+  @@index([periodStart(sort: Desc)])
+  @@index([periodType, periodStart(sort: Desc)])
+  @@map("two_factor_compliance_metrics")
+}
+
+model TwoFactorSecurityEvent {
+  id                String   @id @default(cuid())
+  userId            String   @map("user_id")
+  eventType         String   @map("event_type")
+  eventCategory     String   @map("event_category")
+  success           Boolean  @default(true)
+  failureReason     String?  @map("failure_reason")
+  method            String?
+  ipAddress         String?  @map("ip_address")
+  userAgent         String?  @map("user_agent")
+  deviceFingerprint String?  @map("device_fingerprint")
+  locationCountry   String?  @map("location_country")
+  locationRegion    String?  @map("location_region")
+  locationCity      String?  @map("location_city")
+  isAnomalous       Boolean  @default(false) @map("is_anomalous")
+  anomalyScore      Decimal? @map("anomaly_score") @db.Decimal(5, 2)
+  anomalyReasons    String[] @map("anomaly_reasons")
+  adminId           String?  @map("admin_id")
+  adminAction       String?  @map("admin_action")
+  adminReason       String?  @map("admin_reason")
+  metadata          Json?
+  timestamp         DateTime @default(now())
+
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([eventType, timestamp(sort: Desc)])
+  @@index([eventCategory, timestamp(sort: Desc)])
+  @@index([isAnomalous, timestamp(sort: Desc)])
+  @@index([timestamp(sort: Desc)])
+  @@index([ipAddress, timestamp(sort: Desc)])
+  @@index([adminId, timestamp(sort: Desc)])
+  @@map("two_factor_security_events")
+}
+
+model TwoFactorSecurityAlert {
+  id                  String    @id @default(cuid())
+  alertType           String    @map("alert_type")
+  severity            String    @map("severity")
+  title               String
+  description         String
+  recommendation      String?
+  metric              String
+  currentValue        Decimal   @map("current_value") @db.Decimal(10, 2)
+  threshold           Decimal   @map("threshold") @db.Decimal(10, 2)
+  baselineValue       Decimal?  @map("baseline_value") @db.Decimal(10, 2)
+  periodStart         DateTime  @map("period_start")
+  periodEnd           DateTime  @map("period_end")
+  affectedUserCount   Int?      @map("affected_user_count")
+  affectedUsers       String[]  @map("affected_users")
+  affectedIpAddresses String[]  @map("affected_ip_addresses")
+  status              String    @default("active")
+  acknowledgedAt      DateTime? @map("acknowledged_at")
+  acknowledgedBy      String?   @map("acknowledged_by")
+  resolvedAt          DateTime? @map("resolved_at")
+  resolvedBy          String?   @map("resolved_by")
+  resolution          String?
+  notificationSent    Boolean   @default(false) @map("notification_sent")
+  notificationSentAt  DateTime? @map("notification_sent_at")
+  notifiedAdmins      String[]  @map("notified_admins")
+  metadata            Json?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@index([alertType, createdAt(sort: Desc)])
+  @@index([severity, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("two_factor_security_alerts")
+}
+
+model TwoFactorComplianceReport {
+  id                 String    @id @default(cuid())
+  reportType         String    @map("report_type")
+  format             String
+  periodStart        DateTime  @map("period_start")
+  periodEnd          DateTime  @map("period_end")
+  generatedBy        String?   @map("generated_by")
+  generatedAt        DateTime  @default(now()) @map("generated_at")
+  generationStatus   String    @default("pending") @map("generation_status")
+  reportData         Json?     @map("report_data")
+  summary            String?
+  storageUrl         String?   @map("storage_url")
+  storageKey         String?   @map("storage_key")
+  fileSize           Int?      @map("file_size")
+  emailedTo          String[]  @map("emailed_to")
+  emailedAt          DateTime? @map("emailed_at")
+  downloadCount      Int       @default(0) @map("download_count")
+  lastDownloadedAt   DateTime? @map("last_downloaded_at")
+  isScheduled        Boolean   @default(false) @map("is_scheduled")
+  scheduleFrequency  String?   @map("schedule_frequency")
+  nextGenerationDate DateTime? @map("next_generation_date")
+  errorMessage       String?   @map("error_message")
+  errorStack         String?   @map("error_stack")
+  metadata           Json?
+  expiresAt          DateTime? @map("expires_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([reportType, generatedAt(sort: Desc)])
+  @@index([generatedBy, generatedAt(sort: Desc)])
+  @@index([generationStatus])
+  @@index([isScheduled, nextGenerationDate])
+  @@index([generatedAt(sort: Desc)])
+  @@map("two_factor_compliance_reports")
+}
+
 enum ProjectStatus {
   DRAFT
   ACTIVE
@@ -2582,6 +3024,66 @@ enum UserRole {
   CREATOR
   BRAND
   VIEWER
+}
+
+enum ResourceType {
+  USER
+  ACCOUNT
+  ADMIN_ROLE
+  APPROVAL_REQUEST
+  ASSET
+  ATTRIBUTION
+  BRAND
+  CAMPAIGN
+  CREATOR
+  EMAIL_CAMPAIGN
+  EMAIL_PREFERENCES
+  FILE
+  FINANCIAL_REPORT
+  IP_ASSET
+  IP_OWNERSHIP
+  LICENSE
+  LICENSE_AMENDMENT
+  LICENSE_EXTENSION
+  LICENSE_REQUEST
+  LOGIN_ATTEMPT
+  MEDIA_ITEM
+  MESSAGE
+  NOTIFICATION
+  PASSWORD
+  PAYMENT
+  PAYOUT
+  POST
+  PROJECT
+  REPORT
+  ROYALTY
+  ROYALTY_RUN
+  ROYALTY_STATEMENT
+  SCHEDULED_REPORT
+  SESSION
+  TAX_DOCUMENT
+  TAX_WITHHOLDING
+  TWO_FACTOR_BACKUP_CODE
+  TWO_FACTOR_POLICY
+  VERIFICATION_TOKEN
+  SYSTEM
+  OTHER
+}
+
+enum Department {
+  SUPER_ADMIN
+  CONTENT_MANAGER
+  FINANCE_LICENSING
+  CREATOR_APPLICATIONS
+  BRAND_APPLICATIONS
+  CUSTOMER_SERVICE
+  OPERATIONS
+  CONTRACTOR
+}
+
+enum Seniority {
+  JUNIOR
+  SENIOR
 }
 
 enum TwoFactorMethod {
@@ -3054,476 +3556,4 @@ enum PostExperimentStatus {
   PAUSED
   COMPLETED
   CANCELLED
-}
-
-// ============================================
-// Metrics Aggregation Models
-// ============================================
-
-model WeeklyMetric {
-  id            String   @id @default(cuid())
-  weekStartDate DateTime @map("week_start_date") @db.Date
-  weekEndDate   DateTime @map("week_end_date") @db.Date
-  projectId     String?  @map("project_id")
-  ipAssetId     String?  @map("ip_asset_id")
-  licenseId     String?  @map("license_id")
-
-  // Aggregated metrics
-  totalViews          Int @default(0) @map("total_views")
-  totalClicks         Int @default(0) @map("total_clicks")
-  totalConversions    Int @default(0) @map("total_conversions")
-  totalRevenueCents   Int @default(0) @map("total_revenue_cents")
-  uniqueVisitors      Int @default(0) @map("unique_visitors")
-  totalEngagementTime Int @default(0) @map("total_engagement_time")
-
-  // Growth metrics
-  viewsGrowthPercent       Decimal? @map("views_growth_percent") @db.Decimal(10, 2)
-  clicksGrowthPercent      Decimal? @map("clicks_growth_percent") @db.Decimal(10, 2)
-  conversionsGrowthPercent Decimal? @map("conversions_growth_percent") @db.Decimal(10, 2)
-  revenueGrowthPercent     Decimal? @map("revenue_growth_percent") @db.Decimal(10, 2)
-
-  // Calculated metrics
-  avgDailyViews        Decimal? @map("avg_daily_views") @db.Decimal(10, 2)
-  avgDailyClicks       Decimal? @map("avg_daily_clicks") @db.Decimal(10, 2)
-  avgDailyConversions  Decimal? @map("avg_daily_conversions") @db.Decimal(10, 2)
-  avgDailyRevenueCents Decimal? @map("avg_daily_revenue_cents") @db.Decimal(10, 2)
-
-  // Metadata
-  daysInPeriod       Int    @default(7) @map("days_in_period")
-  aggregationVersion String @default("1.0") @map("aggregation_version") @db.VarChar(20)
-  metadata           Json   @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ipAsset IpAsset? @relation(fields: [ipAssetId], references: [id], onDelete: Cascade)
-  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-
-  @@unique([weekStartDate, projectId, ipAssetId, licenseId], name: "unique_weekly_metric")
-  @@index([weekStartDate(sort: Desc)])
-  @@index([projectId, weekStartDate(sort: Desc)])
-  @@index([ipAssetId, weekStartDate(sort: Desc)])
-  @@index([licenseId, weekStartDate(sort: Desc)])
-  @@index([createdAt(sort: Desc)])
-  @@map("weekly_metrics")
-}
-
-model MonthlyMetric {
-  id             String   @id @default(cuid())
-  monthStartDate DateTime @map("month_start_date") @db.Date
-  monthEndDate   DateTime @map("month_end_date") @db.Date
-  year           Int
-  month          Int
-  projectId      String?  @map("project_id")
-  ipAssetId      String?  @map("ip_asset_id")
-  licenseId      String?  @map("license_id")
-
-  // Aggregated metrics
-  totalViews          Int @default(0) @map("total_views")
-  totalClicks         Int @default(0) @map("total_clicks")
-  totalConversions    Int @default(0) @map("total_conversions")
-  totalRevenueCents   Int @default(0) @map("total_revenue_cents")
-  uniqueVisitors      Int @default(0) @map("unique_visitors")
-  totalEngagementTime Int @default(0) @map("total_engagement_time")
-
-  // Growth metrics
-  viewsGrowthPercent       Decimal? @map("views_growth_percent") @db.Decimal(10, 2)
-  clicksGrowthPercent      Decimal? @map("clicks_growth_percent") @db.Decimal(10, 2)
-  conversionsGrowthPercent Decimal? @map("conversions_growth_percent") @db.Decimal(10, 2)
-  revenueGrowthPercent     Decimal? @map("revenue_growth_percent") @db.Decimal(10, 2)
-
-  // Calculated metrics
-  avgDailyViews        Decimal? @map("avg_daily_views") @db.Decimal(10, 2)
-  avgDailyClicks       Decimal? @map("avg_daily_clicks") @db.Decimal(10, 2)
-  avgDailyConversions  Decimal? @map("avg_daily_conversions") @db.Decimal(10, 2)
-  avgDailyRevenueCents Decimal? @map("avg_daily_revenue_cents") @db.Decimal(10, 2)
-
-  // Weekly data
-  weeksInMonth    Int? @map("weeks_in_month")
-  weeklyBreakdown Json @default("[]") @map("weekly_breakdown")
-
-  // Metadata
-  daysInPeriod       Int    @map("days_in_period")
-  aggregationVersion String @default("1.0") @map("aggregation_version") @db.VarChar(20)
-  metadata           Json   @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ipAsset IpAsset? @relation(fields: [ipAssetId], references: [id], onDelete: Cascade)
-  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-
-  @@unique([year, month, projectId, ipAssetId, licenseId], name: "unique_monthly_metric")
-  @@index([year(sort: Desc), month(sort: Desc)])
-  @@index([monthStartDate(sort: Desc)])
-  @@index([projectId, year(sort: Desc), month(sort: Desc)])
-  @@index([ipAssetId, year(sort: Desc), month(sort: Desc)])
-  @@index([licenseId, year(sort: Desc), month(sort: Desc)])
-  @@index([createdAt(sort: Desc)])
-  @@map("monthly_metrics")
-}
-
-model CustomMetricDefinition {
-  id          String  @id @default(cuid())
-  name        String  @db.VarChar(255)
-  description String?
-
-  // Definition
-  metricType         MetricType @map("metric_type")
-  dataSource         String     @map("data_source") @db.VarChar(100)
-  calculationFormula String     @map("calculation_formula")
-
-  // Dimensions and filters
-  dimensions        Json   @default("[]")
-  filters           Json   @default("{}")
-  aggregationMethod String @map("aggregation_method") @db.VarChar(50)
-
-  // Access control
-  createdBy    String           @map("created_by")
-  visibility   MetricVisibility @default(PRIVATE)
-  allowedRoles Json             @default("[\"ADMIN\"]") @map("allowed_roles")
-
-  // Validation
-  isValidated         Boolean @default(false) @map("is_validated")
-  validationErrors    Json?   @map("validation_errors")
-  estimatedCost       String? @map("estimated_cost")
-  queryTimeoutSeconds Int     @default(30) @map("query_timeout_seconds")
-
-  // Versioning
-  version        Int     @default(1)
-  isActive       Boolean @default(true) @map("is_active")
-  parentMetricId String? @map("parent_metric_id")
-
-  // Usage tracking
-  usageCount       Int       @default(0) @map("usage_count")
-  lastCalculatedAt DateTime? @map("last_calculated_at")
-
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  // Relations
-  creator      User                     @relation("CustomMetricCreator", fields: [createdBy], references: [id], onDelete: Cascade)
-  parentMetric CustomMetricDefinition?  @relation("MetricVersions", fields: [parentMetricId], references: [id])
-  childMetrics CustomMetricDefinition[] @relation("MetricVersions")
-  values       CustomMetricValue[]
-
-  @@unique([name, deletedAt], name: "unique_active_metric_name")
-  @@index([name])
-  @@index([createdBy])
-  @@index([isActive])
-  @@index([metricType])
-  @@index([lastCalculatedAt(sort: Desc)])
-  @@index([usageCount(sort: Desc)])
-  @@map("custom_metric_definitions")
-}
-
-model CustomMetricValue {
-  id                 String @id @default(cuid())
-  metricDefinitionId String @map("metric_definition_id")
-
-  // Time period
-  periodType      MetricPeriodType @map("period_type")
-  periodStartDate DateTime         @map("period_start_date") @db.Date
-  periodEndDate   DateTime         @map("period_end_date") @db.Date
-
-  // Dimensions
-  dimensionValues Json @default("{}") @map("dimension_values")
-
-  // Value
-  metricValue       Decimal @map("metric_value") @db.Decimal(20, 4)
-  metricValueString String? @map("metric_value_string")
-
-  // Metadata
-  calculationTimestamp  DateTime @default(now()) @map("calculation_timestamp")
-  calculationDurationMs Int?     @map("calculation_duration_ms")
-  recordCount           Int?     @map("record_count")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  metricDefinition CustomMetricDefinition @relation(fields: [metricDefinitionId], references: [id], onDelete: Cascade)
-
-  @@unique([metricDefinitionId, periodStartDate, periodEndDate, dimensionValues], name: "unique_custom_metric_value")
-  @@index([metricDefinitionId, periodStartDate(sort: Desc)])
-  @@index([periodStartDate(sort: Desc), periodEndDate(sort: Desc)])
-  @@index([calculationTimestamp(sort: Desc)])
-  @@map("custom_metric_values")
-}
-
-model RealtimeMetricsCache {
-  id         String             @id @default(cuid())
-  metricKey  String             @unique @map("metric_key") @db.VarChar(255)
-  metricType RealtimeMetricType @map("metric_type")
-
-  // Value
-  currentValue  Decimal  @map("current_value") @db.Decimal(20, 4)
-  previousValue Decimal? @map("previous_value") @db.Decimal(20, 4)
-
-  // Metadata
-  dimensions Json    @default("{}")
-  unit       String? @db.VarChar(50)
-
-  // Sliding window
-  windowSizeSeconds Int? @map("window_size_seconds")
-  windowData        Json @default("[]") @map("window_data")
-
-  // Update tracking
-  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
-  updateCount   Int      @default(1) @map("update_count")
-
-  // TTL
-  expiresAt              DateTime? @map("expires_at")
-  refreshIntervalSeconds Int       @default(60) @map("refresh_interval_seconds")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([metricKey])
-  @@index([metricType])
-  @@index([lastUpdatedAt(sort: Desc)])
-  @@index([expiresAt])
-  @@map("realtime_metrics_cache")
-}
-
-model MetricsAggregationJobsLog {
-  id              String   @id @default(cuid())
-  jobType         String   @map("job_type") @db.VarChar(50)
-  periodStartDate DateTime @map("period_start_date") @db.Date
-  periodEndDate   DateTime @map("period_end_date") @db.Date
-
-  // Execution
-  startedAt   DateTime             @map("started_at")
-  completedAt DateTime?            @map("completed_at")
-  status      AggregationJobStatus
-
-  // Results
-  recordsProcessed Int @default(0) @map("records_processed")
-  recordsCreated   Int @default(0) @map("records_created")
-  recordsUpdated   Int @default(0) @map("records_updated")
-  errorsCount      Int @default(0) @map("errors_count")
-
-  // Performance
-  durationSeconds Decimal? @map("duration_seconds") @db.Decimal(10, 2)
-  memoryUsedMb    Int?     @map("memory_used_mb")
-
-  // Error details
-  errorMessage String? @map("error_message")
-  errorStack   String? @map("error_stack")
-
-  // Metadata
-  metadata Json @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([jobType, periodStartDate(sort: Desc)])
-  @@index([status, startedAt(sort: Desc)])
-  @@index([startedAt(sort: Desc)])
-  @@map("metrics_aggregation_jobs_log")
-}
-
-// ============================================================================
-// 2FA Compliance & Reporting Models
-// ============================================================================
-
-model TwoFactorComplianceMetrics {
-  id          String   @id @default(cuid())
-  periodStart DateTime @map("period_start")
-  periodEnd   DateTime @map("period_end")
-  periodType  String   @map("period_type") // 'daily', 'weekly', 'monthly'
-
-  // Adoption metrics
-  totalUsers         Int     @map("total_users")
-  usersWithTwoFactor Int     @map("users_with_two_factor")
-  adoptionRate       Decimal @map("adoption_rate") @db.Decimal(5, 2)
-
-  // Breakdown by role
-  adminTotal     Int @map("admin_total")
-  adminEnabled   Int @map("admin_enabled")
-  creatorTotal   Int @map("creator_total")
-  creatorEnabled Int @map("creator_enabled")
-  brandTotal     Int @map("brand_total")
-  brandEnabled   Int @map("brand_enabled")
-  talentTotal    Int @map("talent_total")
-  talentEnabled  Int @map("talent_enabled")
-  viewerTotal    Int @map("viewer_total")
-  viewerEnabled  Int @map("viewer_enabled")
-
-  // Authentication metrics
-  totalAuthAttempts Int     @map("total_auth_attempts")
-  successfulAuths   Int     @map("successful_auths")
-  failedAuths       Int     @map("failed_auths")
-  failureRate       Decimal @map("failure_rate") @db.Decimal(5, 2)
-
-  // Method breakdown
-  totpAttempts       Int @map("totp_attempts")
-  smsAttempts        Int @map("sms_attempts")
-  backupCodeAttempts Int @map("backup_code_attempts")
-
-  // Security events
-  accountLockouts         Int @map("account_lockouts")
-  suspiciousActivities    Int @map("suspicious_activities")
-  emergencyCodesGenerated Int @map("emergency_codes_generated")
-  adminResets             Int @map("admin_resets")
-
-  // Backup code metrics
-  backupCodesRegenerated  Int @map("backup_codes_regenerated")
-  usersWithLowBackupCodes Int @map("users_with_low_backup_codes") // < 3 codes
-  backupCodesUsed         Int @map("backup_codes_used")
-
-  // Trends (comparison to previous period)
-  adoptionRateChange Decimal? @map("adoption_rate_change") @db.Decimal(5, 2)
-  failureRateChange  Decimal? @map("failure_rate_change") @db.Decimal(5, 2)
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([periodStart, periodEnd, periodType])
-  @@index([periodStart(sort: Desc)])
-  @@index([periodType, periodStart(sort: Desc)])
-  @@map("two_factor_compliance_metrics")
-}
-
-model TwoFactorSecurityEvent {
-  id            String  @id @default(cuid())
-  userId        String  @map("user_id")
-  eventType     String  @map("event_type") // 'setup', 'disable', 'failed_attempt', 'lockout', 'backup_code_usage', 'admin_reset'
-  eventCategory String  @map("event_category") // 'authentication', 'configuration', 'security'
-  success       Boolean @default(true)
-  failureReason String? @map("failure_reason")
-  method        String? // 'totp', 'sms', 'backup_code'
-
-  // Location & device info
-  ipAddress         String? @map("ip_address")
-  userAgent         String? @map("user_agent")
-  deviceFingerprint String? @map("device_fingerprint")
-  locationCountry   String? @map("location_country")
-  locationRegion    String? @map("location_region")
-  locationCity      String? @map("location_city")
-
-  // Anomaly detection
-  isAnomalous    Boolean  @default(false) @map("is_anomalous")
-  anomalyScore   Decimal? @map("anomaly_score") @db.Decimal(5, 2)
-  anomalyReasons String[] @map("anomaly_reasons")
-
-  // Admin actions
-  adminId     String? @map("admin_id")
-  adminAction String? @map("admin_action")
-  adminReason String? @map("admin_reason")
-
-  // Additional metadata
-  metadata Json?
-
-  timestamp DateTime @default(now())
-
-  @@index([userId, timestamp(sort: Desc)])
-  @@index([eventType, timestamp(sort: Desc)])
-  @@index([eventCategory, timestamp(sort: Desc)])
-  @@index([isAnomalous, timestamp(sort: Desc)])
-  @@index([timestamp(sort: Desc)])
-  @@index([ipAddress, timestamp(sort: Desc)])
-  @@index([adminId, timestamp(sort: Desc)])
-  @@map("two_factor_security_events")
-}
-
-model TwoFactorSecurityAlert {
-  id             String  @id @default(cuid())
-  alertType      String  @map("alert_type") // 'spike_failures', 'velocity_attack', 'geographic_anomaly', 'sustained_attack'
-  severity       String  @map("severity") // 'info', 'warning', 'critical', 'urgent'
-  title          String
-  description    String  @db.Text
-  recommendation String? @db.Text
-
-  // Metrics that triggered alert
-  metric        String
-  currentValue  Decimal  @map("current_value") @db.Decimal(10, 2)
-  threshold     Decimal  @map("threshold") @db.Decimal(10, 2)
-  baselineValue Decimal? @map("baseline_value") @db.Decimal(10, 2)
-
-  // Time period
-  periodStart DateTime @map("period_start")
-  periodEnd   DateTime @map("period_end")
-
-  // Affected entities
-  affectedUserCount   Int?     @map("affected_user_count")
-  affectedUsers       String[] @map("affected_users")
-  affectedIpAddresses String[] @map("affected_ip_addresses")
-
-  // Status
-  status         String    @default("active") // 'active', 'acknowledged', 'resolved', 'false_positive'
-  acknowledgedAt DateTime? @map("acknowledged_at")
-  acknowledgedBy String?   @map("acknowledged_by")
-  resolvedAt     DateTime? @map("resolved_at")
-  resolvedBy     String?   @map("resolved_by")
-  resolution     String?   @db.Text
-
-  // Notification
-  notificationSent   Boolean   @default(false) @map("notification_sent")
-  notificationSentAt DateTime? @map("notification_sent_at")
-  notifiedAdmins     String[]  @map("notified_admins")
-
-  // Metadata
-  metadata Json?
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([alertType, createdAt(sort: Desc)])
-  @@index([severity, status])
-  @@index([status, createdAt(sort: Desc)])
-  @@index([createdAt(sort: Desc)])
-  @@map("two_factor_security_alerts")
-}
-
-model TwoFactorComplianceReport {
-  id          String   @id @default(cuid())
-  reportType  String   @map("report_type") // 'monthly_security', 'adoption_trend', 'security_incidents', 'custom'
-  format      String // 'pdf', 'csv', 'json'
-  periodStart DateTime @map("period_start")
-  periodEnd   DateTime @map("period_end")
-
-  // Generation info
-  generatedBy      String?  @map("generated_by")
-  generatedAt      DateTime @default(now()) @map("generated_at")
-  generationStatus String   @default("pending") @map("generation_status") // 'pending', 'generating', 'completed', 'failed'
-
-  // Report content
-  reportData Json?   @map("report_data")
-  summary    String? @db.Text
-
-  // Storage
-  storageUrl String? @map("storage_url")
-  storageKey String? @map("storage_key")
-  fileSize   Int?    @map("file_size")
-
-  // Delivery
-  emailedTo        String[]  @map("emailed_to")
-  emailedAt        DateTime? @map("emailed_at")
-  downloadCount    Int       @default(0) @map("download_count")
-  lastDownloadedAt DateTime? @map("last_downloaded_at")
-
-  // Scheduling (for recurring reports)
-  isScheduled        Boolean   @default(false) @map("is_scheduled")
-  scheduleFrequency  String?   @map("schedule_frequency") // 'monthly', 'weekly', 'quarterly'
-  nextGenerationDate DateTime? @map("next_generation_date")
-
-  // Error tracking
-  errorMessage String? @map("error_message")
-  errorStack   String? @map("error_stack")
-
-  // Metadata
-  metadata Json?
-
-  expiresAt DateTime? @map("expires_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  @@index([reportType, generatedAt(sort: Desc)])
-  @@index([generatedBy, generatedAt(sort: Desc)])
-  @@index([generationStatus])
-  @@index([isScheduled, nextGenerationDate])
-  @@index([generatedAt(sort: Desc)])
-  @@map("two_factor_compliance_reports")
 }

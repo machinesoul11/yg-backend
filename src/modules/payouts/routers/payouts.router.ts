@@ -11,6 +11,10 @@ import {
   adminProcedure,
   creatorProcedure,
 } from '@/lib/trpc';
+import { requirePermission } from '@/lib/middleware/permissions';
+import { requireApprovalOrExecute } from '@/lib/middleware/approval.middleware';
+import { PERMISSIONS } from '@/lib/constants/permissions';
+import { Department } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { redis } from '@/lib/redis';
 import { AuditService } from '@/lib/services/audit.service';
@@ -99,9 +103,26 @@ export const payoutsRouter = createTRPCRouter({
    * Initiate a new payout transfer
    * Admin: Can initiate for any creator
    * Creator: Can only initiate for themselves
+   * Requires finance:process_royalties permission for admin-initiated payouts
+   * Large payouts (>$10,000) require senior approval
    */
   transfer: protectedProcedure
     .input(initiatePayoutSchema)
+    .use(requirePermission(PERMISSIONS.FINANCE_PROCESS_ROYALTIES))
+    .use(requireApprovalOrExecute({
+      actionType: PERMISSIONS.FINANCE_INITIATE_PAYOUTS,
+      getDepartment: () => Department.FINANCE_LICENSING,
+      getDataPayload: (input) => ({
+        creatorId: input.creatorId,
+        amountCents: input.amountCents,
+        royaltyStatementIds: input.royaltyStatementIds,
+        action: 'initiate_large_payout',
+      }),
+      getMetadata: (input) => ({
+        requiresSeniorApproval: (input.amountCents ?? 0) >= 1000000, // $10,000 threshold
+      }),
+      approvalRequiredMessage: 'Large payouts exceeding $10,000 require senior finance approval',
+    }))
     .mutation(async ({ ctx, input }) => {
       try {
         const userId = ctx.session.user.id;

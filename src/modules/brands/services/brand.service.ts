@@ -562,6 +562,72 @@ export class BrandService {
   }
 
   /**
+   * Request additional information from brand (admin only)
+   */
+  async requestBrandInfo(
+    brandId: string,
+    requestedInfo: string[],
+    message: string,
+    adminId: string,
+    deadline?: string
+  ): Promise<void> {
+    const brand = await this.prisma.brand.findUnique({
+      where: { id: brandId },
+      include: { user: true },
+    });
+
+    if (!brand) {
+      throw new BrandNotFoundError(brandId);
+    }
+
+    // Update brand with info request details
+    await this.prisma.brand.update({
+      where: { id: brandId },
+      data: {
+        verificationStatus: 'pending',
+        verificationNotes: `INFO REQUESTED: ${message}\nITEMS: ${requestedInfo.join(', ')}\nDEADLINE: ${deadline || 'Not specified'}`,
+      },
+    });
+
+    // Send info request email to brand
+    const contactEmail = ((brand as any).contactInfo as any)?.primaryContact?.email;
+    if (contactEmail) {
+      await this.emailService
+        .sendTransactional({
+          userId: brand.userId,
+          email: contactEmail,
+          subject: 'Additional Information Needed - YES GODDESS Brand Verification',
+          template: 'brand-info-request',
+          variables: {
+            brandName: brand.companyName,
+            contactName: ((brand as any).contactInfo as any)?.primaryContact?.name,
+            message,
+            requestedInfo: requestedInfo.join(', '),
+            deadline: deadline || 'As soon as possible',
+            replyToEmail: process.env.BRAND_VERIFICATION_EMAIL || 'brands@yesgoddess.com',
+          },
+        })
+        .catch((err) =>
+          console.error('Failed to send info request email:', err)
+        );
+    }
+
+    // Audit log
+    await this.auditService.log({
+      action: 'brand.info_requested',
+      userId: adminId,
+      entityType: 'brand',
+      entityId: brandId,
+      after: {
+        requestedInfo,
+        message,
+        deadline,
+        contactEmail,
+      },
+    });
+  }
+
+  /**
    * Add team member to brand
    */
   async addTeamMember(
