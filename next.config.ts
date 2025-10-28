@@ -18,6 +18,36 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // CORS headers for all API routes
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: process.env.ALLOWED_ORIGINS?.split(',')[0] || 'https://www.yesgoddess.agency',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization, X-Requested-With, Accept, Origin, apikey, x-client-info, x-trpc-source',
+          },
+          {
+            key: 'Access-Control-Allow-Credentials',
+            value: 'true',
+          },
+          {
+            key: 'Access-Control-Max-Age',
+            value: '86400',
+          },
+          {
+            key: 'Access-Control-Expose-Headers',
+            value: 'Content-Range, X-Content-Range',
+          },
+        ],
+      },
+      {
         // Cache static assets aggressively
         source: '/logo/:path*',
         headers: [
