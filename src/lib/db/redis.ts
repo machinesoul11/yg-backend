@@ -26,7 +26,7 @@ let isConnectionConnecting = false;
 function getRedisClient(): Redis {
   if (!redisInstance) {
     redisInstance = new Redis(redisUrl!, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 10, // Increased from 3 to allow more retries before timeout
       retryStrategy(times) {
         if (times > 10) {
           console.error('[Redis] Max retries reached, giving up');
@@ -40,7 +40,7 @@ function getRedisClient(): Redis {
       enableOfflineQueue: false, // Don't queue commands when disconnected
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
       connectTimeout: 10000, // Increased to 10 seconds
-      commandTimeout: 5000, // Increased to 5 seconds per command
+      commandTimeout: 10000, // Increased to 10 seconds per command (was 5s)
       keepAlive: 30000, // Keep connection alive
       family: 4,
       // Allow reconnection on errors
@@ -88,7 +88,7 @@ function getRedisClient(): Redis {
 function getBullMQConnection(): Redis {
   if (!redisConnectionInstance) {
     redisConnectionInstance = new Redis(redisUrl!, {
-      maxRetriesPerRequest: null,
+      maxRetriesPerRequest: null, // BullMQ requires null for unlimited retries
       retryStrategy(times) {
         if (times > 10) {
           console.error('[Redis BullMQ] Max retries reached, giving up');
@@ -102,7 +102,7 @@ function getBullMQConnection(): Redis {
       enableOfflineQueue: true, // Enable offline queue for BullMQ
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
       connectTimeout: 10000, // Increased to 10 seconds
-      commandTimeout: 5000, // 5 seconds per command
+      commandTimeout: 10000, // Increased to 10 seconds per command (was 5s)
       keepAlive: 30000, // Keep connection alive
       family: 4,
       reconnectOnError: (err) => {

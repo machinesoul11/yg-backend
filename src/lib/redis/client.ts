@@ -2,20 +2,27 @@ import Redis from 'ioredis';
 
 // Upstash Redis configuration for serverless environments
 const redisConfig = {
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: false, // Upstash doesn't support PING command
+  maxRetriesPerRequest: 10, // Increased from 3 to allow more retries
+  enableReadyCheck: true, // Enable ready check for better connection monitoring
   retryStrategy: (times: number) => {
-    if (times > 3) return null; // Stop after 3 attempts
-    // Exponential backoff with max delay of 2 seconds
-    const delay = Math.min(times * 100, 2000);
+    if (times > 10) {
+      console.error('[Redis] Max retries reached, stopping');
+      return null;
+    }
+    // Exponential backoff with max delay of 3 seconds
+    const delay = Math.min(times * 100, 3000);
+    console.log(`[Redis] Retry attempt ${times}, waiting ${delay}ms`);
     return delay;
   },
-  reconnectOnError: () => false, // Disable auto-reconnect to prevent storms
-  lazyConnect: true, // CHANGED: Don't connect immediately - let it connect on first command
-  connectTimeout: 5000,
-  commandTimeout: 3000,
-  enableOfflineQueue: true, // Queue commands until connected
-  keepAlive: 0, // Disable keep-alive in serverless
+  reconnectOnError: (err: Error) => {
+    // Reconnect on READONLY errors
+    return err.message.includes('READONLY');
+  },
+  lazyConnect: false, // Connect immediately to avoid timeouts
+  connectTimeout: 10000, // Increased to 10 seconds
+  commandTimeout: 10000, // Increased to 10 seconds
+  enableOfflineQueue: false, // Don't queue when disconnected - fail fast
+  keepAlive: 30000, // Keep connection alive
   family: 4, // Use IPv4 for better compatibility
   // Disable automatic reconnection in serverless - let each invocation create fresh connections
   autoResubscribe: false,
@@ -30,12 +37,25 @@ const createRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, redisConfig);
 
-  // Minimal error logging - filter out noise
+  // Event handlers for better monitoring
   client.on('error', (err) => {
-    // Only log critical errors, not connection resets or EPIPE
-    if (err.message && !err.message.includes('ECONNRESET') && !err.message.includes('EPIPE')) {
-      console.error('[Redis] Error:', err.message);
-    }
+    console.error('[Redis] Connection error:', err.message);
+  });
+
+  client.on('connect', () => {
+    console.info('[Redis Client] Connected successfully');
+  });
+
+  client.on('ready', () => {
+    console.info('[Redis Client] Ready to accept commands');
+  });
+
+  client.on('close', () => {
+    console.warn('[Redis Client] Connection closed');
+  });
+
+  client.on('reconnecting', () => {
+    console.warn('[Redis Client] Reconnecting...');
   });
 
   return client;
@@ -44,18 +64,24 @@ const createRedisClient = () => {
 // BullMQ-specific Redis configuration (maxRetriesPerRequest must be null)
 const bullmqRedisConfig = {
   maxRetriesPerRequest: null, // BullMQ handles retries
-  enableReadyCheck: false,
+  enableReadyCheck: true, // Enable ready check
   retryStrategy: (times: number) => {
-    if (times > 5) return null; // Stop after 5 attempts
+    if (times > 10) {
+      console.error('[Redis:BullMQ] Max retries reached, stopping');
+      return null;
+    }
     const delay = Math.min(times * 200, 3000);
+    console.log(`[Redis:BullMQ] Retry attempt ${times}, waiting ${delay}ms`);
     return delay;
   },
-  reconnectOnError: () => false, // Disable auto-reconnect
-  lazyConnect: true, // CHANGED: Lazy connect for BullMQ too
-  connectTimeout: 10000,
-  commandTimeout: 5000,
-  enableOfflineQueue: false,
-  keepAlive: 0,
+  reconnectOnError: (err: Error) => {
+    return err.message.includes('READONLY');
+  },
+  lazyConnect: false, // Connect immediately
+  connectTimeout: 10000, // Increased to 10 seconds
+  commandTimeout: 10000, // Increased to 10 seconds
+  enableOfflineQueue: true, // Enable queue for BullMQ
+  keepAlive: 30000, // Keep connection alive
   family: 4,
   autoResubscribe: false,
   autoResendUnfulfilledCommands: false,
@@ -69,12 +95,25 @@ const createBullMQRedisClient = () => {
 
   const client = new Redis(process.env.REDIS_URL, bullmqRedisConfig);
 
-  // Minimal error logging
+  // Event handlers for better monitoring
   client.on('error', (err) => {
-    // Only log critical errors
-    if (err.message && !err.message.includes('ECONNRESET') && !err.message.includes('EPIPE')) {
-      console.error('[Redis:BullMQ] Error:', err.message);
-    }
+    console.error('[Redis:BullMQ] Connection error:', err.message);
+  });
+
+  client.on('connect', () => {
+    console.info('[Redis:BullMQ Client] Connected successfully');
+  });
+
+  client.on('ready', () => {
+    console.info('[Redis:BullMQ Client] Ready to accept commands');
+  });
+
+  client.on('close', () => {
+    console.warn('[Redis:BullMQ Client] Connection closed');
+  });
+
+  client.on('reconnecting', () => {
+    console.warn('[Redis:BullMQ Client] Reconnecting...');
   });
 
   return client;
