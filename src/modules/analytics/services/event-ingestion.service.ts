@@ -57,6 +57,8 @@ export class EventIngestionService {
   private batchTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
   private shutdownRequested = false;
+  private batchRetryCount = 0;
+  private readonly MAX_BATCH_RETRIES = 3;
   
   // Circuit breaker for Redis failures
   private redisFailureCount = 0;
@@ -487,30 +489,51 @@ export class EventIngestionService {
     const eventsToProcess = [...this.eventBuffer];
     this.eventBuffer = [];
 
-    console.log(`[EventIngestion] Flushing batch of ${eventsToProcess.length} events`);
+    console.log(`[EventIngestion] Flushing batch of ${eventsToProcess.length} events (retry: ${this.batchRetryCount}/${this.MAX_BATCH_RETRIES})`);
 
     try {
-      // Batch insert events
-      const createdEvents = await this.prisma.event.createManyAndReturn({
-        data: eventsToProcess,
-      });
+      // Add timeout to prevent hanging (10 seconds max for batch write)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Batch write timeout')), 10000)
+      );
+
+      // Batch insert events with timeout protection
+      const createdEvents = await Promise.race([
+        this.prisma.event.createManyAndReturn({
+          data: eventsToProcess,
+        }),
+        timeoutPromise
+      ]) as any[];
 
       console.log(`[EventIngestion] Successfully wrote ${createdEvents.length} events to database`);
 
-      // Queue enrichment jobs if enabled
+      // Reset retry count on success
+      this.batchRetryCount = 0;
+
+      // Queue enrichment jobs if enabled (non-blocking)
       if (this.config.enableEnrichment) {
-        await this.queueEnrichmentJobs(createdEvents);
+        this.queueEnrichmentJobs(createdEvents).catch((error) => {
+          console.error('[EventIngestion] Error queueing enrichment jobs:', error);
+          // Don't fail the batch if enrichment queueing fails
+        });
       }
     } catch (error) {
-      console.error('[EventIngestion] Error flushing batch:', error);
+      console.error('[EventIngestion] Error flushing batch:', 
+        error instanceof Error ? error.message : 'Unknown error');
 
-      // Retry logic: put events back in buffer for next attempt
-      if (!this.shutdownRequested) {
-        console.log('[EventIngestion] Re-queueing failed batch for retry');
+      // Check if we should retry
+      if (!this.shutdownRequested && this.batchRetryCount < this.MAX_BATCH_RETRIES) {
+        this.batchRetryCount++;
+        console.log(`[EventIngestion] Re-queueing failed batch for retry (${this.batchRetryCount}/${this.MAX_BATCH_RETRIES})`);
         this.eventBuffer.unshift(...eventsToProcess);
       } else {
-        // On shutdown, log lost events
-        console.error(`[EventIngestion] Lost ${eventsToProcess.length} events during shutdown`);
+        // Max retries reached or shutdown requested - drop the events
+        if (this.batchRetryCount >= this.MAX_BATCH_RETRIES) {
+          console.error(`[EventIngestion] Max retries (${this.MAX_BATCH_RETRIES}) reached, dropping ${eventsToProcess.length} events to prevent infinite loop`);
+          this.batchRetryCount = 0; // Reset for next batch
+        } else {
+          console.error(`[EventIngestion] Lost ${eventsToProcess.length} events during shutdown`);
+        }
       }
     } finally {
       this.isProcessing = false;
@@ -579,6 +602,8 @@ export class EventIngestionService {
     return {
       bufferSize: this.eventBuffer.length,
       isProcessing: this.isProcessing,
+      batchRetryCount: this.batchRetryCount,
+      maxRetries: this.MAX_BATCH_RETRIES,
       config: this.config,
       circuitBreaker: {
         open: this.redisCircuitOpen,
