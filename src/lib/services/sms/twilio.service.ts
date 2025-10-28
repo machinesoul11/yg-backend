@@ -181,7 +181,79 @@ export class TwilioSmsService {
   }
 
   /**
-   * Send SMS verification code
+   * Send a specific OTP code via SMS (for 2FA challenges)
+   * This method sends a pre-generated OTP instead of generating one
+   */
+  async sendOtpCode(
+    userId: string,
+    phoneNumber: string,
+    otp: string,
+    template: SmsTemplate = 'loginVerification'
+  ): Promise<SendSmsResult> {
+    if (!this.isConfigured()) {
+      return {
+        success: false,
+        error: 'SMS service is not configured',
+      };
+    }
+
+    // Check rate limit
+    const rateLimit = await this.checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return {
+        success: false,
+        error: `SMS rate limit exceeded. Maximum ${MAX_SMS_PER_WINDOW} SMS per ${RATE_LIMIT_WINDOW_MINUTES} minutes.`,
+        rateLimitExceeded: true,
+        rateLimitResetAt: rateLimit.resetAt,
+      };
+    }
+
+    // Check backoff period
+    const backoff = await this.checkBackoffPeriod(userId);
+    if (backoff.shouldWait) {
+      return {
+        success: false,
+        error: `Please wait ${backoff.waitSeconds} seconds before requesting another code.`,
+      };
+    }
+
+    // Prepare SMS message with the provided OTP
+    const message = SMS_TEMPLATES[template](otp, CODE_EXPIRY_MINUTES);
+
+    try {
+      // Send SMS via Twilio
+      const twilioMessage = await this.client!.messages.create({
+        body: message,
+        from: TWILIO_PHONE_NUMBER,
+        to: phoneNumber,
+        statusCallback: `${process.env.NEXTAUTH_URL}/api/webhooks/twilio/status`,
+      });
+
+      // Note: We don't store the code hash here since 2FA challenge service handles that
+      // Just log the SMS send for tracking
+      console.log('[TwilioSmsService] OTP sent successfully:', {
+        userId,
+        messageId: twilioMessage.sid,
+        status: twilioMessage.status,
+      });
+
+      return {
+        success: true,
+        messageId: twilioMessage.sid,
+        cost: parseFloat(twilioMessage.price || '0'),
+      };
+    } catch (error: any) {
+      console.error('[TwilioSmsService] Error sending OTP SMS:', error);
+
+      return {
+        success: false,
+        error: this.parseError(error),
+      };
+    }
+  }
+
+  /**
+   * Send SMS verification code (generates its own code)
    */
   async sendVerificationCode(
     userId: string,
@@ -469,10 +541,9 @@ export class TwilioSmsService {
     // Common Twilio error codes
     const errorMap: Record<string, string> = {
       '21211': 'Invalid phone number',
-      '21408': 'Permission denied for this phone number',
+      '21408': 'You do not have permission to send SMS to this number',
       '21610': 'Phone number is not reachable',
       '21614': 'Invalid phone number',
-      '21408': 'You do not have permission to send SMS to this number',
       '30007': 'Message filtered - likely spam',
       '30008': 'Unknown destination error',
     };

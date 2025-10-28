@@ -175,23 +175,28 @@ export class TwoFactorChallengeService {
         throw new Error('Phone number not verified for SMS authentication');
       }
 
-      // Generate and send OTP
+      // Generate OTP
       const otp = this.generateOTP();
       const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
 
       challengeData.otpHash = otpHash;
       challengeData.phoneNumber = user.phone_number;
 
-      // Send SMS
-      const smsResult = await this.smsService.sendVerificationCode(
+      // Send the specific OTP via SMS
+      console.log('[2FA Challenge] Sending OTP via SMS to:', user.phone_number);
+      const smsResult = await this.smsService.sendOtpCode(
         userId,
         user.phone_number,
+        otp, // Pass the generated OTP
         'loginVerification'
       );
 
       if (!smsResult.success) {
+        console.error('[2FA Challenge] Failed to send SMS:', smsResult);
         throw new Error('Failed to send verification code. Please try again.');
       }
+
+      console.log('[2FA Challenge] SMS sent successfully, messageId:', smsResult.messageId);
     }
 
     // Store challenge data in Redis
@@ -476,11 +481,12 @@ export class TwoFactorChallengeService {
         return { success: false, error: 'Phone number not found' };
       }
 
-      console.log('[2FA Resend] Sending SMS to:', challenge.phoneNumber);
+      console.log('[2FA Resend] Sending OTP via SMS to:', challenge.phoneNumber);
       
-      const smsResult = await this.smsService.sendVerificationCode(
+      const smsResult = await this.smsService.sendOtpCode(
         challenge.userId,
         challenge.phoneNumber,
+        otp, // Pass the generated OTP
         'loginVerification'
       );
 
@@ -488,6 +494,8 @@ export class TwoFactorChallengeService {
         console.error('[2FA Resend] SMS send failed:', smsResult);
         return { success: false, error: 'Failed to send verification code' };
       }
+
+      console.log('[2FA Resend] SMS sent successfully, messageId:', smsResult.messageId);
 
       return {
         success: true,
