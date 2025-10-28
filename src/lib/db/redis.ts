@@ -28,15 +28,19 @@ function getRedisClient(): Redis {
     redisInstance = new Redis(redisUrl!, {
       maxRetriesPerRequest: 3,
       retryStrategy(times) {
-        if (times > 3) return null;
-        const delay = Math.min(times * 100, 2000);
+        if (times > 10) {
+          console.error('[Redis] Max retries reached, giving up');
+          return null;
+        }
+        const delay = Math.min(times * 100, 3000); // Max 3 second delay
+        console.log(`[Redis] Retry attempt ${times}, waiting ${delay}ms`);
         return delay;
       },
-      enableReadyCheck: false,
-      enableOfflineQueue: true,
+      enableReadyCheck: true,
+      enableOfflineQueue: false, // Don't queue commands when disconnected
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
-      connectTimeout: 5000,
-      commandTimeout: 3000,
+      connectTimeout: 10000, // Increased to 10 seconds
+      commandTimeout: 5000, // Increased to 5 seconds per command
       keepAlive: 30000, // Keep connection alive
       family: 4,
       // Allow reconnection on errors
@@ -49,21 +53,29 @@ function getRedisClient(): Redis {
       },
     });
 
-    // Only log critical errors
+    // Log all errors for debugging
     redisInstance.on('error', (error) => {
-      if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
-        console.error('[Redis] Critical error:', error.message);
-      }
+      console.error('[Redis] Connection error:', error.message);
     });
 
     // Log when connected
     redisInstance.on('connect', () => {
-      console.log('[Redis] Connected successfully');
+      console.info('[Redis] Connected successfully');
     });
 
     // Log when ready
     redisInstance.on('ready', () => {
-      console.log('[Redis] Ready to accept commands');
+      console.info('[Redis] Ready to accept commands');
+    });
+
+    // Log when connection closes
+    redisInstance.on('close', () => {
+      console.warn('[Redis] Connection closed');
+    });
+
+    // Log when reconnecting
+    redisInstance.on('reconnecting', () => {
+      console.warn('[Redis] Reconnecting...');
     });
   }
   
@@ -78,15 +90,19 @@ function getBullMQConnection(): Redis {
     redisConnectionInstance = new Redis(redisUrl!, {
       maxRetriesPerRequest: null,
       retryStrategy(times) {
-        if (times > 5) return null;
-        const delay = Math.min(times * 200, 3000);
+        if (times > 10) {
+          console.error('[Redis BullMQ] Max retries reached, giving up');
+          return null;
+        }
+        const delay = Math.min(times * 200, 3000); // Max 3 second delay
+        console.log(`[Redis BullMQ] Retry attempt ${times}, waiting ${delay}ms`);
         return delay;
       },
-      enableReadyCheck: false,
+      enableReadyCheck: true,
       enableOfflineQueue: true, // Enable offline queue for BullMQ
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
-      connectTimeout: 10000,
-      commandTimeout: 5000,
+      connectTimeout: 10000, // Increased to 10 seconds
+      commandTimeout: 5000, // 5 seconds per command
       keepAlive: 30000, // Keep connection alive
       family: 4,
       reconnectOnError: (err) => {
@@ -98,21 +114,29 @@ function getBullMQConnection(): Redis {
       },
     });
 
-    // Only log critical errors
+    // Log all errors for debugging
     redisConnectionInstance.on('error', (error) => {
-      if (!error.message.includes('ECONNRESET') && !error.message.includes('EPIPE')) {
-        console.error('[Redis BullMQ] Critical error:', error.message);
-      }
+      console.error('[Redis BullMQ] Connection error:', error.message);
     });
 
     // Log when connected
     redisConnectionInstance.on('connect', () => {
-      console.log('[Redis BullMQ] Connected successfully');
+      console.info('[Redis BullMQ] Connected successfully');
     });
 
     // Log when ready
     redisConnectionInstance.on('ready', () => {
-      console.log('[Redis BullMQ] Ready to accept commands');
+      console.info('[Redis BullMQ] Ready to accept commands');
+    });
+
+    // Log when connection closes
+    redisConnectionInstance.on('close', () => {
+      console.warn('[Redis BullMQ] Connection closed');
+    });
+
+    // Log when reconnecting
+    redisConnectionInstance.on('reconnecting', () => {
+      console.warn('[Redis BullMQ] Reconnecting...');
     });
   }
   

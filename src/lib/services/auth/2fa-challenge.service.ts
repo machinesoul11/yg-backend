@@ -384,82 +384,122 @@ export class TwoFactorChallengeService {
     token: string,
     context?: { ipAddress?: string; userAgent?: string }
   ): Promise<ResendResult> {
-    // Get challenge data
-    const challenge = await this.getChallengeFromToken(token);
-    if (!challenge) {
-      return { success: false, error: 'Invalid or expired challenge token' };
-    }
+    try {
+      // Get challenge data with timeout protection
+      let challenge;
+      try {
+        challenge = await this.getChallengeFromToken(token);
+      } catch (redisError) {
+        console.error('[2FA Resend] Redis error getting challenge:', redisError);
+        return { 
+          success: false, 
+          error: 'Service temporarily unavailable. Please try again.' 
+        };
+      }
 
-    // Verify method is SMS
-    if (challenge.method !== 'SMS') {
-      return { success: false, error: 'This challenge does not use SMS verification' };
-    }
+      if (!challenge) {
+        console.error('[2FA Resend] Challenge not found for token');
+        return { success: false, error: 'Invalid or expired challenge token' };
+      }
 
-    // Check if challenge is already completed
-    if (challenge.expiresAt < new Date()) {
-      return { success: false, error: 'Challenge has expired. Please initiate a new login.' };
-    }
+      // Verify method is SMS
+      if (challenge.method !== 'SMS') {
+        return { success: false, error: 'This challenge does not use SMS verification' };
+      }
 
-    // Check resend rate limit (stricter than verification rate limit)
-    const resendRateLimitKey = `2fa:resend:${challenge.userId}`;
-    const resendCount = await this.redis.incr(resendRateLimitKey);
-    
-    if (resendCount === 1) {
-      await this.redis.expire(resendRateLimitKey, RATE_LIMIT_WINDOW_MINUTES * 60);
-    }
+      // Check if challenge is expired
+      if (challenge.expiresAt < new Date()) {
+        return { success: false, error: 'Challenge has expired. Please initiate a new login.' };
+      }
 
-    if (resendCount > RESEND_LIMIT_PER_WINDOW) {
-      const ttl = await this.redis.ttl(resendRateLimitKey);
-      const resetAt = new Date(Date.now() + ttl * 1000);
+      // Check resend rate limit with Redis error handling
+      const resendRateLimitKey = `2fa:resend:${challenge.userId}`;
+      let resendCount = 1;
+      
+      try {
+        resendCount = await this.redis.incr(resendRateLimitKey);
+        
+        if (resendCount === 1) {
+          await this.redis.expire(resendRateLimitKey, RATE_LIMIT_WINDOW_MINUTES * 60);
+        }
+
+        if (resendCount > RESEND_LIMIT_PER_WINDOW) {
+          const ttl = await this.redis.ttl(resendRateLimitKey);
+          const resetAt = new Date(Date.now() + ttl * 1000);
+          return {
+            success: false,
+            error: 'Too many resend requests. Please try again later.',
+            resetAt,
+            remainingAttempts: 0,
+          };
+        }
+      } catch (redisError) {
+        console.error('[2FA Resend] Redis error during rate limit check:', redisError);
+        // Allow the resend to proceed if Redis is down (graceful degradation)
+        // This prevents complete system failure when Redis is unstable
+        console.warn('[2FA Resend] Bypassing rate limit due to Redis error');
+        resendCount = 1;
+      }
+
+      // Generate new OTP
+      const otp = this.generateOTP();
+      const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
+
+      // Update challenge with new OTP
+      challenge.otpHash = otpHash;
+      challenge.attempts = 0; // Reset attempts for new code
+      challenge.expiresAt = new Date(Date.now() + CHALLENGE_EXPIRY_MINUTES * 60 * 1000);
+
+      // Save updated challenge with error handling
+      try {
+        const tokenKey = `2fa:token:${token}`;
+        const challengeIdResult = await this.redis.get(tokenKey);
+        if (challengeIdResult) {
+          const challengeKey = `2fa:challenge:${challengeIdResult}`;
+          await this.redis.set(
+            challengeKey,
+            JSON.stringify(challenge),
+            'EX',
+            CHALLENGE_EXPIRY_MINUTES * 60
+          );
+        }
+      } catch (redisError) {
+        console.error('[2FA Resend] Redis error during challenge update:', redisError);
+        return { 
+          success: false, 
+          error: 'Service temporarily unavailable. Please try again.' 
+        };
+      }
+
+      // Send new SMS
+      if (!challenge.phoneNumber) {
+        return { success: false, error: 'Phone number not found' };
+      }
+
+      console.log('[2FA Resend] Sending SMS to:', challenge.phoneNumber);
+      
+      const smsResult = await this.smsService.sendVerificationCode(
+        challenge.userId,
+        challenge.phoneNumber,
+        'loginVerification'
+      );
+
+      if (!smsResult.success) {
+        console.error('[2FA Resend] SMS send failed:', smsResult);
+        return { success: false, error: 'Failed to send verification code' };
+      }
+
       return {
-        success: false,
-        error: 'Too many resend requests. Please try again later.',
-        resetAt,
-        remainingAttempts: 0,
+        success: true,
+        remainingAttempts: Math.max(0, RESEND_LIMIT_PER_WINDOW - resendCount),
+      };
+    } catch (error) {
+      console.error('[2FA Resend] Unexpected error:', error);
+      return { 
+        success: false, 
+        error: 'An unexpected error occurred. Please try again.' 
       };
     }
-
-    // Generate new OTP
-    const otp = this.generateOTP();
-    const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
-
-    // Update challenge with new OTP
-    challenge.otpHash = otpHash;
-    challenge.attempts = 0; // Reset attempts for new code
-    challenge.expiresAt = new Date(Date.now() + CHALLENGE_EXPIRY_MINUTES * 60 * 1000);
-
-    // Save updated challenge
-    const tokenKey = `2fa:token:${token}`;
-    const challengeIdResult = await this.redis.get(tokenKey);
-    if (challengeIdResult) {
-      const challengeKey = `2fa:challenge:${challengeIdResult}`;
-      await this.redis.set(
-        challengeKey,
-        JSON.stringify(challenge),
-        'EX',
-        CHALLENGE_EXPIRY_MINUTES * 60
-      );
-    }
-
-    // Send new SMS
-    if (!challenge.phoneNumber) {
-      return { success: false, error: 'Phone number not found' };
-    }
-
-    const smsResult = await this.smsService.sendVerificationCode(
-      challenge.userId,
-      challenge.phoneNumber,
-      'loginVerification'
-    );
-
-    if (!smsResult.success) {
-      return { success: false, error: 'Failed to send verification code' };
-    }
-
-    return {
-      success: true,
-      remainingAttempts: RESEND_LIMIT_PER_WINDOW - resendCount,
-    };
   }
 
   /**
