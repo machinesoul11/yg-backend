@@ -120,9 +120,18 @@ export async function POST(req: NextRequest) {
 
     const duration = Date.now() - startTime;
     console.log(`[Login] Success for ${validatedData.email} in ${duration}ms`);
+    console.log('[Login] Result type:', 'requiresTwoFactor' in result ? '2FA Required' : 'Direct Login');
 
     // Check if 2FA is required
     if ('requiresTwoFactor' in result && result.requiresTwoFactor) {
+      console.log('[Login] 🔐 2FA challenge response:', {
+        requiresTwoFactor: result.requiresTwoFactor,
+        challengeType: result.challengeType,
+        hasToken: !!result.temporaryToken,
+        tokenPreview: result.temporaryToken?.substring(0, 10) + '...',
+        expiresAt: result.expiresAt,
+      });
+      
       return NextResponse.json(
         {
           success: true,
@@ -142,6 +151,8 @@ export async function POST(req: NextRequest) {
         }
       );
     }
+
+    console.log('[Login] ✅ Direct login (no 2FA), returning user data');
 
     // Return success response with CORS headers (regular login without 2FA)
     const loginResult = result as LoginOutput;

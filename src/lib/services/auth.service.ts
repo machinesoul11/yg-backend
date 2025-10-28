@@ -96,10 +96,12 @@ export class AuthService {
     if (existingUser) {
       await this.auditService.log({
         action: AUDIT_ACTIONS.REGISTER_FAILED,
+        entityType: 'user',
+        entityId: existingUser.id,
         email,
         ipAddress: context?.ipAddress,
         userAgent: context?.userAgent,
-        afterJson: { reason: 'EMAIL_EXISTS' },
+        after: { reason: 'EMAIL_EXISTS' },
       });
       throw AuthErrors.EMAIL_EXISTS;
     }
@@ -145,6 +147,8 @@ export class AuthService {
 
       await this.auditService.log({
         action: AUDIT_ACTIONS.EMAIL_VERIFICATION_SENT,
+        entityType: 'user',
+        entityId: user.user.id,
         userId: user.user.id,
         email: user.user.email,
         ipAddress: context?.ipAddress,
@@ -157,11 +161,13 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.REGISTER_SUCCESS,
+      entityType: 'user',
+      entityId: user.user.id,
       userId: user.user.id,
       email: user.user.email,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
-      afterJson: {
+      after: {
         role: user.user.role,
         hasName: !!user.user.name,
       },
@@ -221,6 +227,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.EMAIL_VERIFIED,
+      entityType: 'user',
+      entityId: verificationToken.userId,
       userId: verificationToken.userId,
       email: verificationToken.user.email,
       ipAddress: context?.ipAddress,
@@ -274,6 +282,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.EMAIL_VERIFICATION_SENT,
+      entityType: 'user',
+      entityId: user.id,
       userId: user.id,
       email: user.email,
       ipAddress: context?.ipAddress,
@@ -464,11 +474,24 @@ export class AuthService {
     // Successful password validation - record successful attempt with anomaly detection
     await this.loginSecurity.recordSuccessfulAttempt(user.id, email, context || {});
 
+    console.log('[AuthService] ✅ Password validated for:', {
+      email: user.email,
+      userId: user.id,
+    });
+
     // Check if user has 2FA enabled
     const has2FA = user.two_factor_enabled;
     
+    console.log('[AuthService] Checking 2FA status:', {
+      twoFactorEnabled: has2FA,
+      preferredMethod: user.preferred_2fa_method,
+      phoneNumber: user.phone_number ? 'Yes' : 'No',
+      hasTotpSecret: user.two_factor_secret ? 'Yes' : 'No',
+    });
+    
     // Check if they provided a trusted device token
     if (trustedDeviceToken && has2FA) {
+      console.log('[AuthService] Checking trusted device token...');
       const isTrusted = await this.multiStepAuth.verifyTrustedDevice(
         user.id,
         trustedDeviceToken,
@@ -476,6 +499,7 @@ export class AuthService {
       );
 
       if (isTrusted) {
+        console.log('[AuthService] ✅ Trusted device verified, bypassing 2FA');
         // Trusted device - allow login without 2FA
         await this.auditService.log({
           action: AUDIT_ACTIONS.LOGIN_SUCCESS,
@@ -507,27 +531,42 @@ export class AuthService {
             emailVerified: !!user.email_verified,
           },
         };
+      } else {
+        console.log('[AuthService] ❌ Trusted device token invalid');
       }
     }
 
     // If 2FA is enabled and no trusted device, require 2FA verification
     if (has2FA) {
+      console.log('[AuthService] 🔐 2FA is enabled, initiating challenge...');
+      
       // Determine challenge type (TOTP or SMS)
       const challengeType = user.preferred_2fa_method === 'SMS' ? 'SMS' : 'TOTP';
+      console.log('[AuthService] Challenge type:', challengeType);
 
       // For SMS, send the code
       if (challengeType === 'SMS') {
+        console.log('[AuthService] 📱 SMS method selected');
         // TODO: Implement SMS sending logic
         // This would involve creating an SMS verification code and sending it
         // For now, we'll just indicate TOTP is required
+        console.warn('[AuthService] ⚠️ SMS sending NOT YET IMPLEMENTED in auth.service.ts');
+        console.warn('[AuthService] ⚠️ Need to call TwoFactorChallengeService.initiateChallenge()');
       }
 
       // Create temporary auth token
+      console.log('[AuthService] Creating temporary auth token...');
       const tempTokenData = await this.multiStepAuth.createTemporaryAuthToken(
         user.id,
         challengeType,
         context
       );
+
+      console.log('[AuthService] ✅ Temporary token created:', {
+        token: tempTokenData.token.substring(0, 10) + '...',
+        expiresAt: tempTokenData.expiresAt,
+        challengeType,
+      });
 
       await this.auditService.log({
         action: AUDIT_ACTIONS.LOGIN_SUCCESS,
@@ -545,6 +584,8 @@ export class AuthService {
         },
       });
 
+      console.log('[AuthService] Returning 2FA required response');
+
       return {
         requiresTwoFactor: true,
         temporaryToken: tempTokenData.token,
@@ -553,6 +594,8 @@ export class AuthService {
         userId: user.id,
       };
     }
+
+    console.log('[AuthService] No 2FA required, completing login');
 
     // No 2FA - complete login
     await this.auditService.log({
@@ -629,6 +672,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.PASSWORD_RESET_REQUESTED,
+      entityType: 'user',
+      entityId: user.id,
       userId: user.id,
       email: user.email,
       ipAddress: context?.ipAddress,
@@ -835,7 +880,7 @@ export class AuthService {
       email: user.email,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
-      afterJson: {
+      after: {
         sessionsRevoked,
         keptCurrentSession: keepCurrentSession ?? true,
       },
@@ -869,12 +914,14 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.PROFILE_UPDATED,
+      entityType: 'user',
+      entityId: userId,
       userId,
       email: user.email,
       ipAddress: context?.ipAddress,
       userAgent: context?.userAgent,
-      beforeJson: beforeData,
-      afterJson: input,
+      before: beforeData,
+      after: input,
     });
   }
 
@@ -926,6 +973,8 @@ export class AuthService {
 
     await this.auditService.log({
       action: AUDIT_ACTIONS.ACCOUNT_DELETED,
+      entityType: 'user',
+      entityId: userId,
       userId,
       email: user.email,
       ipAddress: context?.ipAddress,
