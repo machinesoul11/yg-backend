@@ -47,7 +47,10 @@ export const eventIngestionRouter = createTRPCRouter({
       // Silently fail for analytics - don't block the request
       try {
         // Quick status check - don't try to connect if not ready
-        if (!redis || redis.status !== 'ready') {
+        // Check multiple conditions to ensure Redis is actually working
+        const redisStatus = redis?.status;
+        if (!redis || redisStatus !== 'ready') {
+          console.warn('[EventIngestion] Redis not ready, skipping analytics:', redisStatus || 'undefined');
           // Return success immediately without trying to connect
           return {
             id: `skipped-${Date.now()}`,
@@ -111,7 +114,9 @@ export const eventIngestionRouter = createTRPCRouter({
       // Silently fail for analytics - don't block the request
       try {
         // Quick status check - don't try to connect if not ready
-        if (!redis || redis.status !== 'ready') {
+        const redisStatus = redis?.status;
+        if (!redis || redisStatus !== 'ready') {
+          console.warn('[EventIngestion] Redis not ready for batch, skipping analytics:', redisStatus || 'undefined');
           // Return success immediately without trying to connect
           return {
             total: input.events.length,
