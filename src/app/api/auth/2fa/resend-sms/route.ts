@@ -68,10 +68,20 @@ export async function POST(req: NextRequest) {
     const result = await challengeService.resendSmsCode(challengeToken, context);
 
     if (!result.success) {
+      console.error('[2FA Resend SMS] Failed:', {
+        error: result.error,
+        resetAt: result.resetAt,
+        remainingAttempts: result.remainingAttempts,
+        challengeToken: challengeToken.substring(0, 10) + '...', // Log partial token
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent.substring(0, 50) + '...', // Log partial user agent
+      });
+      
       // Determine appropriate status code
       let statusCode = 400;
       if (result.error?.includes('Too many')) statusCode = 429;
       if (result.error?.includes('expired')) statusCode = 410;
+      if (result.error?.includes('not found')) statusCode = 404;
 
       return NextResponse.json(
         {
