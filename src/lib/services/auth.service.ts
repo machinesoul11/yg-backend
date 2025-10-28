@@ -17,6 +17,8 @@ import { MultiStepAuthService } from './multi-step-auth.service';
 import { LoginSecurityService } from './login-security.service';
 import { captchaService } from './captcha.service';
 import { securityLoggingService } from './security-logging.service';
+import { TwoFactorChallengeService } from './auth/2fa-challenge.service';
+import { TwilioSmsService } from './sms/twilio.service';
 import type { TotpSecret } from '../auth/totp.service';
 import type {
   RegisterInput,
@@ -67,6 +69,7 @@ export class AuthService {
   private accountLockout: AccountLockoutService;
   private multiStepAuth: MultiStepAuthService;
   private loginSecurity: LoginSecurityService;
+  private twoFactorChallengeService: TwoFactorChallengeService;
 
   constructor(
     private prisma: PrismaClient,
@@ -77,6 +80,15 @@ export class AuthService {
     this.accountLockout = new AccountLockoutService(prisma, emailService);
     this.multiStepAuth = new MultiStepAuthService(prisma);
     this.loginSecurity = new LoginSecurityService(prisma, emailService);
+    
+    // Initialize 2FA Challenge Service with all dependencies
+    const smsService = new TwilioSmsService();
+    this.twoFactorChallengeService = new TwoFactorChallengeService(
+      prisma,
+      smsService,
+      emailService,
+      this.accountLockout
+    );
   }
 
   /**
@@ -544,18 +556,60 @@ export class AuthService {
       const challengeType = user.preferred_2fa_method === 'SMS' ? 'SMS' : 'TOTP';
       console.log('[AuthService] Challenge type:', challengeType);
 
-      // For SMS, send the code
+      // For SMS, send the code using TwoFactorChallengeService
       if (challengeType === 'SMS') {
-        console.log('[AuthService] 📱 SMS method selected');
-        // TODO: Implement SMS sending logic
-        // This would involve creating an SMS verification code and sending it
-        // For now, we'll just indicate TOTP is required
-        console.warn('[AuthService] ⚠️ SMS sending NOT YET IMPLEMENTED in auth.service.ts');
-        console.warn('[AuthService] ⚠️ Need to call TwoFactorChallengeService.initiateChallenge()');
+        console.log('[AuthService] 📱 SMS method selected, calling TwoFactorChallengeService...');
+        
+        try {
+          // CRITICAL FIX: Actually call the TwoFactorChallengeService
+          const challengeResult = await this.twoFactorChallengeService.initiateChallenge(
+            user.id,
+            {
+              ipAddress: context?.ipAddress,
+              userAgent: context?.userAgent,
+            }
+          );
+          
+          console.log('[AuthService] ✅ 2FA challenge initiated successfully');
+          console.log('[AuthService] Challenge token preview:', challengeResult.token.substring(0, 10) + '...');
+          console.log('[AuthService] SMS sent to:', challengeResult.maskedPhone);
+          
+          // Audit log
+          await this.auditService.log({
+            action: AUDIT_ACTIONS.LOGIN_SUCCESS,
+            entityType: 'user',
+            entityId: user.id,
+            userId: user.id,
+            email: user.email,
+            ipAddress: context?.ipAddress,
+            userAgent: context?.userAgent,
+            after: {
+              role: user.role,
+              emailVerified: !!user.email_verified,
+              requires2FA: true,
+              challengeType: challengeResult.method,
+              smsSent: true,
+            },
+          });
+
+          console.log('[AuthService] Returning 2FA SMS challenge response');
+
+          // Return 2FA required response with challenge token
+          return {
+            requiresTwoFactor: true,
+            temporaryToken: challengeResult.token,
+            challengeType: challengeResult.method as 'SMS',
+            expiresAt: challengeResult.expiresAt,
+            userId: user.id,
+          };
+        } catch (error) {
+          console.error('[AuthService] ❌ Failed to initiate SMS challenge:', error);
+          throw new Error('Failed to send verification code. Please try again.');
+        }
       }
 
-      // Create temporary auth token
-      console.log('[AuthService] Creating temporary auth token...');
+      // For TOTP, just create temporary token (no SMS needed)
+      console.log('[AuthService] Creating temporary auth token for TOTP...');
       const tempTokenData = await this.multiStepAuth.createTemporaryAuthToken(
         user.id,
         challengeType,
@@ -584,7 +638,7 @@ export class AuthService {
         },
       });
 
-      console.log('[AuthService] Returning 2FA required response');
+      console.log('[AuthService] Returning 2FA TOTP required response');
 
       return {
         requiresTwoFactor: true,
