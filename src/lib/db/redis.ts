@@ -37,10 +37,10 @@ function getRedisClient(): Redis {
         return delay;
       },
       enableReadyCheck: true,
-      enableOfflineQueue: false, // Don't queue commands when disconnected
+      enableOfflineQueue: true, // ✅ CRITICAL: Queue commands during brief disconnects
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
-      connectTimeout: 10000, // Increased to 10 seconds
-      commandTimeout: 10000, // Increased to 10 seconds per command (was 5s)
+      connectTimeout: 30000, // Increased to 30 seconds for unstable connections
+      commandTimeout: 15000, // Increased to 15 seconds per command
       keepAlive: 30000, // Keep connection alive
       family: 4,
       // Allow reconnection on errors

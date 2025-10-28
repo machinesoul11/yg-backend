@@ -172,6 +172,11 @@ export class TwoFactorChallengeService {
     // Handle SMS method
     if (method === 'SMS') {
       if (!user.phone_number || !user.phone_verified) {
+        console.error('[2FA Challenge] ❌ Phone verification failed:', {
+          userId,
+          hasPhoneNumber: !!user.phone_number,
+          isPhoneVerified: user.phone_verified,
+        });
         throw new Error('Phone number not verified for SMS authentication');
       }
 
@@ -183,39 +188,86 @@ export class TwoFactorChallengeService {
       challengeData.phoneNumber = user.phone_number;
 
       // Send the specific OTP via SMS
-      console.log('[2FA Challenge] Sending OTP via SMS to:', user.phone_number);
-      const smsResult = await this.smsService.sendOtpCode(
-        userId,
-        user.phone_number,
-        otp, // Pass the generated OTP
-        'loginVerification'
-      );
+      console.log('[2FA Challenge] 📱 Initiating SMS send to:', this.maskPhoneNumber(user.phone_number));
+      console.log('[2FA Challenge] Generated OTP (first 2 digits):', otp.substring(0, 2) + '****');
+      
+      try {
+        const smsResult = await this.smsService.sendOtpCode(
+          userId,
+          user.phone_number,
+          otp, // Pass the generated OTP
+          'loginVerification'
+        );
 
-      if (!smsResult.success) {
-        console.error('[2FA Challenge] Failed to send SMS:', smsResult);
+        if (!smsResult.success) {
+          console.error('[2FA Challenge] ❌ SMS send failed:', {
+            success: smsResult.success,
+            error: smsResult.error,
+            messageId: smsResult.messageId,
+          });
+          throw new Error('Failed to send verification code. Please try again.');
+        }
+
+        console.log('[2FA Challenge] ✅ SMS sent successfully:', {
+          messageId: smsResult.messageId,
+          phone: this.maskPhoneNumber(user.phone_number),
+          timestamp: new Date().toISOString(),
+        });
+      } catch (smsError) {
+        console.error('[2FA Challenge] ❌ SMS send exception:', {
+          error: smsError instanceof Error ? smsError.message : String(smsError),
+          userId,
+          phone: this.maskPhoneNumber(user.phone_number),
+        });
         throw new Error('Failed to send verification code. Please try again.');
       }
-
-      console.log('[2FA Challenge] SMS sent successfully, messageId:', smsResult.messageId);
     }
 
     // Store challenge data in Redis
     const challengeKey = `2fa:challenge:${challengeId}`;
-    await this.redis.set(
+    console.log('[2FA Challenge] 💾 Storing challenge in Redis:', {
       challengeKey,
-      JSON.stringify(challengeData),
-      'EX',
-      CHALLENGE_EXPIRY_MINUTES * 60
-    );
+      userId,
+      method,
+      expiresIn: `${CHALLENGE_EXPIRY_MINUTES} minutes`,
+    });
+    
+    try {
+      await this.redis.set(
+        challengeKey,
+        JSON.stringify(challengeData),
+        'EX',
+        CHALLENGE_EXPIRY_MINUTES * 60
+      );
 
-    // Map token to challenge ID
-    const tokenKey = `2fa:token:${token}`;
-    await this.redis.set(
-      tokenKey,
-      challengeId,
-      'EX',
-      CHALLENGE_EXPIRY_MINUTES * 60
-    );
+      // Map token to challenge ID
+      const tokenKey = `2fa:token:${token}`;
+      await this.redis.set(
+        tokenKey,
+        challengeId,
+        'EX',
+        CHALLENGE_EXPIRY_MINUTES * 60
+      );
+
+      console.log('[2FA Challenge] ✅ Challenge stored successfully in Redis');
+    } catch (redisError) {
+      console.error('[2FA Challenge] ❌ Redis storage failed:', {
+        error: redisError instanceof Error ? redisError.message : String(redisError),
+        challengeKey,
+        userId,
+      });
+      throw new Error('Failed to create challenge. Please try again.');
+    }
+
+    console.log('[2FA Challenge] 🎉 Challenge initiated successfully:', {
+      token: token.substring(0, 10) + '...',
+      challengeId: challengeId.substring(0, 10) + '...',
+      method,
+      expiresAt: expiresAt.toISOString(),
+      maskedPhone: method === 'SMS' && user.phone_number
+        ? this.maskPhoneNumber(user.phone_number)
+        : undefined,
+    });
 
     return {
       token,

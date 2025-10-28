@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { Redis } from 'ioredis';
+import { redis } from '@/lib/redis'; // Use singleton Redis instance
 import { 
   FinancialReportingService,
   ReportGenerationError,
@@ -20,7 +20,7 @@ import {
 async function generateMonthlyFinancialReport() {
   // Initialize dependencies
   const prisma = new PrismaClient();
-  const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  // Use singleton Redis instance instead of creating new connection
   
   // Create service instance
   const financialService = new FinancialReportingService(prisma, redis);
@@ -77,7 +77,7 @@ async function generateMonthlyFinancialReport() {
   } finally {
     // Clean up connections
     await prisma.$disconnect();
-    redis.disconnect();
+    // Redis singleton is managed globally - don't disconnect
   }
 }
 
@@ -95,7 +95,7 @@ async function integrateWithExistingAPI() {
         const { startDate, endDate, format = 'json' } = req.body;
         
         const prisma = new PrismaClient();
-        const redis = new Redis();
+        // Use singleton Redis instance
         const service = new FinancialReportingService(prisma, redis);
         
         const report = await service.generateFinancialStatement({
@@ -147,7 +147,7 @@ async function scheduledReportExample() {
   
   const generateWeeklyReport = async () => {
     const prisma = new PrismaClient();
-    const redis = new Redis();
+    // Use singleton Redis instance
     const service = new FinancialReportingService(prisma, redis);
     
     try {
@@ -181,7 +181,7 @@ async function scheduledReportExample() {
       // Implement alerting for failed scheduled reports
     } finally {
       await prisma.$disconnect();
-      redis.disconnect();
+      // Redis singleton is managed globally - don't disconnect
     }
   };
   
@@ -193,7 +193,7 @@ async function scheduledReportExample() {
  */
 async function advancedReportExample() {
   const prisma = new PrismaClient();
-  const redis = new Redis();
+  // Use singleton Redis instance
   const service = new FinancialReportingService(prisma, redis);
   
   try {
@@ -240,7 +240,7 @@ async function advancedReportExample() {
     
   } finally {
     await prisma.$disconnect();
-    redis.disconnect();
+    // Redis singleton is managed globally - don't disconnect
   }
 }
 

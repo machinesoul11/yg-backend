@@ -19,9 +19,9 @@ const redisConfig = {
     return err.message.includes('READONLY');
   },
   lazyConnect: false, // Connect immediately to avoid timeouts
-  connectTimeout: 10000, // Increased to 10 seconds
-  commandTimeout: 10000, // Increased to 10 seconds
-  enableOfflineQueue: false, // Don't queue when disconnected - fail fast
+  connectTimeout: 30000, // Increased to 30 seconds for unstable connections
+  commandTimeout: 15000, // Increased to 15 seconds per command
+  enableOfflineQueue: true, // ✅ CRITICAL: Queue commands during brief disconnects
   keepAlive: 30000, // Keep connection alive
   family: 4, // Use IPv4 for better compatibility
   // Disable automatic reconnection in serverless - let each invocation create fresh connections
