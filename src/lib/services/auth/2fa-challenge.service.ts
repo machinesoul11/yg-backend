@@ -1070,4 +1070,134 @@ export class TwoFactorChallengeService {
         : undefined,
     };
   }
+
+  /**
+   * Verify backup code for 2FA challenge
+   */
+  async verifyBackupCode(
+    token: string,
+    code: string,
+    context?: { ipAddress?: string; userAgent?: string }
+  ): Promise<VerificationResult & { remainingCodes?: number }> {
+    // Get challenge data
+    const challenge = await this.getChallengeFromToken(token);
+
+    if (!challenge) {
+      return { success: false, error: 'Invalid or expired challenge token' };
+    }
+
+    // Check if challenge is expired
+    if (challenge.expiresAt < new Date()) {
+      await this.invalidateChallenge(token);
+      return { success: false, error: 'Challenge has expired. Please log in again.' };
+    }
+
+    // Check if maximum attempts exceeded
+    if (challenge.attempts >= MAX_VERIFICATION_ATTEMPTS) {
+      return { success: false, error: 'Maximum verification attempts exceeded' };
+    }
+
+    // Check rate limit
+    const rateLimitResult = await this.checkVerificationRateLimit(challenge.userId);
+    if (!rateLimitResult.allowed) {
+      return {
+        success: false,
+        error: `Too many verification attempts. Please try again in ${Math.ceil((rateLimitResult.resetAt.getTime() - Date.now()) / 60000)} minutes.`,
+      };
+    }
+
+    // Increment attempt counter
+    await this.incrementChallengeAttempts(token);
+
+    // Get user and backup codes
+    const user = await this.prisma.user.findUnique({
+      where: { id: challenge.userId },
+      include: {
+        twoFactorBackupCodes: {
+          where: { used: false },
+        },
+      },
+    });
+
+    if (!user || !user.two_factor_enabled) {
+      return { success: false, error: 'Two-factor authentication is not enabled' };
+    }
+
+    const backupCodes = user.twoFactorBackupCodes;
+
+    if (backupCodes.length === 0) {
+      return { success: false, error: 'No backup codes remaining. Please contact support.' };
+    }
+
+    // Normalize the input code (remove spaces/dashes and convert to uppercase)
+    const normalizedInputCode = code.replace(/[\s-]/g, '').toUpperCase();
+
+    // Find matching backup code
+    let matchedCodeId: string | null = null;
+    for (const backupCode of backupCodes) {
+      // Backup codes are stored hashed in the database
+      const isValid = await bcrypt.compare(normalizedInputCode, backupCode.code);
+      if (isValid) {
+        matchedCodeId = backupCode.id;
+        break;
+      }
+    }
+
+    if (!matchedCodeId) {
+      // Record failed attempt
+      await this.recordFailedVerification(challenge.userId, context);
+
+      const remaining = MAX_VERIFICATION_ATTEMPTS - challenge.attempts - 1;
+      return {
+        success: false,
+        error: 'Invalid backup code',
+        attemptsRemaining: Math.max(0, remaining),
+      };
+    }
+
+    // Mark backup code as used with race condition protection
+    const updateResult = await this.prisma.twoFactorBackupCode.updateMany({
+      where: {
+        id: matchedCodeId,
+        used: false, // Only update if still unused (prevents race condition)
+      },
+      data: {
+        used: true,
+        usedAt: new Date(),
+      },
+    });
+
+    // If no rows were updated, the code was already used in a concurrent request
+    if (updateResult.count === 0) {
+      await this.recordFailedVerification(challenge.userId, context);
+      return {
+        success: false,
+        error: 'This backup code has already been used',
+      };
+    }
+
+    const remainingCodes = backupCodes.length - 1;
+
+    // Send alert if backup codes are running low (<3 remaining)
+    if (remainingCodes > 0 && remainingCodes < 3) {
+      try {
+        await this.emailService.sendLowBackupCodesAlert({
+          email: user.email,
+          name: user.name || user.email,
+          remainingCodes,
+        });
+      } catch (emailError) {
+        console.error('[2FA] Failed to send backup code alert:', emailError);
+        // Don't fail the verification if email fails
+      }
+    }
+
+    // Success - complete authentication
+    const result = await this.completeAuthentication(challenge.userId, token, context);
+    
+    return {
+      ...result,
+      remainingCodes,
+    };
+  }
 }
