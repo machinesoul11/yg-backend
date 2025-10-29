@@ -581,9 +581,9 @@ export class TwoFactorChallengeService {
   }
 
   /**
-   * Get challenge data from token
+   * Get challenge data from token (public method for trust device)
    */
-  private async getChallengeFromToken(token: string): Promise<ChallengeData | null> {
+  async getChallengeFromToken(token: string): Promise<ChallengeData | null> {
     const tokenKey = `2fa:token:${token}`;
     const challengeId = await this.redis.get(tokenKey);
 
