@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Request validation schema
 const verifySchema = z.object({
-  challengeToken: z.string(),
+  temporaryToken: z.string().min(1, 'Temporary token is required'),
   code: z.string().min(1, 'Backup code is required'),
   trustDevice: z.boolean().optional(),
 });
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     console.log('[2FA Login Backup Code] Route handler started');
     
     const body = await req.json();
-    console.log('[2FA Login Backup Code] Request body:', { hasToken: !!body.challengeToken, hasCode: !!body.code });
+    console.log('[2FA Login Backup Code] Request body:', { hasToken: !!body.temporaryToken, hasCode: !!body.code });
     
     const validation = verifySchema.safeParse(body);
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { challengeToken, code } = validation.data;
+    const { temporaryToken, code } = validation.data;
     const context = getRequestContext(req);
 
     // Lazy initialize services inside the handler
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     console.log('[2FA Login Backup Code] Verifying backup code...');
     
     // Verify backup code using the challenge service
-    const result = await challengeService.verifyBackupCode(challengeToken, code, context);
+    const result = await challengeService.verifyBackupCode(temporaryToken, code, context);
 
     if (!result.success) {
       let statusCode = 401;
