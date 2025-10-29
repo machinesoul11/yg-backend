@@ -47,12 +47,47 @@ export async function POST(req: NextRequest) {
     const { challengeToken, code } = validation.data;
     const context = getRequestContext(req);
 
-    // Lazy initialize services inside the handler
-    const { prisma } = await import('@/lib/db');
-    const { TwoFactorChallengeService } = await import('@/lib/services/auth/2fa-challenge.service');
-    const { TwilioSmsService } = await import('@/lib/services/sms/twilio.service');
-    const { EmailService } = await import('@/lib/services/email/email.service');
-    const { AccountLockoutService } = await import('@/lib/auth/account-lockout.service');
+    console.log('[2FA Login SMS] Starting service initialization...');
+    
+    // Lazy initialize services inside the handler with error handling
+    let prisma, TwoFactorChallengeService, TwilioSmsService, EmailService, AccountLockoutService;
+    
+    try {
+      console.log('[2FA Login SMS] Importing prisma...');
+      const dbModule = await import('@/lib/db');
+      prisma = dbModule.prisma;
+      
+      console.log('[2FA Login SMS] Importing TwoFactorChallengeService...');
+      const challengeModule = await import('@/lib/services/auth/2fa-challenge.service');
+      TwoFactorChallengeService = challengeModule.TwoFactorChallengeService;
+      
+      console.log('[2FA Login SMS] Importing TwilioSmsService...');
+      const smsModule = await import('@/lib/services/sms/twilio.service');
+      TwilioSmsService = smsModule.TwilioSmsService;
+      
+      console.log('[2FA Login SMS] Importing EmailService...');
+      const emailModule = await import('@/lib/services/email/email.service');
+      EmailService = emailModule.EmailService;
+      
+      console.log('[2FA Login SMS] Importing AccountLockoutService...');
+      const lockoutModule = await import('@/lib/auth/account-lockout.service');
+      AccountLockoutService = lockoutModule.AccountLockoutService;
+      
+      console.log('[2FA Login SMS] All services imported successfully');
+    } catch (importError) {
+      console.error('[2FA Login SMS] Import error:', importError);
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Service initialization failed',
+            details: importError instanceof Error ? importError.message : 'Unknown import error',
+          },
+        },
+        { status: 500 }
+      );
+    }
 
     console.log('[2FA Login SMS] Services imported, initializing...');
     
