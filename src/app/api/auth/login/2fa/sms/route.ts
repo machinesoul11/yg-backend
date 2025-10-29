@@ -5,23 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { TwoFactorChallengeService } from '@/lib/services/auth/2fa-challenge.service';
-import { TwilioSmsService } from '@/lib/services/sms/twilio.service';
-import { EmailService } from '@/lib/services/email/email.service';
-import { AccountLockoutService } from '@/lib/auth/account-lockout.service';
 import { z } from 'zod';
-
-// Initialize services
-const smsService = new TwilioSmsService();
-const emailService = new EmailService();
-const lockoutService = new AccountLockoutService(prisma, emailService);
-const challengeService = new TwoFactorChallengeService(
-  prisma,
-  smsService,
-  emailService,
-  lockoutService
-);
 
 // Request validation schema
 const verifySchema = z.object({
@@ -39,7 +23,11 @@ function getRequestContext(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('[2FA Login SMS] Route handler started');
+    
     const body = await req.json();
+    console.log('[2FA Login SMS] Request body:', { hasToken: !!body.challengeToken, hasCode: !!body.code });
+    
     const validation = verifySchema.safeParse(body);
 
     if (!validation.success) {
@@ -59,6 +47,27 @@ export async function POST(req: NextRequest) {
     const { challengeToken, code } = validation.data;
     const context = getRequestContext(req);
 
+    // Lazy initialize services inside the handler
+    const { prisma } = await import('@/lib/db');
+    const { TwoFactorChallengeService } = await import('@/lib/services/auth/2fa-challenge.service');
+    const { TwilioSmsService } = await import('@/lib/services/sms/twilio.service');
+    const { EmailService } = await import('@/lib/services/email/email.service');
+    const { AccountLockoutService } = await import('@/lib/auth/account-lockout.service');
+
+    console.log('[2FA Login SMS] Services imported, initializing...');
+    
+    const smsService = new TwilioSmsService();
+    const emailService = new EmailService();
+    const lockoutService = new AccountLockoutService(prisma, emailService);
+    const challengeService = new TwoFactorChallengeService(
+      prisma,
+      smsService,
+      emailService,
+      lockoutService
+    );
+
+    console.log('[2FA Login SMS] Verifying SMS OTP...');
+    
     // Verify SMS OTP using the challenge service
     const result = await challengeService.verifySmsOtp(challengeToken, code, context);
 
