@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Request validation schema
 const verifySchema = z.object({
-  temporaryToken: z.string().min(1, 'Temporary token is required'),
+  challengeToken: z.string().min(1, 'Challenge token is required'),
   code: z.string().length(6, 'Verification code must be 6 digits').regex(/^\d+$/, 'Code must contain only digits'),
   trustDevice: z.boolean().optional(),
 });
@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
     
     const body = await req.json();
     console.log('[2FA Login SMS] Request body:', { 
-      hasToken: !!body.temporaryToken, 
-      tokenValue: body.temporaryToken?.substring(0, 10) + '...', 
+      hasToken: !!body.challengeToken, 
+      tokenValue: body.challengeToken?.substring(0, 10) + '...', 
       hasCode: !!body.code,
       codeLength: body.code?.length 
     });
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { temporaryToken, code } = validation.data;
+    const { challengeToken, code } = validation.data;
     const context = getRequestContext(req);
 
     console.log('[2FA Login SMS] Starting service initialization...');
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     console.log('[2FA Login SMS] Verifying SMS OTP...');
     
     // Verify SMS OTP using the challenge service
-    const result = await challengeService.verifySmsOtp(temporaryToken, code, context);
+    const result = await challengeService.verifySmsOtp(challengeToken, code, context);
 
     if (!result.success) {
       let statusCode = 401;

@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 // Request validation schema
 const verifySchema = z.object({
-  temporaryToken: z.string().min(1, 'Temporary token is required'),
+  challengeToken: z.string().min(1, 'Challenge token is required'),
   code: z.string().length(6, 'Verification code must be 6 digits').regex(/^\d+$/, 'Code must contain only digits'),
   trustDevice: z.boolean().optional(),
 });
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     console.log('[2FA Login TOTP] Route handler started');
     
     const body = await req.json();
-    console.log('[2FA Login TOTP] Request body:', { hasToken: !!body.temporaryToken, hasCode: !!body.code });
+    console.log('[2FA Login TOTP] Request body:', { hasToken: !!body.challengeToken, hasCode: !!body.code });
     
     const validation = verifySchema.safeParse(body);
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { temporaryToken, code } = validation.data;
+    const { challengeToken, code } = validation.data;
     const context = getRequestContext(req);
 
     // Lazy initialize services inside the handler
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     console.log('[2FA Login TOTP] Verifying TOTP...');
     
     // Verify TOTP using the challenge service
-    const result = await challengeService.verifyTotp(temporaryToken, code, context);
+    const result = await challengeService.verifyTotp(challengeToken, code, context);
 
     if (!result.success) {
       let statusCode = 401;
