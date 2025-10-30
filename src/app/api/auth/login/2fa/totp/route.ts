@@ -91,11 +91,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log('[2FA Login TOTP] ✅ Verification successful, session token:', result.sessionToken?.substring(0, 10) + '...');
+
     return NextResponse.json(
       {
         success: true,
         data: {
           message: 'Two-factor authentication successful',
+          sessionToken: result.sessionToken,
         },
       },
       { status: 200 }

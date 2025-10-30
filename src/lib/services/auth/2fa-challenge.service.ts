@@ -743,50 +743,103 @@ export class TwoFactorChallengeService {
 
   /**
    * Complete authentication after successful 2FA verification
+   * Creates a session token and returns it
    */
   private async completeAuthentication(
     userId: string,
     token: string,
     context?: { ipAddress?: string; userAgent?: string }
   ): Promise<VerificationResult> {
-    // Reset failed attempts
-    await this.lockoutService.resetFailedAttempts(userId);
+    try {
+      // Reset failed attempts
+      await this.lockoutService.resetFailedAttempts(userId);
 
-    // Invalidate challenge
-    await this.invalidateChallenge(token);
+      // Invalidate challenge
+      await this.invalidateChallenge(token);
 
-    // Update last login
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        lastLoginAt: new Date(),
-        // @ts-ignore - Prisma types will update after client regeneration
-        two_factor_verified_at: new Date(),
-      },
-    });
-
-    // Log successful authentication
-    await this.prisma.auditEvent.create({
-      data: {
-        userId,
-        entityType: 'user',
-        entityId: userId,
-        action: '2FA_VERIFICATION_SUCCESS',
-        ipAddress: context?.ipAddress,
-        userAgent: context?.userAgent,
-        afterJson: {
-          timestamp: new Date().toISOString(),
+      // Update last login
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          lastLoginAt: new Date(),
+          // @ts-ignore - Prisma types will update after client regeneration
+          two_factor_verified_at: new Date(),
         },
-      },
-    });
+      });
 
-    // Check for new device/location and send alert
-    await this.checkForSuspiciousLogin(userId, context);
+      // Create session token
+      const sessionToken = crypto.randomBytes(32).toString('base64url');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 
-    // Return success (session token generation handled by auth system)
-    return {
-      success: true,
-    };
+      // Extract device info from user agent
+      const deviceName = this.extractDeviceName(context?.userAgent);
+
+      // Create session
+      const session = await this.prisma.session.create({
+        data: {
+          userId,
+          sessionToken,
+          deviceName,
+          deviceFingerprint: context?.ipAddress, // Temporary - should use actual fingerprint
+          ipAddress: context?.ipAddress,
+          userAgent: context?.userAgent,
+          expires: expiresAt,
+          lastActivityAt: new Date(),
+        },
+      });
+
+      // Log successful authentication (non-blocking)
+      try {
+        await this.prisma.auditEvent.create({
+          data: {
+            userId,
+            entityType: 'user',
+            entityId: userId,
+            action: '2FA_VERIFICATION_SUCCESS',
+            ipAddress: context?.ipAddress,
+            userAgent: context?.userAgent,
+            afterJson: {
+              timestamp: new Date().toISOString(),
+              sessionId: session.id,
+            },
+          },
+        });
+      } catch (auditError) {
+        console.error('[2FA] Failed to create audit log:', auditError);
+      }
+
+      // Check for new device/location and send alert (non-blocking)
+      this.checkForSuspiciousLogin(userId, context).catch((err) => {
+        console.error('[2FA] Failed to check for suspicious login:', err);
+      });
+
+      // Return success with session token
+      return {
+        success: true,
+        sessionToken,
+      };
+    } catch (error) {
+      console.error('[2FA] Error completing authentication:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Extract device name from user agent string
+   */
+  private extractDeviceName(userAgent?: string): string | null {
+    if (!userAgent) return null;
+    
+    // Simple device name extraction - can be enhanced
+    if (userAgent.includes('iPhone')) return 'iPhone';
+    if (userAgent.includes('iPad')) return 'iPad';
+    if (userAgent.includes('Android')) return 'Android Device';
+    if (userAgent.includes('Windows')) return 'Windows PC';
+    if (userAgent.includes('Mac')) return 'Mac';
+    if (userAgent.includes('Linux')) return 'Linux';
+    
+    return 'Unknown Device';
   }
 
   /**
