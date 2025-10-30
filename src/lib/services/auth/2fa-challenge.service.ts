@@ -57,6 +57,7 @@ export interface ChallengeToken {
 export interface VerificationResult {
   success: boolean;
   sessionToken?: string;
+  sessionExpiresAt?: Date;
   user?: {
     id: string;
     email: string;
@@ -853,6 +854,7 @@ export class TwoFactorChallengeService {
       return {
         success: true,
         sessionToken,
+        sessionExpiresAt: expiresAt,
         user,
       };
     } catch (error) {

@@ -4,12 +4,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 
 /**
  * Extract session token from Authorization header or cookie
  */
-function extractSessionToken(req: NextRequest): string | null {
+async function extractSessionToken(req: NextRequest): Promise<string | null> {
   // Try Authorization header first (Bearer token)
   const authHeader = req.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
@@ -17,13 +18,10 @@ function extractSessionToken(req: NextRequest): string | null {
   }
 
   // Try cookie
-  const cookieHeader = req.headers.get('cookie');
-  if (cookieHeader) {
-    const cookies = cookieHeader.split(';').map((c) => c.trim());
-    const sessionCookie = cookies.find((c) => c.startsWith('session_token='));
-    if (sessionCookie) {
-      return sessionCookie.split('=')[1];
-    }
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('session_token');
+  if (sessionToken) {
+    return sessionToken.value;
   }
 
   return null;
@@ -36,12 +34,15 @@ function extractSessionToken(req: NextRequest): string | null {
 export async function GET(req: NextRequest) {
   try {
     console.log('[Session GET] Request received');
-    console.log('[Session GET] Headers:', {
-      authorization: req.headers.get('authorization'),
-      cookie: req.headers.get('cookie'),
-    });
+    
+    // Get all cookies for debugging
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    console.log('[Session GET] All cookies:', allCookies.map(c => c.name));
+    console.log('[Session GET] Cookie header:', req.headers.get('cookie'));
+    console.log('[Session GET] Authorization header:', req.headers.get('authorization'));
 
-    const sessionToken = extractSessionToken(req);
+    const sessionToken = await extractSessionToken(req);
 
     if (!sessionToken) {
       console.log('[Session GET] No session token found');
@@ -51,6 +52,12 @@ export async function GET(req: NextRequest) {
           error: {
             code: 'NO_SESSION',
             message: 'No session token provided',
+            debug: {
+              hasCookies: allCookies.length > 0,
+              cookieNames: allCookies.map(c => c.name),
+              hasCookieHeader: !!req.headers.get('cookie'),
+              hasAuthHeader: !!req.headers.get('authorization'),
+            },
           },
         },
         { status: 401 }
@@ -76,9 +83,6 @@ export async function GET(req: NextRequest) {
             preferred_2fa_method: true,
             createdAt: true,
             updatedAt: true,
-            // Exclude sensitive fields
-            // password_hash: false,
-            // two_factor_secret: false,
           },
         },
       },

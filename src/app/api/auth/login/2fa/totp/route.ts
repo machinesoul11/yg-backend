@@ -1,10 +1,10 @@
 /**
  * POST /api/auth/login/2fa/totp
- * Alias route for TOTP verification during multi-step login
- * Delegates to the main verify-totp logic
+ * Verify TOTP (Time-based One-Time Password) during multi-step login
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { z } from 'zod';
 
 // Request validation schema
@@ -93,16 +93,51 @@ export async function POST(req: NextRequest) {
 
     console.log('[2FA Login TOTP] ✅ Verification successful, session token:', result.sessionToken?.substring(0, 10) + '...');
 
+    // Set session cookie
+    if (result.sessionToken) {
+      const cookieStore = await cookies();
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      cookieStore.set('session_token', result.sessionToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+        path: '/',
+      });
+
+      console.log('[2FA Login TOTP] Session cookie set:', {
+        name: 'session_token',
+        value: result.sessionToken.substring(0, 10) + '...',
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        path: '/',
+      });
+    }
+
+    console.log('[2FA Login TOTP] Response created with cookie, sending to client');
+
     return NextResponse.json(
       {
         success: true,
-        data: {
-          message: 'Two-factor authentication successful',
-          sessionToken: result.sessionToken,
-          user: result.user,
+        session: {
+          token: result.sessionToken,
+          expiresAt: result.sessionExpiresAt
         },
+        user: {
+          id: result.user?.id,
+          email: result.user?.email,
+          name: result.user?.name
+        }
       },
-      { status: 200 }
+      { 
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
+          'Access-Control-Allow-Credentials': 'true',
+        },
+      }
     );
   } catch (error) {
     console.error('[2FA Login TOTP] Error:', error);
