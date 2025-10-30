@@ -101,3 +101,72 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/notifications
+ * List user's notifications with pagination and filtering (alternative to GET)
+ */
+export async function POST(req: NextRequest) {
+  try {
+    // Authenticate user
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Parse and validate request body
+    const body = await req.json();
+    const validated = listQuerySchema.parse(body);
+
+    // Fetch notifications
+    const { notifications, total } = await notificationService.listForUser({
+      userId: session.user.id,
+      page: validated.page,
+      pageSize: validated.pageSize,
+      read: validated.read,
+      type: validated.type as NotificationType | undefined,
+      priority: validated.priority as NotificationPriority | undefined,
+    });
+
+    // Format response
+    return NextResponse.json({
+      success: true,
+      data: notifications.map(n => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        actionUrl: n.actionUrl,
+        priority: n.priority,
+        read: n.read,
+        readAt: n.readAt?.toISOString() || null,
+        metadata: n.metadata,
+        createdAt: n.createdAt.toISOString(),
+      })),
+      pagination: {
+        page: validated.page,
+        pageSize: validated.pageSize,
+        total,
+        totalPages: Math.ceil(total / validated.pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid request data', details: error.issues },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

@@ -85,10 +85,10 @@ export async function clearNoNewNotificationsCache(userId: string): Promise<void
 }
 
 /**
- * GET /api/notifications/poll
+ * POST /api/notifications/poll
  * Poll for new notifications since last-seen timestamp
  */
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     // Authenticate user
     const session = await getServerSession(authOptions);
@@ -119,13 +119,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Parse and validate query parameters
-    const searchParams = req.nextUrl.searchParams;
-    const queryParams = {
-      lastSeen: searchParams.get('lastSeen') || undefined,
-    };
-
-    const validated = pollQuerySchema.parse(queryParams);
+    // Parse and validate request body
+    const body = await req.json();
+    const validated = pollQuerySchema.parse(body);
 
     // Determine query timestamp
     let queryAfter: Date;

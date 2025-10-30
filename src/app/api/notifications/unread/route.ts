@@ -45,3 +45,36 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/notifications/unread
+ * Get count of unread notifications for authenticated user (alternative to GET)
+ */
+export async function POST(req: NextRequest) {
+  try {
+    // Authenticate user
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get unread count (cached)
+    const count = await notificationService.getUnreadCount(session.user.id);
+
+    return NextResponse.json({
+      success: true,
+      data: { count },
+    });
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
