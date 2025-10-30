@@ -346,11 +346,10 @@ export class AuditService {
 
         // Update with hash - Note: This is the ONE exception to append-only
         // We update immediately after creation before any other operations
-        await this.prisma.$executeRawUnsafe(
-          `UPDATE audit_events SET entry_hash = $1 WHERE id = $2`,
-          entryHash,
-          createdEntry.id
-        );
+        await this.prisma.auditEvent.update({
+          where: { id: createdEntry.id },
+          data: { entryHash },
+        });
       } catch (hashError) {
         // Hash generation failed, but entry is still created
         console.error('Failed to generate entry hash for audit log', {

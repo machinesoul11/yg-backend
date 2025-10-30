@@ -156,6 +156,33 @@ export async function POST(req: NextRequest) {
       expiresAt: trustedDevice.expiresAt,
     });
 
+    // Log the device trust action (non-blocking)
+    try {
+      const { AuditService } = await import('@/lib/services/audit.service');
+      const auditService = new AuditService(prisma);
+      
+      await auditService.log({
+        action: 'TRUSTED_DEVICE_CREATED',
+        entityType: 'user',
+        entityId: userId,
+        userId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        after: {
+          deviceId: trustedDevice.id,
+          deviceName,
+          deviceFingerprint: deviceInfo.fingerprint,
+          expiresAt: trustedDevice.expiresAt,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          device: deviceInfo.device,
+        },
+      });
+    } catch (auditError) {
+      // Log error but don't fail the device trust operation
+      console.error('[Trust Device] Failed to create audit log:', auditError);
+    }
+
     return NextResponse.json(
       {
         success: true,
