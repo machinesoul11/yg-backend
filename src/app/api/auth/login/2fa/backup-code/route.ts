@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
           message: 'Backup code verification successful',
           remainingBackupCodes: result.remainingCodes,
           sessionToken: result.sessionToken,
+          user: result.user,
         },
       },
       { status: 200 }

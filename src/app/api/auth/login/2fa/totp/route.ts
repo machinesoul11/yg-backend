@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
         data: {
           message: 'Two-factor authentication successful',
           sessionToken: result.sessionToken,
+          user: result.user,
         },
       },
       { status: 200 }

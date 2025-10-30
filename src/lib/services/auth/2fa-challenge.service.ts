@@ -57,6 +57,19 @@ export interface ChallengeToken {
 export interface VerificationResult {
   success: boolean;
   sessionToken?: string;
+  user?: {
+    id: string;
+    email: string;
+    name: string | null;
+    avatar: string | null;
+    role: string;
+    email_verified: Date | null;
+    phone_verified: boolean;
+    two_factor_enabled: boolean;
+    preferred_2fa_method: TwoFactorMethod | null;
+    createdAt: Date;
+    updatedAt: Date;
+  };
   error?: string;
   attemptsRemaining?: number;
   lockedUntil?: Date;
@@ -743,7 +756,7 @@ export class TwoFactorChallengeService {
 
   /**
    * Complete authentication after successful 2FA verification
-   * Creates a session token and returns it
+   * Creates a session token and returns it along with user data
    */
   private async completeAuthentication(
     userId: string,
@@ -756,6 +769,28 @@ export class TwoFactorChallengeService {
 
       // Invalidate challenge
       await this.invalidateChallenge(token);
+
+      // Get user data (we'll need to return this)
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+          role: true,
+          email_verified: true,
+          phone_verified: true,
+          two_factor_enabled: true,
+          preferred_2fa_method: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
 
       // Update last login
       await this.prisma.user.update({
@@ -814,10 +849,11 @@ export class TwoFactorChallengeService {
         console.error('[2FA] Failed to check for suspicious login:', err);
       });
 
-      // Return success with session token
+      // Return success with session token and user data
       return {
         success: true,
         sessionToken,
+        user,
       };
     } catch (error) {
       console.error('[2FA] Error completing authentication:', error);
