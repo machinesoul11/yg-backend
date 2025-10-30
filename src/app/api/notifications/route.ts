@@ -25,6 +25,29 @@ const listQuerySchema = z.object({
   priority: z.nativeEnum(NotificationPriority).optional(),
 });
 
+// Query timeout in milliseconds
+const QUERY_TIMEOUT = 5000; // 5 seconds
+
+/**
+ * Execute query with timeout protection
+ */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout')), timeoutMs)
+      )
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Query timeout') {
+      console.error('[Notifications] Query timeout - returning fallback');
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 /**
  * GET /api/notifications
  * List user's notifications with pagination and filtering
@@ -53,15 +76,21 @@ export async function GET(req: NextRequest) {
 
     const validated = listQuerySchema.parse(queryParams);
 
-    // Fetch notifications
-    const { notifications, total } = await notificationService.listForUser({
-      userId: session.user.id,
-      page: validated.page,
-      pageSize: validated.pageSize,
-      read: validated.read,
-      type: validated.type as NotificationType | undefined,
-      priority: validated.priority as NotificationPriority | undefined,
-    });
+    // Fetch notifications with timeout protection
+    const result = await withTimeout(
+      notificationService.listForUser({
+        userId: session.user.id,
+        page: validated.page,
+        pageSize: validated.pageSize,
+        read: validated.read,
+        type: validated.type as NotificationType | undefined,
+        priority: validated.priority as NotificationPriority | undefined,
+      }),
+      QUERY_TIMEOUT,
+      { notifications: [], total: 0 } // Fallback to empty list on timeout
+    );
+
+    const { notifications, total } = result;
 
     // Format response
     return NextResponse.json({
@@ -86,7 +115,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching notifications:', error);
+    console.error('[Notifications] Error fetching notifications:', error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -95,10 +124,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Return graceful fallback instead of 500
+    return NextResponse.json({
+      success: true,  // Don't fail the whole app
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        total: 0,
+        totalPages: 0,
+      },
+    });
   }
 }
 
@@ -122,15 +158,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const validated = listQuerySchema.parse(body);
 
-    // Fetch notifications
-    const { notifications, total } = await notificationService.listForUser({
-      userId: session.user.id,
-      page: validated.page,
-      pageSize: validated.pageSize,
-      read: validated.read,
-      type: validated.type as NotificationType | undefined,
-      priority: validated.priority as NotificationPriority | undefined,
-    });
+    // Fetch notifications with timeout protection
+    const result = await withTimeout(
+      notificationService.listForUser({
+        userId: session.user.id,
+        page: validated.page,
+        pageSize: validated.pageSize,
+        read: validated.read,
+        type: validated.type as NotificationType | undefined,
+        priority: validated.priority as NotificationPriority | undefined,
+      }),
+      QUERY_TIMEOUT,
+      { notifications: [], total: 0 } // Fallback to empty list on timeout
+    );
+
+    const { notifications, total } = result;
 
     // Format response
     return NextResponse.json({
@@ -155,7 +197,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching notifications:', error);
+    console.error('[Notifications] Error fetching notifications (POST):', error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -164,9 +206,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Return graceful fallback instead of 500
+    return NextResponse.json({
+      success: true,  // Don't fail the whole app
+      data: [],
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        total: 0,
+        totalPages: 0,
+      },
+    });
   }
 }

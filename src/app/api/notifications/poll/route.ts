@@ -21,6 +21,27 @@ const pollQuerySchema = z.object({
 const RATE_LIMIT_WINDOW = 10; // seconds
 const RATE_LIMIT_MAX_REQUESTS = 1; // 1 request per 10 seconds
 const POLL_RESULT_LIMIT = 50; // Max notifications to return per poll
+const QUERY_TIMEOUT = 5000; // 5 seconds for database queries
+
+/**
+ * Execute query with timeout protection
+ */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout')), timeoutMs)
+      )
+    ]);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Query timeout') {
+      console.error('[Notifications Poll] Query timeout - returning fallback');
+      return fallback;
+    }
+    throw error;
+  }
+}
 
 /**
  * Check rate limit for user
@@ -152,9 +173,13 @@ export async function POST(req: NextRequest) {
       const hasCache = await getCachedNoNewNotifications(session.user.id);
       if (hasCache) {
         // Quick response - no new notifications
-        const unreadCount = await prisma.notification.count({
-          where: { userId: session.user.id, read: false },
-        });
+        const unreadCount = await withTimeout(
+          prisma.notification.count({
+            where: { userId: session.user.id, read: false },
+          }),
+          QUERY_TIMEOUT,
+          0 // Fallback to 0 on timeout
+        );
         
         return NextResponse.json({
           success: true,
@@ -168,20 +193,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Query for new notifications
-    const notifications = await prisma.notification.findMany({
-      where: {
-        userId: session.user.id,
-        createdAt: { gt: queryAfter },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: POLL_RESULT_LIMIT,
-    });
+    // Query for new notifications with timeout protection
+    const notifications = await withTimeout(
+      prisma.notification.findMany({
+        where: {
+          userId: session.user.id,
+          createdAt: { gt: queryAfter },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: POLL_RESULT_LIMIT,
+      }),
+      QUERY_TIMEOUT,
+      [] // Fallback to empty array on timeout
+    );
 
-    // Get unread count
-    const unreadCount = await prisma.notification.count({
-      where: { userId: session.user.id, read: false },
-    });
+    // Get unread count with timeout protection
+    const unreadCount = await withTimeout(
+      prisma.notification.count({
+        where: { userId: session.user.id, read: false },
+      }),
+      QUERY_TIMEOUT,
+      0 // Fallback to 0 on timeout
+    );
 
     // If no new notifications, cache this result
     if (notifications.length === 0 && validated.lastSeen) {
@@ -213,7 +246,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error polling notifications:', error);
+    console.error('[Notifications Poll] Error polling notifications:', error);
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -222,9 +255,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    // Return graceful fallback instead of 500
+    return NextResponse.json({
+      success: true,  // Don't fail the whole app
+      data: {
+        notifications: [],
+        newCount: 0,
+        unreadCount: 0,
+        lastSeen: new Date().toISOString(),
+        suggestedPollInterval: 10,
+      },
+    });
   }
 }

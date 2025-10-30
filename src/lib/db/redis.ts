@@ -26,21 +26,21 @@ let isConnectionConnecting = false;
 function getRedisClient(): Redis {
   if (!redisInstance) {
     redisInstance = new Redis(redisUrl!, {
-      maxRetriesPerRequest: 10, // Increased from 3 to allow more retries before timeout
+      maxRetriesPerRequest: 3, // Reduce to 3 for faster failure detection
       retryStrategy(times) {
-        if (times > 10) {
+        if (times > 3) {
           console.error('[Redis] Max retries reached, giving up');
           return null;
         }
-        const delay = Math.min(times * 100, 3000); // Max 3 second delay
+        const delay = Math.min(times * 50, 2000); // Faster retry, max 2 second delay
         console.log(`[Redis] Retry attempt ${times}, waiting ${delay}ms`);
         return delay;
       },
       enableReadyCheck: true,
       enableOfflineQueue: true, // ✅ CRITICAL: Queue commands during brief disconnects
       lazyConnect: false, // Connect immediately to avoid INSUFFICIENT_RESOURCES errors
-      connectTimeout: 30000, // Increased to 30 seconds for unstable connections
-      commandTimeout: 15000, // Increased to 15 seconds per command
+      connectTimeout: 10000, // 10 seconds for connection
+      commandTimeout: 5000,  // 5 seconds per command for faster failure
       keepAlive: 30000, // Keep connection alive
       family: 4,
       // Allow reconnection on errors
@@ -60,12 +60,12 @@ function getRedisClient(): Redis {
 
     // Log when connected
     redisInstance.on('connect', () => {
-      console.info('[Redis] Connected successfully');
+      console.info('✅ Redis connected');
     });
 
     // Log when ready
     redisInstance.on('ready', () => {
-      console.info('[Redis] Ready to accept commands');
+      console.info('✅ Redis ready');
     });
 
     // Log when connection closes

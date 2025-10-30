@@ -1687,9 +1687,11 @@ model Notification {
   createdAt DateTime             @default(now()) @map("created_at")
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, read, createdAt(sort: Desc)])
-  @@index([userId, type])
-  @@index([createdAt(sort: Desc)])
+  @@index([userId, read])                      // For unread count queries
+  @@index([userId, createdAt(sort: Desc)])     // For poll queries
+  @@index([userId, read, createdAt(sort: Desc)]) // Composite index for filtered lists
+  @@index([userId, type])                      // For type filtering
+  @@index([createdAt(sort: Desc)])             // For admin queries
   @@map("notifications")
 }
 

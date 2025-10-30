@@ -58,6 +58,21 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
+// Initialize connection with proper error handling
+if (!globalForPrisma.prisma) {
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ Database connected successfully');
+    })
+    .catch((err) => {
+      console.error('❌ Database connection failed:', err);
+      // Don't exit process in serverless - let it retry on next request
+      if (process.env.NODE_ENV !== 'production') {
+        process.exit(1);
+      }
+    });
+}
+
 /**
  * Query execution wrapper with automatic read/write routing
  */

@@ -10,9 +10,17 @@ import { prisma } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
+    // IMPORTANT: Await the session
     const session = await getServerSession(authOptions);
+    
+    console.log('[Security Alerts] Session check:', { 
+      hasSession: !!session, 
+      userId: session?.user?.id,
+      userRole: session?.user?.role 
+    });
 
     if (!session?.user) {
+      console.log('[Security Alerts] No session or user - Unauthorized');
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -24,6 +32,11 @@ export async function GET(req: NextRequest) {
 
     // Verify user can only access their own alerts or is admin
     if (userId && userId !== session.user.id && session.user.role !== 'ADMIN') {
+      console.log('[Security Alerts] Forbidden - user trying to access other user alerts:', { 
+        requestedUserId: userId, 
+        sessionUserId: session.user.id,
+        userRole: session.user.role 
+      });
       return NextResponse.json(
         { success: false, error: 'Forbidden' },
         { status: 403 }
@@ -31,6 +44,8 @@ export async function GET(req: NextRequest) {
     }
 
     const targetUserId = userId || session.user.id;
+
+    console.log('[Security Alerts] Fetching alerts for user:', targetUserId);
 
     // SecurityAlert model doesn't exist yet in the schema
     // Return empty alerts for now to prevent frontend errors
@@ -47,7 +62,7 @@ export async function GET(req: NextRequest) {
       unacknowledgedCount,
     });
   } catch (error) {
-    console.error('Security alerts API error:', error);
+    console.error('[Security Alerts] Error:', error);
     
     // Return empty alerts on error to prevent breaking the frontend
     return NextResponse.json(
