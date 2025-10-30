@@ -121,6 +121,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
+        // ✅ ADD sessionToken at root level (frontend expects this)
+        sessionToken: result.sessionToken,
+        // ✅ KEEP session object for future compatibility
         session: {
           token: result.sessionToken,
           expiresAt: result.sessionExpiresAt
