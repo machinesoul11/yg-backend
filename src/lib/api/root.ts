@@ -5,6 +5,7 @@ import { auditRouter } from './routers/audit.router';
 import { rolesRouter } from './routers/roles.router';
 import { permissionsRouter } from './routers/permissions.router';
 import { adminUsersRouter } from './routers/admin-users.router';
+import { adminSecurityRouter } from './routers/admin-security.router';
 import { sms2FARouter } from './routers/sms-2fa.router';
 import { sessionRouter } from './routers/session.router';
 import { securityRouter } from './routers/security.router';
@@ -38,6 +39,7 @@ export const appRouter = createTRPCRouter({
   roles: rolesRouter,
   permissions: permissionsRouter,
   adminUsers: adminUsersRouter,
+  adminSecurity: adminSecurityRouter,
   sms2FA: sms2FARouter,
   session: sessionRouter,
   security: securityRouter,

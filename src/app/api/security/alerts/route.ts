@@ -22,7 +22,13 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       console.log('[Security Alerts] No session or user - Unauthorized');
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { 
+          success: false, 
+          error: 'Unauthorized',
+          alerts: [],
+          hasUrgent: false,
+          unacknowledgedCount: 0
+        },
         { status: 401 }
       );
     }
@@ -38,7 +44,13 @@ export async function GET(req: NextRequest) {
         userRole: session.user.role 
       });
       return NextResponse.json(
-        { success: false, error: 'Forbidden' },
+        { 
+          success: false, 
+          error: 'Forbidden',
+          alerts: [],
+          hasUrgent: false,
+          unacknowledgedCount: 0
+        },
         { status: 403 }
       );
     }
