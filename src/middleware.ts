@@ -93,28 +93,21 @@ export default withAuth(
   },
   {
     callbacks: {
-      // Return true to allow access to route
       authorized: ({ token, req }) => {
         const path = req.nextUrl.pathname;
         
-        // Allow public blog routes (they may have redirects)
-        if (path.startsWith('/blog')) {
-          return true;
-        }
-        
-        // CRITICAL FIX: Require token for tRPC API routes
+        // Allow all TRPC requests to proceed (authentication happens inside handlers)
         if (path.startsWith('/api/trpc')) {
-          console.log('[Middleware] tRPC route authorization check:', {
-            path,
-            hasToken: !!token,
-            userId: token?.userId || token?.sub,
-            role: token?.role
-          });
-          return !!token; // Return true only if session token exists
+          return true; // ← ALLOW, let TRPC handle auth
         }
         
-        // Require token for all other protected routes
-        return !!token;
+        // For portal routes, require token
+        if (path.startsWith('/portal/')) {
+          return !!token;
+        }
+        
+        // Allow public routes
+        return true;
       },
     },
     pages: {
