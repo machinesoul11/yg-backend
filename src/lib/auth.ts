@@ -555,6 +555,8 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
+        // Allow cross-subdomain access for production
+        domain: process.env.NODE_ENV === 'production' ? '.yesgoddess.agency' : undefined,
       },
     },
     callbackUrl: {
@@ -563,6 +565,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
+        domain: process.env.NODE_ENV === 'production' ? '.yesgoddess.agency' : undefined,
       },
     },
     csrfToken: {

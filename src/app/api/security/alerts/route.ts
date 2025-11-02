@@ -10,26 +10,35 @@ import { prisma } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   try {
-    // IMPORTANT: Await the session
+    // IMPORTANT: Await the session with proper configuration
     const session = await getServerSession(authOptions);
     
     console.log('[Security Alerts] Session check:', { 
       hasSession: !!session, 
       userId: session?.user?.id,
-      userRole: session?.user?.role 
+      userRole: session?.user?.role,
+      headers: Object.fromEntries(req.headers.entries()) // Log headers for debugging
     });
 
     if (!session?.user) {
       console.log('[Security Alerts] No session or user - Unauthorized');
+      // Return 401 with proper CORS headers
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Unauthorized',
+          error: 'Authentication required',
+          message: 'Please sign in to view security alerts',
           alerts: [],
           hasUrgent: false,
           unacknowledgedCount: 0
         },
-        { status: 401 }
+        { 
+          status: 401,
+          headers: {
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'https://www.yesgoddess.agency',
+          }
+        }
       );
     }
 

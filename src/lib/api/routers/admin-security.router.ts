@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { createTRPCRouter, adminProcedure } from '@/lib/trpc';
 import { AdminSecurityMonitoringService } from '@/lib/services/admin-security-monitoring.service';
 import { AdminSessionSecurityService } from '@/lib/services/admin-session-security.service';
@@ -32,8 +33,30 @@ export const adminSecurityRouter = createTRPCRouter({
   getDashboardMetrics: adminProcedure
     .use(checkAdminSessionTimeout)
     .use(withReadOperationRateLimit)
-    .query(async () => {
-      return await securityMonitoringService.getDashboardMetrics();
+    .query(async ({ ctx }) => {
+      try {
+        console.log('[AdminSecurity] getDashboardMetrics called by:', ctx.session?.user?.id);
+        
+        // Verify admin role explicitly
+        if (ctx.session?.user?.role !== 'ADMIN') {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Admin access required'
+          });
+        }
+        
+        return await securityMonitoringService.getDashboardMetrics();
+      } catch (error) {
+        console.error('[AdminSecurity] getDashboardMetrics error:', error);
+        // Re-throw TRPCErrors as-is
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch dashboard metrics'
+        });
+      }
     }),
 
   /**
@@ -64,13 +87,34 @@ export const adminSecurityRouter = createTRPCRouter({
   getRateLimitStatus: adminProcedure
     .use(checkAdminSessionTimeout)
     .query(async ({ ctx }) => {
-      const userId = ctx.session.user.id;
-      const status = await adminRateLimitService.getAllTierStatus(userId);
+      try {
+        console.log('[AdminSecurity] getRateLimitStatus called by:', ctx.session?.user?.id);
+        
+        if (!ctx.session?.user?.id) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required'
+          });
+        }
 
-      return {
-        userId,
-        tiers: status,
-      };
+        const userId = ctx.session.user.id;
+        const status = await adminRateLimitService.getAllTierStatus(userId);
+
+        return {
+          success: true,
+          userId,
+          tiers: status,
+        };
+      } catch (error) {
+        console.error('[AdminSecurity] getRateLimitStatus error:', error);
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch rate limit status'
+        });
+      }
     }),
 
   /**

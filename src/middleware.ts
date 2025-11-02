@@ -1,6 +1,6 @@
 /**
  * Next.js Middleware
- * Handles authentication, authorization, and blog redirects
+ * Handles authentication, authorization, CORS, and blog redirects
  * Optimized for Edge Runtime to stay under 1MB limit
  */
 
@@ -12,6 +12,34 @@ export default withAuth(
   async function middleware(req) {
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
+
+    // Handle CORS for API routes
+    const response = NextResponse.next();
+    
+    if (path.startsWith('/api/')) {
+      const origin = req.headers.get('origin');
+      const allowedOrigins = [
+        'https://www.yesgoddess.agency',
+        'https://yesgoddess.agency',
+        process.env.FRONTEND_URL,
+        process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : null,
+      ].filter(Boolean) as string[];
+      
+      if (origin && allowedOrigins.includes(origin)) {
+        response.headers.set('Access-Control-Allow-Origin', origin);
+        response.headers.set('Access-Control-Allow-Credentials', 'true');
+        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      }
+      
+      // Handle preflight requests
+      if (req.method === 'OPTIONS') {
+        return new NextResponse(null, { 
+          status: 200, 
+          headers: response.headers 
+        });
+      }
+    }
 
     // Handle blog redirects first (for public routes)
     try {
@@ -61,7 +89,7 @@ export default withAuth(
       }
     }
 
-    return NextResponse.next();
+    return response;
   },
   {
     callbacks: {
