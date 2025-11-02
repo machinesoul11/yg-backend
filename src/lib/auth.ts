@@ -546,35 +546,37 @@ export const authOptions: NextAuthOptions = {
   // Enable debug mode in development
   debug: process.env.NODE_ENV === 'development',
 
-  // Cookie configuration
+  // Cookie configuration - CRITICAL FIX for cross-subdomain support
   cookies: {
     sessionToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
+      // IMPORTANT: Don't use __Secure- or __Host- prefix, it causes issues
+      name: 'next-auth.session-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'lax', // Changed from 'none' for better compatibility
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        // Allow cross-subdomain access for production
-        domain: process.env.NODE_ENV === 'production' ? '.yesgoddess.agency' : undefined,
+        // CRITICAL: Set domain for cross-subdomain sharing
+        domain: '.yesgoddess.agency', // Include the dot for all subdomains
       },
     },
     callbackUrl: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.callback-url`,
+      name: 'next-auth.callback-url',
       options: {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? '.yesgoddess.agency' : undefined,
+        domain: '.yesgoddess.agency',
       },
     },
     csrfToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Host-' : ''}next-auth.csrf-token`,
+      name: 'next-auth.csrf-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
+        domain: '.yesgoddess.agency',
       },
     },
   },

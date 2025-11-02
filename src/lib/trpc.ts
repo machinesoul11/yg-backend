@@ -28,8 +28,27 @@ import {
  * wrap this and provides the required context.
  */
 export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
-  // Get the session from Auth.js
-  const session = await getServerSession(authOptions);
+  // Get the session from Auth.js with error handling
+  let session = null;
+  
+  try {
+    session = await getServerSession(authOptions);
+  } catch (error) {
+    console.error('[tRPC Context] Session error:', error);
+    
+    // If it's a JWT decryption error, log detailed info
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as Error).message;
+      if (message.includes('decryption')) {
+        console.error('[tRPC Context] JWT decryption failed - possible secret mismatch or cookie issue');
+        console.error('[tRPC Context] NEXTAUTH_SECRET length:', process.env.NEXTAUTH_SECRET?.length);
+        console.error('[tRPC Context] NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
+      }
+    }
+    
+    // Continue without session instead of crashing
+    session = null;
+  }
   
   // Build security context if user is authenticated
   let securityContext: SecurityContext | undefined;
@@ -136,9 +155,23 @@ export const publicProcedure = t.procedure;
  * @see https://trpc.io/docs/procedures
  */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-  if (!ctx.session || !ctx.session.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+  // Better error messaging
+  if (!ctx.session) {
+    throw new TRPCError({ 
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required. Please sign in again.',
+      cause: 'NO_SESSION'
+    });
   }
+  
+  if (!ctx.session.user) {
+    throw new TRPCError({ 
+      code: 'UNAUTHORIZED',
+      message: 'Invalid session. Please sign in again.',
+      cause: 'NO_USER'
+    });
+  }
+  
   return next({
     ctx: {
       ...ctx,
