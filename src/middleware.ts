@@ -13,9 +13,15 @@ export default withAuth(
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
 
-    // Handle CORS for API routes
     const response = NextResponse.next();
-    
+
+    // CRITICAL: Attach the session token for TRPC to use
+    if (token && path.startsWith('/api/trpc')) {
+      // Store the token in a header so TRPC context can access it
+      response.headers.set('x-auth-token', JSON.stringify(token));
+    }
+
+    // CORS handling for API routes
     if (path.startsWith('/api/')) {
       const origin = req.headers.get('origin');
       const allowedOrigins = [
@@ -24,14 +30,14 @@ export default withAuth(
         process.env.FRONTEND_URL,
         process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : null,
       ].filter(Boolean) as string[];
-      
+
       if (origin && allowedOrigins.includes(origin)) {
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Access-Control-Allow-Credentials', 'true');
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token');
       }
-      
+
       // Handle preflight requests
       if (req.method === 'OPTIONS') {
         return new NextResponse(null, { 
@@ -41,7 +47,7 @@ export default withAuth(
       }
     }
 
-    // Handle blog redirects first (for public routes)
+    // Handle blog redirects (for public routes)
     try {
       const redirectResponse = await handleBlogRedirects(req);
       if (redirectResponse) {
@@ -94,19 +100,7 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        const path = req.nextUrl.pathname;
-        
-        // Allow all TRPC requests to proceed (authentication happens inside handlers)
-        if (path.startsWith('/api/trpc')) {
-          return true; // ← ALLOW, let TRPC handle auth
-        }
-        
-        // For portal routes, require token
-        if (path.startsWith('/portal/')) {
-          return !!token;
-        }
-        
-        // Allow public routes
+        // Allow all requests (TRPC will handle auth internally)
         return true;
       },
     },
@@ -120,19 +114,10 @@ export default withAuth(
 // Specify which routes this middleware should run on
 export const config = {
   matcher: [
-    // Admin routes
-    '/portal/admin/:path*',
+    // API routes
+    '/api/:path*',
     
-    // Creator routes
-    '/portal/creator/:path*',
-    
-    // Brand routes
-    '/portal/brand/:path*',
-    
-    // Blog routes (for redirect handling)
-    '/blog/:path*',
-    
-    // CRITICAL FIX: Include tRPC API routes for session validation
-    '/api/trpc/:path*',
+    // Portal routes
+    '/portal/:path*',
   ],
 };

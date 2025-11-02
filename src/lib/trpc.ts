@@ -28,32 +28,71 @@ import {
  * wrap this and provides the required context.
  */
 export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
-  // Get the session from Auth.js with error handling
   let session = null;
-  
+
+  // Try to get session from the middleware header first
   try {
-    session = await getServerSession(authOptions);
-  } catch (error) {
-    console.error('[tRPC Context] Session error:', error);
+    const headerToken = opts.req?.headers?.get?.('x-auth-token');
     
-    // If it's a JWT decryption error, log detailed info
-    if (error && typeof error === 'object' && 'message' in error) {
-      const message = (error as Error).message;
-      if (message.includes('decryption')) {
-        console.error('[tRPC Context] JWT decryption failed - possible secret mismatch or cookie issue');
-        console.error('[tRPC Context] NEXTAUTH_SECRET length:', process.env.NEXTAUTH_SECRET?.length);
-        console.error('[tRPC Context] NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
+    if (headerToken) {
+      try {
+        const token = JSON.parse(headerToken);
+        console.log('[TRPC Context] Got token from middleware header:', token.email);
+        
+        // Reconstruct session from token
+        session = {
+          user: {
+            id: token.userId || token.sub,
+            email: token.email,
+            name: token.name,
+            role: token.role,
+            emailVerified: token.emailVerified,
+            twoFactorEnabled: token.twoFactorEnabled,
+            creatorId: token.creatorId,
+            brandId: token.brandId,
+            isAdmin: token.role === 'ADMIN',
+            isCreator: token.role === 'CREATOR',
+            isBrand: token.role === 'BRAND',
+          },
+          expires: token.exp ? new Date(token.exp * 1000).toISOString() : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        };
+      } catch (parseError) {
+        console.warn('[TRPC Context] Failed to parse token from header:', parseError);
       }
     }
-    
-    // Continue without session instead of crashing
-    session = null;
+  } catch (error) {
+    console.warn('[TRPC Context] Error reading auth header:', error);
+  }
+
+  // Fallback: Get fresh session if not in header
+  if (!session) {
+    try {
+      session = await getServerSession(authOptions);
+      console.log('[TRPC Context] Got session from getServerSession');
+    } catch (error) {
+      console.error('[TRPC Context] Session error:', error);
+      
+      // If it's a JWT decryption error, log detailed info
+      if (error && typeof error === 'object' && 'message' in error) {
+        const message = (error as Error).message;
+        if (message.includes('decryption')) {
+          console.error('[TRPC Context] JWT decryption failed - possible secret mismatch or cookie issue');
+          console.error('[TRPC Context] NEXTAUTH_SECRET length:', process.env.NEXTAUTH_SECRET?.length);
+          console.error('[TRPC Context] NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
+        }
+      }
+      
+      // Continue without session instead of crashing
+      session = null;
+    }
   }
   
   // Build security context if user is authenticated
   let securityContext: SecurityContext | undefined;
   
   if (session?.user) {
+    console.log('[TRPC Context] User authenticated:', session.user.email);
+    
     // Fetch creator and brand IDs if they exist
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -71,6 +110,8 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
         brandId: user.brand?.id,
       };
     }
+  } else {
+    console.log('[TRPC Context] No session - user not authenticated');
   }
   
   return {
