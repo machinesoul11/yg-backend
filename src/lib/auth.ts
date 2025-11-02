@@ -546,37 +546,41 @@ export const authOptions: NextAuthOptions = {
   // Enable debug mode in development
   debug: process.env.NODE_ENV === 'development',
 
-  // Cookie configuration - CRITICAL FIX for cross-subdomain support
+  // Cookie configuration - CRITICAL FIX for Vercel deployment
   cookies: {
     sessionToken: {
-      // IMPORTANT: Don't use __Secure- or __Host- prefix, it causes issues
-      name: 'next-auth.session-token',
+      name: process.env.NODE_ENV === 'production' 
+        ? '__Secure-next-auth.session-token' 
+        : 'next-auth.session-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax', // Changed from 'none' for better compatibility
+        sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        // CRITICAL: Set domain for cross-subdomain sharing
-        domain: '.yesgoddess.agency', // Include the dot for all subdomains
+        // CRITICAL: Don't set domain for Vercel deployments
+        // Vercel handles cookie domains automatically for *.vercel.app and custom domains
+        // Setting domain can cause cookie issues on Vercel
       },
     },
     callbackUrl: {
-      name: 'next-auth.callback-url',
+      name: process.env.NODE_ENV === 'production'
+        ? '__Secure-next-auth.callback-url'
+        : 'next-auth.callback-url',
       options: {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: '.yesgoddess.agency',
       },
     },
     csrfToken: {
-      name: 'next-auth.csrf-token',
+      name: process.env.NODE_ENV === 'production'
+        ? '__Host-next-auth.csrf-token'
+        : 'next-auth.csrf-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: '.yesgoddess.agency',
       },
     },
   },

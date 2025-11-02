@@ -30,14 +30,40 @@ import {
 export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
   let session = null;
 
-  // Try to get session from the middleware header first
+  // PRIORITY 1: Try to get session from NextAuth
   try {
-    const headerToken = opts.req?.headers?.get?.('x-auth-token');
+    session = await getServerSession(authOptions);
     
-    if (headerToken) {
-      try {
+    if (session) {
+      console.log('[TRPC Context] ✓ Session found via getServerSession:', session.user.email);
+    } else {
+      console.log('[TRPC Context] ⚠ No session found via getServerSession');
+    }
+  } catch (error) {
+    console.error('[TRPC Context] ❌ Session retrieval error:', error);
+    
+    // Detailed error logging for debugging
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as Error).message;
+      if (message.includes('decryption') || message.includes('JWT')) {
+        console.error('[TRPC Context] JWT Error Details:', {
+          message,
+          secretLength: process.env.NEXTAUTH_SECRET?.length,
+          url: process.env.NEXTAUTH_URL,
+          nodeEnv: process.env.NODE_ENV,
+        });
+      }
+    }
+  }
+
+  // FALLBACK: Try middleware header (for edge cases)
+  if (!session) {
+    try {
+      const headerToken = opts.req?.headers?.get?.('x-auth-token');
+      
+      if (headerToken) {
         const token = JSON.parse(headerToken);
-        console.log('[TRPC Context] Got token from middleware header:', token.email);
+        console.log('[TRPC Context] ⚠ Using fallback token from middleware for:', token.email);
         
         // Reconstruct session from token
         session = {
@@ -56,34 +82,9 @@ export const createTRPCContext = async (opts: FetchCreateContextFnOptions) => {
           },
           expires: token.exp ? new Date(token.exp * 1000).toISOString() : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         };
-      } catch (parseError) {
-        console.warn('[TRPC Context] Failed to parse token from header:', parseError);
       }
-    }
-  } catch (error) {
-    console.warn('[TRPC Context] Error reading auth header:', error);
-  }
-
-  // Fallback: Get fresh session if not in header
-  if (!session) {
-    try {
-      session = await getServerSession(authOptions);
-      console.log('[TRPC Context] Got session from getServerSession');
     } catch (error) {
-      console.error('[TRPC Context] Session error:', error);
-      
-      // If it's a JWT decryption error, log detailed info
-      if (error && typeof error === 'object' && 'message' in error) {
-        const message = (error as Error).message;
-        if (message.includes('decryption')) {
-          console.error('[TRPC Context] JWT decryption failed - possible secret mismatch or cookie issue');
-          console.error('[TRPC Context] NEXTAUTH_SECRET length:', process.env.NEXTAUTH_SECRET?.length);
-          console.error('[TRPC Context] NEXTAUTH_URL:', process.env.NEXTAUTH_URL);
-        }
-      }
-      
-      // Continue without session instead of crashing
-      session = null;
+      console.warn('[TRPC Context] Could not parse middleware header token:', error);
     }
   }
   

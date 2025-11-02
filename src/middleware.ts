@@ -15,33 +15,38 @@ export default withAuth(
 
     const response = NextResponse.next();
 
-    // CRITICAL: Attach the session token for TRPC to use
-    if (token && path.startsWith('/api/trpc')) {
-      // Store the token in a header so TRPC context can access it
+    // IMPORTANT: Only attach token header for debugging purposes
+    // TRPC will use getServerSession() directly instead of this header
+    if (token && path.startsWith('/api/trpc') && process.env.NODE_ENV === 'development') {
+      // In dev, provide token for debugging
       response.headers.set('x-auth-token', JSON.stringify(token));
+      response.headers.set('x-auth-debug', 'middleware-token-attached');
     }
 
     // CORS handling for API routes
     if (path.startsWith('/api/')) {
       const origin = req.headers.get('origin');
       const allowedOrigins = [
+        'https://ops.yesgoddess.agency',
         'https://www.yesgoddess.agency',
         'https://yesgoddess.agency',
         process.env.FRONTEND_URL,
         process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : null,
+        process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : null,
       ].filter(Boolean) as string[];
 
       if (origin && allowedOrigins.includes(origin)) {
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Access-Control-Allow-Credentials', 'true');
-        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token');
+        response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token, cookie');
+        response.headers.set('Access-Control-Expose-Headers', 'x-auth-debug');
       }
 
       // Handle preflight requests
       if (req.method === 'OPTIONS') {
         return new NextResponse(null, { 
-          status: 200, 
+          status: 204, 
           headers: response.headers 
         });
       }
