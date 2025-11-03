@@ -39,7 +39,7 @@ export default withAuth(
         response.headers.set('Access-Control-Allow-Origin', origin);
         response.headers.set('Access-Control-Allow-Credentials', 'true');
         response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token, cookie');
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-auth-token, x-trpc-source, cookie');
         response.headers.set('Access-Control-Expose-Headers', 'x-auth-debug');
       }
 
