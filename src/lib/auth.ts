@@ -554,12 +554,12 @@ export const authOptions: NextAuthOptions = {
         : 'next-auth.session-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none', // Required for cross-origin requests (www -> ops subdomain)
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        // CRITICAL: Don't set domain for Vercel deployments
-        // Vercel handles cookie domains automatically for *.vercel.app and custom domains
-        // Setting domain can cause cookie issues on Vercel
+        secure: true, // Required when sameSite=none
+        domain: process.env.NODE_ENV === 'production' 
+          ? '.yesgoddess.agency'  // Share cookies across all yesgoddess.agency subdomains
+          : undefined,
       },
     },
     callbackUrl: {
@@ -567,20 +567,26 @@ export const authOptions: NextAuthOptions = {
         ? '__Secure-next-auth.callback-url'
         : 'next-auth.callback-url',
       options: {
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
+        domain: process.env.NODE_ENV === 'production' 
+          ? '.yesgoddess.agency' 
+          : undefined,
       },
     },
     csrfToken: {
       name: process.env.NODE_ENV === 'production'
-        ? '__Host-next-auth.csrf-token'
+        ? '__Secure-next-auth.csrf-token' // Changed from __Host- to __Secure- (allows domain attribute)
         : 'next-auth.csrf-token',
       options: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'none',
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: true,
+        domain: process.env.NODE_ENV === 'production' 
+          ? '.yesgoddess.agency' 
+          : undefined,
       },
     },
   },
